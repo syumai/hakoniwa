@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "vp dev",
     "build": "vp build",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "cli": "node dist/cli.js"
   },
   "dependencies": {
     "@hakoniwa/game": "workspace:*",

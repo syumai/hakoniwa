@@ -19,10 +19,12 @@ function BackupRow({ backup }: { backup: BackupInfo }) {
         (1970年1月1日から{backup.createdAt}秒)
       </p>
       <form action={`/admin/backups/${backup.label}/restore`} method="post">
+        <b>パスワード:</b>
         <input type="password" name="password" size={32} maxlength={32} />
         <input type="submit" value="このデータを現役に" />
       </form>
       <form action={`/admin/backups/${backup.label}/delete`} method="post">
+        <b>パスワード:</b>
         <input type="password" name="password" size={32} maxlength={32} />
         <input type="submit" value="このデータを削除" />
       </form>
@@ -50,6 +52,7 @@ export function AdminPage({ status, notice }: { status: AdminStatus; notice: str
             <b>最終更新時間(秒数表示)</b>:1970年1月1日から{status.lastTime}秒
           </p>
           <form action="/admin/reset" method="post">
+            <b>パスワード:</b>
             <input type="password" name="password" size={32} maxlength={32} />
             <input type="submit" value="このデータを削除" />
           </form>
@@ -57,18 +60,20 @@ export function AdminPage({ status, notice }: { status: AdminStatus; notice: str
           <h3>最終更新時間の変更</h3>
           <form action="/admin/last-time" method="post">
             <input type="datetime-local" name="datetime" />
+            <b>パスワード:</b>
             <input type="password" name="password" size={32} maxlength={32} />
             <input type="submit" value="変更" />
           </form>
           <form action="/admin/last-time" method="post">
             1970年1月1日から
-            <input type="text" size={32} name="unix" />秒
+            <input type="text" size={32} name="unix" />秒<b>パスワード:</b>
             <input type="password" name="password" size={32} maxlength={32} />
             <input type="submit" value="秒指定で変更" />
           </form>
 
           <h3>ターン進行</h3>
           <form action="/admin/turn" method="post">
+            <b>パスワード:</b>
             <input type="password" name="password" size={32} maxlength={32} />
             <input type="submit" value="ターンを進める" />
           </form>
@@ -77,6 +82,7 @@ export function AdminPage({ status, notice }: { status: AdminStatus; notice: str
         <div class="current-data">
           <h2>現役データ</h2>
           <form action="/admin/init" method="post">
+            <b>パスワード:</b>
             <input type="password" name="password" size={32} maxlength={32} />
             <input type="submit" value="新しいデータを作る" />
           </form>
@@ -88,6 +94,7 @@ export function AdminPage({ status, notice }: { status: AdminStatus; notice: str
       <form action="/admin/backups" method="post">
         ラベル(省略可)
         <input type="text" name="label" size={32} />
+        <b>パスワード:</b>
         <input type="password" name="password" size={32} maxlength={32} />
         <input type="submit" value="バックアップを作成" />
       </form>

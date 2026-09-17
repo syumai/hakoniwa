@@ -84,8 +84,16 @@ export function defaultsCookieMiddleware(): MiddlewareHandler<DefaultsCookieEnv>
   };
 }
 
-/** ルートハンドラから呼ぶヘルパ。複数回呼んでも merge される。 */
+/**
+ * ルートハンドラから呼ぶヘルパ。複数回呼んでも merge される。
+ *
+ * Perl 版 cgiInput は `$HdefaultX` 等のグローバル変数を同一リクエスト内で上書きし、
+ * 直後の tempOwner 描画がその値を参照する (Cookie への書き出しは応答後)。
+ * これに合わせて `defaultsUpdate` (Set-Cookie 用) だけでなく `defaults`
+ * (`c.get('defaults')` で views に渡す値) も同時に更新し、このリクエストの描画に反映する。
+ */
 export function updateDefaults(c: Context<DefaultsCookieEnv>, patch: Partial<FormDefaults>): void {
   const existing = c.get("defaultsUpdate");
   c.set("defaultsUpdate", { ...existing, ...patch });
+  c.set("defaults", { ...c.get("defaults"), ...patch });
 }

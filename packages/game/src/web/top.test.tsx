@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { setupTestApp } from "./test-helpers.ts";
+import { postForm, setupTestApp } from "./test-helpers.ts";
 
 describe("GET /", () => {
   it("200 で配布元リンク、ターン数、各フォームの見出しを含む", async () => {
@@ -55,5 +55,47 @@ describe("POST /turn (デバッグ用)", () => {
     const html = await res.text();
     expect(html).toContain("ターン2");
     expect(repo.getMeta().turn).toBe(2);
+  });
+});
+
+describe("順位表の島名 (放置島)", () => {
+  it("absent === 0 なら island-name クラス", async () => {
+    const { app, repo } = setupTestApp();
+    await postForm(app, "/islands", {
+      name: "てすと",
+      password: "pass1234",
+      passwordConfirm: "pass1234",
+    });
+    // 新規作成直後は Perl 版と同じく absent が 0 でない (giveupTurns - 3) ため、
+    // 「観光」などで最終アクセスを更新したのと同じ状態 (absent === 0) を明示的に作る。
+    const island = repo.findIsland(1);
+    if (island === undefined) {
+      throw new Error("island not found");
+    }
+    repo.updateIsland({ ...island, absent: 0 });
+
+    const res = await app.request("/");
+    const html = await res.text();
+    expect(html).toContain('class="island-name"');
+    expect(html).not.toContain('class="island-name-faded"');
+  });
+
+  it("absent > 0 なら island-name-faded クラスで薄く表示する", async () => {
+    const { app, repo } = setupTestApp();
+    await postForm(app, "/islands", {
+      name: "てすと",
+      password: "pass1234",
+      passwordConfirm: "pass1234",
+    });
+    const island = repo.findIsland(1);
+    if (island === undefined) {
+      throw new Error("island not found");
+    }
+    repo.updateIsland({ ...island, absent: 25 });
+
+    const res = await app.request("/");
+    const html = await res.text();
+    expect(html).toContain('class="island-name-faded"');
+    expect(html).toContain("てすと島(25)");
   });
 });

@@ -4,7 +4,7 @@ import { defineConfig } from "vite-plus";
 
 // tmp/09-tooling.md packages/server-node の vite.config.ts。
 // dev: `@hono/vite-dev-server` が src/dev.ts の default export (Hono app) を SSR ランナーで動かす。
-// build: SSR ビルドで dist/server.js を出す (cli.ts は Phase 5 で追加)。
+// build: SSR ビルドで dist/server.js と dist/cli.js を出す。
 export default defineConfig({
   plugins: [devServer({ entry: "src/dev.ts" })],
   publicDir: fileURLToPath(new URL("../game/public", import.meta.url)),
@@ -12,7 +12,7 @@ export default defineConfig({
     ssr: true,
     outDir: "dist",
     rollupOptions: {
-      input: { server: "src/server.ts" },
+      input: { server: "src/server.ts", cli: "src/cli.ts" },
       output: { entryFileNames: "[name].js" },
     },
   },

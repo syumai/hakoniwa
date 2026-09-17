@@ -125,6 +125,27 @@ describe("POST /islands/:id/commands (計画登録)", () => {
     });
     expect(res.status).toBe(400);
   });
+
+  it("応答の描画に送信した x/y/kind/target がフォームの選択初期値として反映される", async () => {
+    const { app } = setupTestApp();
+    await createIsland(app);
+    const res = await postForm(app, "/islands/1/commands", {
+      password: "pass1234",
+      number: 0,
+      kind: 2,
+      x: 5,
+      y: 6,
+      amount: 0,
+      target: 1,
+      mode: "insert",
+    });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toMatch(/<select name="kind">[\s\S]*?<option value="2"[^>]*selected/);
+    expect(html).toMatch(/<select name="x">[\s\S]*?<option value="5"[^>]*selected/);
+    expect(html).toMatch(/<select name="y">[\s\S]*?<option value="6"[^>]*selected/);
+    expect(html).toMatch(/<select name="target">[\s\S]*?<option value="1"[^>]*selected/);
+  });
 });
 
 describe("POST /islands/:id/comment (コメント更新)", () => {

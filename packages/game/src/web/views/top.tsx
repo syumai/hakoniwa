@@ -60,7 +60,7 @@ function IslandRow({ island, config }: { island: IslandRowVM; config: GameConfig
         <td class="rank-cell" rowspan={2}>
           {island.rank}
         </td>
-        <td class="island-name" rowspan={2}>
+        <td class={island.absent !== 0 ? "island-name-faded" : "island-name"} rowspan={2}>
           <a href={`/islands/${island.id}`}>
             {island.name}島{island.absent !== 0 ? `(${island.absent})` : ""}
           </a>
@@ -103,7 +103,7 @@ export function TopPage({ vm, config, defaults }: TopPageProps) {
   const showMoneyColumn = config.hideMoneyMode !== 0;
   return (
     <div class="top-page">
-      <p class="big">{config.site.title}</p>
+      <p class="title">{config.site.title}</p>
 
       {vm.debug ? (
         <form action="/turn" method="post">

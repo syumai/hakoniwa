@@ -119,6 +119,17 @@ td.command-cell {
   font-size: 1.6em;
 }
 
+/* サイトタイトル「箱庭諸島２」(Perl 版 $HtagTitle_ = FONT SIZE=7 COLOR="#8888ff")。 */
+.title {
+  font-size: 2.5em;
+  color: #8888ff;
+}
+
+/* トップページの各セクション見出し (Perl 版 $HtagHeader_ = FONT COLOR="#4444ff")。 */
+.top-page h1 {
+  color: #4444ff;
+}
+
 .notice {
   margin: 8px 0;
 }
