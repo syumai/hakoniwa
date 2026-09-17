@@ -171,3 +171,23 @@ export {
   FakeBackupStore,
   FakeLogger,
 } from "./app/fake-repository.ts";
+
+// ----------------------------------------------------------------------
+// storage 層 (Phase 3b)。SqlDriver、マイグレーション、実 SQLite リポジトリ。
+// ----------------------------------------------------------------------
+
+export type { SqlDriver, SqlParam } from "./storage/driver.ts";
+export { schemaSql } from "./storage/schema.ts";
+export { migrate } from "./storage/migrate.ts";
+export type { SqliteGameRepositoryConfig } from "./storage/repository.ts";
+export { SqliteGameRepository } from "./storage/repository.ts";
+
+// ----------------------------------------------------------------------
+// bootstrap 層 (Phase 3b)。env → 設定、パスワードハッシュ、Adapter 共通の組立。
+// ----------------------------------------------------------------------
+
+export { Pbkdf2PasswordHasher } from "./bootstrap/pbkdf2-hasher.ts";
+export type { AppConfig } from "./bootstrap/config-from-env.ts";
+export { loadConfigFromEnv } from "./bootstrap/config-from-env.ts";
+export type { BuildDepsInput, BuiltDeps } from "./bootstrap/build-deps.ts";
+export { buildDeps } from "./bootstrap/build-deps.ts";
