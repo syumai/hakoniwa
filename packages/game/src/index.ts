@@ -108,3 +108,66 @@ export { doIslandProcess } from "./core/turn/island-process.ts";
 export { islandSort } from "./core/turn/sort.ts";
 export type { TurnResult, CreateTurnContextInput } from "./core/turn/index.ts";
 export { runTurn, createTurnContext } from "./core/turn/index.ts";
+
+// ----------------------------------------------------------------------
+// app 層 (Phase 3a)。ports の型、ユースケース (Service)、画面向け DTO。
+// ----------------------------------------------------------------------
+
+export type {
+  GameMeta,
+  IslandSummary,
+  ListLogsQuery,
+  GameRepository,
+  BackupInfo,
+  BackupStore,
+  Clock,
+  PasswordHasher,
+  Logger,
+} from "./app/ports.ts";
+
+export type { AppErrorKind } from "./app/errors.ts";
+export { AppError } from "./app/errors.ts";
+
+export type { VerifyIslandPasswordDeps } from "./app/auth.ts";
+export { safeEqual, verifyIslandPassword } from "./app/auth.ts";
+
+export {
+  MAX_NAME_LEN,
+  MAX_COMMENT_LEN,
+  MAX_LBBS_NAME_LEN,
+  MAX_LBBS_MESSAGE_LEN,
+  stripControlAndComma,
+  cutColumn,
+  sanitizeText,
+  isBadIslandName,
+} from "./app/sanitize.ts";
+
+export type {
+  MoneyDisplay,
+  PrizeVM,
+  IslandRowVM,
+  TopPageVM,
+  IslandDetailVM,
+  IslandPageVM,
+  OwnerPageVM,
+  NewIslandVM,
+  IslandSelectVM,
+} from "./app/view-models.ts";
+export { aboutMoney, buildMoneyDisplay } from "./app/view-models.ts";
+
+export type { GameServiceDeps, CommandInput } from "./app/game-service.ts";
+export { GameService } from "./app/game-service.ts";
+
+export type { TurnServiceDeps } from "./app/turn-service.ts";
+export { TurnService } from "./app/turn-service.ts";
+
+export type { AdminStatus, AdminServiceDeps } from "./app/admin-service.ts";
+export { AdminService } from "./app/admin-service.ts";
+
+export {
+  FakeGameRepository,
+  FakePasswordHasher,
+  FakeClock,
+  FakeBackupStore,
+  FakeLogger,
+} from "./app/fake-repository.ts";
