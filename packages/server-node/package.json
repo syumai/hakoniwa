@@ -5,8 +5,7 @@
   "scripts": {
     "dev": "vp dev",
     "build": "vp build",
-    "start": "node dist/server.js",
-    "cli": "node dist/cli.js"
+    "start": "node dist/server.js"
   },
   "dependencies": {
     "@hakoniwa/game": "workspace:*",
@@ -14,6 +13,7 @@
     "hono": "^4.13.8"
   },
   "devDependencies": {
+    "@hono/vite-dev-server": "^0.26.1",
     "@types/node": "^24.13.5",
     "vitest": "4.1.11"
   }

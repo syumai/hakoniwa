@@ -1,1 +1,189 @@
-/* 画面スタイル (Phase 4 で実装する) */
+/*
+ * 箱庭諸島 画面スタイル。
+ * lib/Hako/Const.pm 「外見関係」(FONT COLOR / BGCOLOR) の設定を CSS クラスへ移植する。
+ * 対応する Perl 側の変数名をコメントに残す。
+ */
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  /* Perl 版 $htmlBody = 'BGCOLOR="#EEFFFF"' */
+  background-color: #eeffff;
+  color: #000000;
+  font-family: "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+  padding: 8px;
+}
+
+a {
+  color: inherit;
+}
+
+hr {
+  margin: 12px 0;
+}
+
+/* テーブルは border 付き。 */
+table {
+  border-collapse: collapse;
+  margin: 8px 0;
+}
+
+table th,
+table td {
+  border: 1px solid #333333;
+  padding: 2px 6px;
+}
+
+/* 順位表における見出し (Perl 版 $HtagTH_ / $HbgTitleCell)。 */
+th {
+  background-color: #ccffcc;
+  color: #c00000;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+/* 島の名前など (Perl 版 $HtagName_)。 */
+.island-name {
+  color: #a06040;
+  font-weight: bold;
+}
+
+/* 放置島の薄くなった島の名前 (Perl 版 $HtagName2_)。 */
+.island-name-faded {
+  color: #808080;
+  font-weight: bold;
+}
+
+/* 順位の番号 (Perl 版 $HtagNumber_ / $HbgNumberCell)。 */
+.rank-cell {
+  background-color: #ccffcc;
+  color: #800000;
+  font-weight: bold;
+  text-align: center;
+}
+
+/* 開発計画の名前 (Perl 版 $HtagComName_)。 */
+.command-name {
+  color: #d08000;
+  font-weight: bold;
+}
+
+/* 災害名 (Perl 版 $HtagDisaster_)。 */
+.disaster {
+  color: #ff0000;
+  font-weight: bold;
+}
+
+/* ローカル掲示板、観光者の書いた文字 (Perl 版 $HtagLbbsSS_)。 */
+.lbbs-visitor {
+  color: #0000ff;
+  font-weight: bold;
+}
+
+/* ローカル掲示板、島主の書いた文字 (Perl 版 $HtagLbbsOW_)。 */
+.lbbs-owner {
+  color: #ff0000;
+  font-weight: bold;
+}
+
+/* 順位表: 島名/情報セル (Perl 版 $HbgNameCell / $HbgInfoCell)。 */
+.rank-table td,
+.info-table td {
+  background-color: #ccffff;
+}
+
+/* 順位/コメント欄はセル背景を上書き (Perl 版 $HbgNumberCell / $HbgCommentCell)。 */
+.rank-table td.rank-cell,
+.info-table td.rank-cell {
+  background-color: #ccffcc;
+}
+
+.comment-cell {
+  background-color: #ccffcc;
+}
+
+/* 開発計画: フォーム/地図/計画一覧セル (Perl 版 $HbgInputCell / $HbgMapCell / $HbgCommandCell)。 */
+td.input-cell,
+td.map-cell,
+td.command-cell {
+  background-color: #ccffcc;
+  vertical-align: top;
+}
+
+/* 大きい文字 (Perl 版 $HtagBig_)。 */
+.big {
+  font-size: 1.6em;
+}
+
+.notice {
+  margin: 8px 0;
+}
+
+.error {
+  color: #ff0000;
+}
+
+/* 地図: 画像を隙間なく並べる。 */
+.map {
+  white-space: nowrap;
+  line-height: 0;
+}
+
+.map img {
+  vertical-align: top;
+  border: 0;
+}
+
+.map-row {
+  white-space: nowrap;
+  line-height: 0;
+}
+
+/* 地図上の 1 ヘックス (owner モードのみ <a> でラップされる)。 */
+a.map-cell {
+  display: inline-block;
+  line-height: 0;
+}
+
+a.map-cell img {
+  border: 0;
+}
+
+.command-line {
+  line-height: 1.4;
+}
+
+.command-number {
+  color: #800000;
+  font-weight: bold;
+  text-decoration: none;
+  margin-right: 4px;
+}
+
+.log-list,
+.history-list {
+  line-height: 1.4;
+}
+
+.log-turn {
+  font-weight: bold;
+}
+
+.log-secret {
+  font-weight: bold;
+}
+
+.backup-row {
+  border: 1px solid #999999;
+  border-radius: 4px;
+  padding: 8px;
+  margin: 8px 0;
+}
+
+.footer {
+  font-size: 0.9em;
+}

@@ -156,6 +156,8 @@ export interface OwnerPageProps {
 export function OwnerPage({ vm, config, defaults, password, targets, notice }: OwnerPageProps) {
   return (
     <div class="owner-page">
+      {/* 座標選択の補助スクリプト (owner.tsx 内でのみ必要なため、この画面だけで読み込む)。 */}
+      <script src="/owner.js" defer></script>
       {notice !== undefined ? <Notice message={notice} /> : ""}
       <p class="big">
         <span class="island-name">{vm.name}島</span>開発計画
