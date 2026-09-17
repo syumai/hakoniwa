@@ -1,0 +1,8 @@
+{
+  "name": "@hakoniwa/server-workers",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@hakoniwa/game": "workspace:*"
+  }
+}

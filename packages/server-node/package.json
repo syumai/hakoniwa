@@ -1,0 +1,19 @@
+{
+  "name": "@hakoniwa/server-node",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vp dev",
+    "build": "vp build",
+    "start": "node dist/server.js",
+    "cli": "node dist/cli.js"
+  },
+  "dependencies": {
+    "@hakoniwa/game": "workspace:*",
+    "@hono/node-server": "^2.1.1",
+    "hono": "^4.13.8"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.5"
+  }
+}

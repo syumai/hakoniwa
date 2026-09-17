@@ -1,0 +1,4 @@
+[tools]
+node = "24"
+pnpm = "10"
+vp = "0.3.2" # mise registry の `vp` (= npm:vite-plus)。npm の最新に合わせる
