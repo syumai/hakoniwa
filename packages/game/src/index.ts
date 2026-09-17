@@ -60,3 +60,31 @@ export {
   expToLevel,
   isHardened,
 } from "./core/terrain.ts";
+
+export type { NewIslandInit } from "./core/island.ts";
+export { makeNewLand, makeNewIsland, estimate } from "./core/island.ts";
+
+export type { AutoPrepareKind } from "./core/commands/queue.ts";
+export {
+  slideFront,
+  slideBack,
+  writeAt,
+  insertAt,
+  deleteAt,
+  clearAll,
+  autoPrepare,
+} from "./core/commands/queue.ts";
+
+export type { FormattedCommand, ResolveIslandName } from "./core/commands/format.ts";
+export { formatCommand } from "./core/commands/format.ts";
+
+export type { FlagPrizeView, KilledMonstersView } from "./core/prize.ts";
+export {
+  hasFlag,
+  withFlag,
+  withMonster,
+  withTurnPrize,
+  turnPrizes,
+  flagPrizes,
+  killedMonsters,
+} from "./core/prize.ts";
