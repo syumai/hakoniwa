@@ -191,3 +191,10 @@ export type { AppConfig } from "./bootstrap/config-from-env.ts";
 export { loadConfigFromEnv } from "./bootstrap/config-from-env.ts";
 export type { BuildDepsInput, BuiltDeps } from "./bootstrap/build-deps.ts";
 export { buildDeps } from "./bootstrap/build-deps.ts";
+
+// ----------------------------------------------------------------------
+// web 層 (Phase 4a)。ランタイム非依存の Hono app。静的配信は Adapter の責務。
+// ----------------------------------------------------------------------
+
+export type { WebDeps } from "./web/deps.ts";
+export { createApp } from "./web/app.tsx";

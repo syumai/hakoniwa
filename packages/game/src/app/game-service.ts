@@ -61,11 +61,12 @@ export interface GameServiceDeps {
   rng: Rng;
 }
 
-function buildDetailVM(island: Island, rank: number): IslandDetailVM {
+function buildDetailVM(island: Island, rank: number, turn: number): IslandDetailVM {
   return {
     id: island.id,
     name: island.name,
     rank,
+    turn,
     absent: island.absent,
     pop: island.pop,
     area: island.area,
@@ -126,7 +127,7 @@ export class GameService {
     const sinceTurn = meta.turn - config.logKeepTurns + 1;
     const logs = repo.listLogs({ sinceTurn, islandId: id });
     return {
-      ...buildDetailVM(island, rank),
+      ...buildDetailVM(island, rank, meta.turn),
       moneyDisplay: buildMoneyDisplay(island.money, config, false),
       lbbs: island.lbbs,
       logs,
@@ -150,9 +151,10 @@ export class GameService {
       formatCommand(command, index, config, resolveIslandName),
     );
     return {
-      ...buildDetailVM(island, rank),
+      ...buildDetailVM(island, rank, meta.turn),
       money: island.money,
       commands,
+      rawCommands: island.commands,
       lbbs: island.lbbs,
       logs,
     };
@@ -279,7 +281,7 @@ export class GameService {
       repo.appendHistory(history);
 
       return {
-        ...buildDetailVM(island, rank + 1),
+        ...buildDetailVM(island, rank + 1, meta.turn),
         money: island.money,
       };
     });
@@ -364,7 +366,13 @@ export class GameService {
       }
 
       repo.updateIsland(island);
-      return { ...this.#buildOwnerPageVM(id), notice: "計画を登録しました。" };
+      // Perl 版 commandMain は delete モードと AutoDelete (全消し) を tempCommandDelete、
+      // それ以外 (insert/write/AutoPrepare/AutoPrepare2) を tempCommandAdd で表示する。
+      const notice =
+        input.mode === "delete" || kind === CommandKind.AutoDelete
+          ? "コマンドを削除しました。"
+          : "コマンドを登録しました。";
+      return { ...this.#buildOwnerPageVM(id), notice };
     });
   }
 
@@ -530,7 +538,7 @@ export class GameService {
         message: cleanMessage,
         turn: meta.turn,
       });
-      return { ...this.#buildIslandPageVM(id), notice: "掲示板に書き込みました。" };
+      return { ...this.#buildIslandPageVM(id), notice: "記帳を行いました。" };
     });
   }
 
@@ -568,7 +576,7 @@ export class GameService {
         message: cleanMessage,
         turn: meta.turn,
       });
-      return { ...this.#buildOwnerPageVM(id), notice: "掲示板に書き込みました。" };
+      return { ...this.#buildOwnerPageVM(id), notice: "記帳を行いました。" };
     });
   }
 
@@ -605,7 +613,7 @@ export class GameService {
         posts.splice(number, 1);
       }
       repo.replaceLbbs(id, posts);
-      return { ...this.#buildOwnerPageVM(id), notice: "掲示板の書き込みを削除しました。" };
+      return { ...this.#buildOwnerPageVM(id), notice: "記帳内容を削除しました。" };
     });
   }
 }

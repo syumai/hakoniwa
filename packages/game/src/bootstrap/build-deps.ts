@@ -1,6 +1,4 @@
 // tmp/13-monorepo.md 「@hakoniwa/game の公開 API」、tmp/08 の buildDeps に対応する組立関数。
-// 設計書との差異: 13 は `BuiltApp` という型名を挙げているが、Hono app は Phase 4 で追加するため、
-// 本 Phase (3b) では app を含まない `BuiltDeps` を返す (Phase 4 で `app` フィールドを追加する)。
 import { AdminService } from "../app/admin-service.ts";
 import { GameService } from "../app/game-service.ts";
 import type { BackupStore, Clock, Logger } from "../app/ports.ts";
@@ -9,6 +7,8 @@ import { createMathRandomRng } from "../core/rng.ts";
 import type { Rng } from "../core/rng.ts";
 import type { SqlDriver } from "../storage/driver.ts";
 import { SqliteGameRepository } from "../storage/repository.ts";
+import { createApp } from "../web/app.tsx";
+import type { WebDeps } from "../web/deps.ts";
 import type { AppConfig } from "./config-from-env.ts";
 import { Pbkdf2PasswordHasher } from "./pbkdf2-hasher.ts";
 
@@ -30,6 +30,8 @@ export interface BuiltDeps {
   turnService: TurnService;
   adminService: AdminService;
   config: AppConfig;
+  /** ランタイム非依存の Hono app (Phase 4a で追加)。静的配信は Adapter が別途行う。 */
+  app: ReturnType<typeof createApp>;
 }
 
 /** console ベースの既定ロガー。bootstrap 層 (Adapter 組立コード) でのみ console を直接使う。 */
@@ -85,5 +87,8 @@ export function buildDeps(input: BuildDepsInput): BuiltDeps {
     turnService,
   });
 
-  return { repo, hasher, gameService, turnService, adminService, config };
+  const webDeps: WebDeps = { gameService, turnService, adminService, config, clock };
+  const app = createApp(webDeps);
+
+  return { repo, hasher, gameService, turnService, adminService, config, app };
 }

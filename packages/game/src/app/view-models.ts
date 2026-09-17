@@ -4,7 +4,7 @@
 import type { GameConfig } from "../core/config.ts";
 import type { FormattedCommand } from "../core/commands/format.ts";
 import type { FlagPrizeView, KilledMonstersView } from "../core/prize.ts";
-import type { HistoryEntry, LbbsPost, LogEntry, Terrain } from "../core/types.ts";
+import type { Command, HistoryEntry, LbbsPost, LogEntry, Terrain } from "../core/types.ts";
 
 /**
  * 資金の表示方法。Perl 版 aboutMoney / hideMoneyMode の移植。
@@ -84,6 +84,8 @@ export interface IslandDetailVM {
   name: string;
   /** 1 始まり。 */
   rank: number;
+  /** 現在のターン数。IslandMap の怪獣硬化判定 (isHardened) に必要 (web 層で追加)。 */
+  turn: number;
   absent: number;
   pop: number;
   area: number;
@@ -108,6 +110,11 @@ export interface IslandPageVM extends IslandDetailVM {
 export interface OwnerPageVM extends IslandDetailVM {
   money: number;
   commands: FormattedCommand[];
+  /**
+   * 整形前のコマンド一覧 (web 層で追加)。IslandMap の座標付き計画オーバーレイ (Perl 版 comStr) は
+   * x/y が必要だが FormattedCommand は文字列化済みで持たないため、別途生の Command 配列を持たせる。
+   */
+  rawCommands: Command[];
   lbbs: LbbsPost[];
   /** mode 1 (本人の機密ログを含む)。 */
   logs: LogEntry[];
