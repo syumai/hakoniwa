@@ -1,0 +1,23 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`runTurn: 固定seedでの50ターン進行スナップショット (リファクタリング検出用) > 各島の主要な値とログ件数がスナップショットと一致する 1`] = `
+{
+  "islands": [
+    {
+      "area": 29,
+      "food": 0,
+      "id": 1,
+      "money": 600,
+      "pop": 32,
+      "prize": {
+        "flags": 0,
+        "monsters": 0,
+        "turns": [],
+      },
+    },
+  ],
+  "totalHistory": 1,
+  "totalLogs": 31,
+  "turn": 50,
+}
+`;

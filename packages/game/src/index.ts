@@ -103,3 +103,8 @@ export { doPrepare, doReclaim, doDestroy, doSellTree } from "./core/turn/command
 export { doBuild, doMountain, doSbase } from "./core/turn/command-build.ts";
 export { doSendMonster, doSell, doAid, doPropaganda, doGiveup } from "./core/turn/command-misc.ts";
 export { doMissile } from "./core/turn/missile.ts";
+export { doEachHex, countGrow } from "./core/turn/each-hex.ts";
+export { doIslandProcess } from "./core/turn/island-process.ts";
+export { islandSort } from "./core/turn/sort.ts";
+export type { TurnResult, CreateTurnContextInput } from "./core/turn/index.ts";
+export { runTurn, createTurnContext } from "./core/turn/index.ts";
