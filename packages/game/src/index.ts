@@ -88,3 +88,18 @@ export {
   flagPrizes,
   killedMonsters,
 } from "./core/prize.ts";
+
+export * as logMarkup from "./core/log/markup.ts";
+export * as logMessages from "./core/log/messages.ts";
+export { LogCollector } from "./core/log/collector.ts";
+
+export type { TurnContext } from "./core/turn/context.ts";
+export { getState, findIsland } from "./core/turn/context.ts";
+export { income } from "./core/turn/income.ts";
+export { wideDamage } from "./core/turn/wide-damage.ts";
+export type { CommandOutcome } from "./core/turn/command.ts";
+export { doCommand } from "./core/turn/command.ts";
+export { doPrepare, doReclaim, doDestroy, doSellTree } from "./core/turn/command-land.ts";
+export { doBuild, doMountain, doSbase } from "./core/turn/command-build.ts";
+export { doSendMonster, doSell, doAid, doPropaganda, doGiveup } from "./core/turn/command-misc.ts";
+export { doMissile } from "./core/turn/missile.ts";

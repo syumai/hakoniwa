@@ -109,6 +109,8 @@ export interface LogEntry {
   targetId: number;
   /** エスケープ済み HTML 断片。 */
   html: string;
+  /** logFlush 後の表示順 (0 から)。 */
+  seq: number;
 }
 
 export interface HistoryEntry {
