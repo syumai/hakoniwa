@@ -73,7 +73,7 @@ vp run dev
 - `/login` を開き、開発ログインのフォームに任意のメールアドレス (`HAKONIWA_ADMIN_EMAILS` に指定したもの) を入力してログインし、`/admin` で「新しいデータを作る」(開始日時・最終ターン・1 ターンの長さを指定可能) を実行する
 - CLI で初期化する: `vp run --filter ./packages/server-node cli -- db init`
 
-データベースのスキーマ変更は、Node/Workers いずれも起動時に自動でマイグレーションされます。ただし v1 (パスワード認証) のデータベースファイルが残っている場合はスキーマに互換性が無いため、`vp run --filter ./packages/server-node cli -- db reset --yes` で一度削除してから初期化し直してください (`HAKONIWA_DB_PATH` を新しいパスにして作り直しても構いません)。
+データベースのスキーマ変更は、Node/Workers いずれも起動時に自動でマイグレーションされます。ただし初期のスキーマ (v1) で作られたデータベースファイルが残っている場合はスキーマに互換性が無いため、`vp run --filter ./packages/server-node cli -- db reset --yes` で一度削除してから初期化し直してください (`HAKONIWA_DB_PATH` を新しいパスにして作り直しても構いません)。
 
 ## 運用 (Node)
 
@@ -93,7 +93,7 @@ node packages/server-node/dist/cli.js --help
 node packages/server-node/dist/cli.js db init          # データの新規作成
 node packages/server-node/dist/cli.js db init --start-at 2026-10-01T21:00:00+09:00 --final-turn 100 --unit-time 3600
 node packages/server-node/dist/cli.js db status        # ターン数、最終更新時刻、開始時刻、最終ターン、1ターンの長さ、状態、島数など
-node packages/server-node/dist/cli.js db reset --yes    # 現役データを削除する (v1 の DB を使い続けている場合の移行にも使う)
+node packages/server-node/dist/cli.js db reset --yes    # 現役データを削除する (古いスキーマの DB を作り直す場合にも使う)
 node packages/server-node/dist/cli.js turn check       # 期限が来ていればターンを進める (終了後は 0)
 node packages/server-node/dist/cli.js turn advance     # 強制的に 1 ターン進める (終了後は何もしない)
 node packages/server-node/dist/cli.js time set <unix|ISO8601>
@@ -238,8 +238,6 @@ Workers Cache は `Cache-Control` の無い応答も RFC 9111 のヒューリス
 
 最終ターンを設定すると、そのターンの処理が終わった時点でゲームが終了し、以降はターンが進まなくなります (管理画面の「ゲーム設定」または CLI `game set-final-turn` でいつでも変更・解除できます)。終了後もトップと観光・開発画面は閲覧でき、掲示板への記帳もできますが、計画登録・コメント更新・名前変更・新しい島の作成はできなくなります。
 
-v1 にあった `HAKONIWA_MASTER_PASSWORD` / `HAKONIWA_SPECIAL_PASSWORD` は v2 で廃止されました (パスワード認証を全廃し、better-auth によるログインに置き換えたため)。管理画面へは管理者メールでログインします。資金・食料の最大化は管理画面の操作 (`/admin` の「資金・食料の最大化」) として引き継いでいます。
-
 ## 管理画面の機能一覧 (`/admin`)
 
 - **データ作成・削除**: 「新しいデータを作る」(開始日時・最終ターン・1 ターンの長さを指定可能) / 「このデータを削除」
@@ -247,7 +245,7 @@ v1 にあった `HAKONIWA_MASTER_PASSWORD` / `HAKONIWA_SPECIAL_PASSWORD` は v2 
 - **ゲーム設定**: 最終ターン数の変更 (空欄で無期限)、1 ターンの長さの変更 (次のターン境界から反映)
 - **ターンを進める**: `HAKONIWA_DEBUG=true` のときにトップページにも表示される、手動でのターン進行 (管理者ログイン必須)
 - **ログイン方法の ON/OFF**: X / Discord / メールをそれぞれ有効化・無効化 (環境変数で未設定の方法は選べない)
-- **資金・食料の最大化**: 島を選んで資金・食料を最大値にする (v1 の特殊パスワードの代替)
+- **資金・食料の最大化**: 島を選んで資金・食料を最大値にする
 - **バックアップ**: 一覧表示、作成 (ラベル指定可)、現役データへの復元、削除 (Node はファイル、Workers は PITR)
 
 ## 開発
