@@ -1,0 +1,39 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "hakoniwa",
+  "main": "src/worker.ts",
+  // 設計書との差異: tmp/12-workers-adapter.md は現在日付近辺を挙げているが、
+  // @cloudflare/vitest-pool-workers 0.22.0 が同梱する miniflare (workerd) の対応上限が
+  // 2026-08-22 だったため、テストが通る日付に合わせている (wrangler dev 側はより新しい
+  // workerd を使うため問題なく動く。テストと dev で workerd のバージョンが揃うよう、
+  // 依存更新時にこの日付も見直すこと)。
+  "compatibility_date": "2026-08-22",
+  // packages/game/public (images/style.css/owner.js) を Worker より先に配信する。
+  "assets": {
+    "directory": "../game/public",
+  },
+  // 世界 = 1 DO (SQLite backend)。tmp/12-workers-adapter.md 「構成」節。
+  "durable_objects": {
+    "bindings": [{ "name": "GAME", "class_name": "HakoniwaGame" }],
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["HakoniwaGame"] }],
+  // ターン進行の外部トリガー。15 分ごとに DO の checkTurn() (RPC) を呼ぶ。
+  "triggers": {
+    "crons": ["*/15 * * * *"],
+  },
+  // 非秘密の設定値。秘密情報は `wrangler secret put <NAME>` で登録する (README 参照):
+  //   wrangler secret put HAKONIWA_AUTH_SECRET
+  //   wrangler secret put HAKONIWA_X_CLIENT_ID
+  //   wrangler secret put HAKONIWA_X_CLIENT_SECRET
+  //   wrangler secret put HAKONIWA_DISCORD_CLIENT_ID
+  //   wrangler secret put HAKONIWA_DISCORD_CLIENT_SECRET
+  //   wrangler secret put HAKONIWA_RESEND_API_KEY
+  "vars": {
+    "HAKONIWA_BASE_URL": "https://hakoniwa.example.workers.dev",
+    "HAKONIWA_UNIT_TIME_SEC": "21600",
+    "HAKONIWA_MAX_CATCH_UP_TURNS": "3",
+    "HAKONIWA_ADMIN_EMAILS": "",
+    "HAKONIWA_MAIL_FROM": "hakoniwa@example.com",
+    "HAKONIWA_DEV_LOGIN": "false",
+  },
+}

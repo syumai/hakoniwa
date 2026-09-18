@@ -16,7 +16,7 @@ pnpm workspace によるモノレポです。パッケージ化しているの�
 | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `packages/game` (`@hakoniwa/game`)                     | ゲーム本体。ランタイム非依存で、Node や Cloudflare 固有の API を使いません。`core` (ゲームロジック)、`app` (ユースケース)、`storage` (SQLite 用ストレージ抽象)、`web` (Hono + hono/jsx の画面)、`bootstrap` (組み立て) と、画像や CSS などの `public` を含みます |
 | `packages/server-node` (`@hakoniwa/server-node`)       | Node.js 向け Adapter。`node:sqlite` によるストレージ、HTTP サーバー、ファイルバックアップ、CLI                                                                                                                                                                   |
-| `packages/server-workers` (`@hakoniwa/server-workers`) | Cloudflare Workers (Durable Objects SQLite) 向け Adapter。現時点では型定義のみのスケルトンです                                                                                                                                                                   |
+| `packages/server-workers` (`@hakoniwa/server-workers`) | Cloudflare Workers (Durable Objects SQLite) 向け Adapter。DO のストレージ、Cron Trigger によるターン進行、PITR バックアップ                                                                                                                                      |
 
 ## 必要なツール
 
@@ -122,12 +122,87 @@ node packages/server-node/dist/cli.js backup list|create [label]|restore <label>
 
 v1 にあった `HAKONIWA_MASTER_PASSWORD` / `HAKONIWA_SPECIAL_PASSWORD` は v2 で廃止されました (パスワード認証を全廃し、better-auth によるログインに置き換えたため)。管理画面へは管理者メールでログインします。資金・食料の最大化は管理画面の操作 (`/admin` の「資金・食料の最大化」) として引き継いでいます。
 
+## Cloudflare Workers 版
+
+`packages/server-workers` は Cloudflare Workers (Durable Objects の SQLite バックエンド) 向けの Adapter です。世界全体を 1 つの Durable Object (`HakoniwaGame`) に収め、`packages/game` が提供する Hono app をそのまま動かします。ゲームロジックやスキーマは Node 版と共通で、`SqlDriver`/`BackupStore` の実装だけが異なります。
+
+### 前提
+
+- [Cloudflare アカウント](https://dash.cloudflare.com/sign-up) と `wrangler login` (実際にデプロイする場合のみ必要。ローカルの `wrangler dev` だけならログイン不要)
+- `packages/server-workers/wrangler.jsonc` の `name`・`vars.HAKONIWA_BASE_URL` を自分の Workers サブドメインに合わせて書き換える
+
+### ローカル開発 (`wrangler dev`)
+
+`wrangler dev` は `.env` (mise 経由) を読みません。ローカル用の秘密情報は `packages/server-workers/.dev.vars` に書きます (git 管理外。このリポジトリには同梱していないので、以下の内容で自分で作成してください)。
+
+```sh
+# packages/server-workers/.dev.vars
+HAKONIWA_AUTH_SECRET=（openssl rand -base64 32 などで生成した32バイト以上のランダム文字列）
+HAKONIWA_DEV_LOGIN=true
+HAKONIWA_ADMIN_EMAILS=you@example.com
+HAKONIWA_BASE_URL=http://localhost:8787
+```
+
+```sh
+pnpm --filter @hakoniwa/server-workers dev
+# もしくは
+cd packages/server-workers && vp run dev   # = wrangler dev
+```
+
+`.dev.vars` を作らずに一時的な値で試したい場合は `--var` オプションでも指定できます。
+
+```sh
+cd packages/server-workers
+wrangler dev --port 8787 \
+  --var HAKONIWA_AUTH_SECRET:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \
+  --var HAKONIWA_DEV_LOGIN:true \
+  --var HAKONIWA_ADMIN_EMAILS:you@example.com \
+  --var HAKONIWA_BASE_URL:http://localhost:8787
+```
+
+初回のデータ作成手順は Node 版と同じです (`/login` から開発ログイン → `/admin` で「新しいデータを作る」)。ローカルの DO の状態は `packages/server-workers/.wrangler/state` に保存されます (git 管理外)。
+
+### デプロイ
+
+```sh
+pnpm --filter @hakoniwa/server-workers deploy
+# もしくは
+cd packages/server-workers && wrangler deploy
+```
+
+秘密情報は `wrangler secret put <NAME>` で登録します (`wrangler.jsonc` の `vars` には書かない)。
+
+```sh
+wrangler secret put HAKONIWA_AUTH_SECRET
+wrangler secret put HAKONIWA_X_CLIENT_ID
+wrangler secret put HAKONIWA_X_CLIENT_SECRET
+wrangler secret put HAKONIWA_DISCORD_CLIENT_ID
+wrangler secret put HAKONIWA_DISCORD_CLIENT_SECRET
+wrangler secret put HAKONIWA_RESEND_API_KEY
+```
+
+非秘密の設定 (`HAKONIWA_BASE_URL`、`HAKONIWA_UNIT_TIME_SEC`、`HAKONIWA_ADMIN_EMAILS` 等) は `wrangler.jsonc` の `vars` に書きます。`HAKONIWA_DEV_LOGIN` は本番の `vars` では必ず `false` のままにしてください。
+
+### ターン進行の仕組み (Cron Trigger)
+
+Node 版のタイマーの代わりに、`wrangler.jsonc` の `triggers.crons` (既定 `*/15 * * * *`、15 分ごと) から Worker の `scheduled` ハンドラが呼ばれ、DO の RPC `checkTurn()` (`turnService.advanceTurnIfDue`) を実行します。実際にターンを進めるべきかどうかは `HAKONIWA_UNIT_TIME_SEC` と最終更新時刻から判定するため、Cron 側は境界を意識しません。ターン境界と Cron 間隔の差 (最大 15 分) だけ進行が遅れますが、リクエストごとの遅延判定 (turn-check ミドルウェア) も併存するのでアクセスがあればその時点で進みます。ローカルの `wrangler dev` では Cron は自動発火しないため、手動で `curl http://localhost:8787/cdn-cgi/local/scheduled` を叩いて試せます。
+
+### バックアップ (PITR)
+
+ファイルベースのバックアップの代わりに、SQLite backend の DO が持つ Point-in-Time Recovery のブックマークを使います。管理画面からの操作は Node 版と同じですが、`restore` は DO を再起動する (`ctx.abort()`) ため、実行後は「復元を予約しました。数秒後に再読み込みしてください」という案内になります。
+
 ## テストと静的検査
 
 ```sh
-vp test    # Vitest
-vp check   # フォーマット、lint、型チェック
+vp test    # Vitest (packages/server-workers 以外)
+vp check   # フォーマット、lint、型チェック (packages/server-workers を含む全パッケージ)
 vp fmt     # フォーマットの自動修正
+```
+
+`packages/server-workers` のテストは `@cloudflare/vitest-pool-workers` (workerd 上で実行する Vitest プール) を使っていますが、`vp test` が内蔵する vitest ランナーとは別インスタンスのため `vp test` の集約実行には乗らず、`vite.config.ts` の `test.projects` から明示的に除外しています。単体では次のコマンドで実行できます。
+
+```sh
+pnpm --filter @hakoniwa/server-workers test
 ```
 
 ## ライセンス

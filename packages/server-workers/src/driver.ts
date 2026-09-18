@@ -1,57 +1,43 @@
-// tmp/12-workers-adapter.md 「SqlDriver の DO 実装」節の骨子。
-// 型定義のみ。各メソッドの実装は次フェーズで行う。
-// @cloudflare/workers-types・cloudflare:workers は依存に追加せず、この骨子が必要とする
-// 最小限の型をローカルに定義する (Durable Object の実際の型と構造互換であれば足りる)。
+// tmp/12-workers-adapter.md 「SqlDriver の DO 実装」節の実装。
+// Durable Object (SQLite backend) の同期 SQL API (`ctx.storage.sql`) を `SqlDriver` に載せる。
 import type { SqlDriver, SqlParam } from "@hakoniwa/game";
 
-/** `ctx.storage.sql.exec()` が返すカーソルのうち、この骨子が使う部分だけのローカル型。 */
-export interface DurableObjectSqlCursorLike {
-  toArray(): unknown[];
-  readonly rowsWritten: number;
-}
-
-/** `ctx.storage.sql` のローカル型。 */
-export interface DurableObjectSqlStorageLike {
-  exec(query: string, ...bindings: unknown[]): DurableObjectSqlCursorLike;
-}
-
-/** `ctx.storage` のうち、この骨子が使う部分だけのローカル型。 */
-export interface DurableObjectStorageLike {
-  sql: DurableObjectSqlStorageLike;
-  transactionSync<T>(fn: () => T): T;
-}
-
 /**
- * tmp/12-workers-adapter.md 「SqlDriver の DO 実装」の骨子。
+ * `ctx.storage` (DurableObjectStorage) による `SqlDriver` 実装。
  *
- * 実装時の注意点 (12 参照):
+ * 実装時の注意点 (tmp/12-workers-adapter.md 参照):
  * - `sql.exec` に `BEGIN`/`COMMIT` を渡せないため、`transaction` は `transactionSync` を使う
  *   (Node 版 `NodeSqliteDriver` の `BEGIN IMMEDIATE` とは異なる)。
- * - `tryBumpTurn` の更新件数は `rowsWritten` ではなく `run()` の後に
- *   `get('SELECT changes() AS n')` で取る方が両実装で確実。
- *
- * 実装は次フェーズ。各メソッドは骨子として `not implemented` を投げる。
+ * - `run()` の戻り値は使わない (`GameRepository` 側は `SELECT changes()` で更新件数を取る)。
+ * - `exec()` は複数文をまとめて実行できる (スキーマ適用用)。
  */
 export class DurableObjectSqlDriver implements SqlDriver {
-  constructor(private readonly storage: DurableObjectStorageLike) {}
+  readonly #storage: DurableObjectStorage;
 
-  exec(_sql: string): void {
-    throw new Error("not implemented");
+  constructor(storage: DurableObjectStorage) {
+    this.#storage = storage;
   }
 
-  run(_sql: string, ..._params: SqlParam[]): void {
-    throw new Error("not implemented");
+  exec(sql: string): void {
+    // 複数文を渡せるのはこの exec() のみ。戻り値 (カーソル) は使わないので捨ててよい。
+    this.#storage.sql.exec(sql);
   }
 
-  get<T = Record<string, unknown>>(_sql: string, ..._params: SqlParam[]): T | undefined {
-    throw new Error("not implemented");
+  run(sql: string, ...params: SqlParam[]): void {
+    // カーソルを最後まで読み切らないと実行が完了しない場合があるため toArray() で消費する。
+    this.#storage.sql.exec(sql, ...params).toArray();
   }
 
-  all<T = Record<string, unknown>>(_sql: string, ..._params: SqlParam[]): T[] {
-    throw new Error("not implemented");
+  get<T = Record<string, unknown>>(sql: string, ...params: SqlParam[]): T | undefined {
+    const rows = this.#storage.sql.exec(sql, ...params).toArray();
+    return rows[0] as T | undefined;
   }
 
-  transaction<T>(_fn: () => T): T {
-    throw new Error("not implemented");
+  all<T = Record<string, unknown>>(sql: string, ...params: SqlParam[]): T[] {
+    return this.#storage.sql.exec(sql, ...params).toArray() as T[];
+  }
+
+  transaction<T>(fn: () => T): T {
+    return this.#storage.transactionSync(fn);
   }
 }

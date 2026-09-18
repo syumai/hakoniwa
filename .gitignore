@@ -3,3 +3,5 @@ node_modules
 **/dist
 data/
 .env
+# wrangler dev のローカル DO 状態 (PITR ブックマーク等はここに永続化される)。
+.wrangler/
