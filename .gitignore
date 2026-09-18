@@ -5,3 +5,5 @@ data/
 .env
 # wrangler dev のローカル DO 状態 (PITR ブックマーク等はここに永続化される)。
 .wrangler/
+# wrangler dev のローカル用秘密情報 (root に置く。wrangler.jsonc と同じ場所)。
+.dev.vars

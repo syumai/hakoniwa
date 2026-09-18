@@ -10,7 +10,12 @@ export interface OAuthClientConfig {
 }
 
 export interface AuthConfig {
-  baseUrl: string;
+  /**
+   * 未設定なら better-auth がリクエストから baseURL/trustedOrigins を推定する
+   * (bootstrap/auth.ts, web/middleware/csrf.tsx 参照)。カスタムドメインや逆プロキシ配下で
+   * 明示したい場合だけ HAKONIWA_BASE_URL を設定する。
+   */
+  baseUrl?: string;
   /** better-auth の secret と CSRF トークンの HMAC 鍵。 */
   secret: string;
   x?: OAuthClientConfig;
@@ -106,7 +111,7 @@ function loadMailConfig(env: Record<string, string | undefined>): MailConfig {
 }
 
 function loadAuthConfig(env: Record<string, string | undefined>): AuthConfig {
-  const baseUrl = env.HAKONIWA_BASE_URL ?? "http://localhost:5173";
+  const baseUrl = nonEmpty(env.HAKONIWA_BASE_URL);
   const secret = nonEmpty(env.HAKONIWA_AUTH_SECRET);
   if (secret === undefined) {
     throw new Error(
@@ -128,7 +133,7 @@ function loadAuthConfig(env: Record<string, string | undefined>): AuthConfig {
   const adminEmails = parseCsvList(env.HAKONIWA_ADMIN_EMAILS);
 
   return {
-    baseUrl,
+    ...(baseUrl !== undefined ? { baseUrl } : {}),
     secret,
     ...(x !== undefined ? { x } : {}),
     ...(discord !== undefined ? { discord } : {}),

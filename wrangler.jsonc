@@ -1,7 +1,12 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "hakoniwa",
-  "main": "src/worker.ts",
+  // 設計書との差異: Deploy to Cloudflare ボタンはサブディレクトリ単位のデプロイを
+  // サポートしない (依存が閉じている必要があるが packages/server-workers は
+  // workspace 依存の @hakoniwa/game を参照するため使えない)。そのため wrangler.jsonc を
+  // リポジトリ直下に置き、リポジトリ全体を 1 つのデプロイ単位にする
+  // (tmp/12-workers-adapter.md 末尾「Deploy to Cloudflare ボタン」節)。
+  "main": "packages/server-workers/src/worker.ts",
   // 設計書との差異: tmp/12-workers-adapter.md は現在日付近辺を挙げているが、
   // @cloudflare/vitest-pool-workers 0.22.0 が同梱する miniflare (workerd) の対応上限が
   // 2026-08-22 だったため、テストが通る日付に合わせている (wrangler dev 側はより新しい
@@ -10,7 +15,7 @@
   "compatibility_date": "2026-08-22",
   // packages/game/public (images/style.css/owner.js) を Worker より先に配信する。
   "assets": {
-    "directory": "../game/public",
+    "directory": "packages/game/public",
   },
   // 世界 = 1 DO (SQLite backend)。tmp/12-workers-adapter.md 「構成」節。
   "durable_objects": {
@@ -29,7 +34,9 @@
   //   wrangler secret put HAKONIWA_DISCORD_CLIENT_SECRET
   //   wrangler secret put HAKONIWA_RESEND_API_KEY
   "vars": {
-    "HAKONIWA_BASE_URL": "https://hakoniwa.example.workers.dev",
+    // HAKONIWA_BASE_URL は通常不要 (better-auth がリクエストから baseURL/trustedOrigins を
+    // 推定する)。カスタムドメインや逆プロキシ配下で明示したい場合だけここに追加する:
+    //   "HAKONIWA_BASE_URL": "https://hakoniwa.example.com",
     "HAKONIWA_UNIT_TIME_SEC": "21600",
     "HAKONIWA_MAX_CATCH_UP_TURNS": "3",
     "HAKONIWA_ADMIN_EMAILS": "",

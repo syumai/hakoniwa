@@ -1,5 +1,7 @@
 # 箱庭諸島２
 
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/syumai/hakoniwa)
+
 徳岡宏樹氏による Web ブラウザゲーム「箱庭諸島２」を、TypeScript (Node.js + Hono + `node:sqlite`) で書き直したものです。
 ゲームロジックと HTTP 層をランタイムから独立させてあり、将来的に Cloudflare Workers (Durable Objects SQLite) でも動かせる構成にしています。
 
@@ -63,8 +65,10 @@ v1 (パスワード認証) のデータベースファイルが残っている�
 
 X (Twitter) / Discord ログインを試したい場合は `HAKONIWA_X_CLIENT_ID`/`HAKONIWA_X_CLIENT_SECRET`
 や `HAKONIWA_DISCORD_CLIENT_ID`/`HAKONIWA_DISCORD_CLIENT_SECRET` を設定してください
-(OAuth アプリ側のコールバック URL は `${HAKONIWA_BASE_URL}/api/auth/callback/twitter`・
-`.../callback/discord`)。メールログインは `HAKONIWA_RESEND_API_KEY` を設定しない限り
+(OAuth アプリ側のコールバック URL は `<公開 URL>/api/auth/callback/twitter`・
+`.../callback/discord`。`<公開 URL>` はローカル開発なら `http://localhost:5173` です。
+`HAKONIWA_BASE_URL` は通常は不要ですが、カスタムドメインや逆プロキシ配下で動かす場合だけ
+明示的に設定してください)。メールログインは `HAKONIWA_RESEND_API_KEY` を設定しない限り
 コンソールにリンクを出力するだけの開発用 Mailer で動きます。
 
 ## ビルドと起動
@@ -94,31 +98,31 @@ node packages/server-node/dist/cli.js backup list|create [label]|restore <label>
 
 ## 環境変数
 
-| 環境変数                                                        | 既定値                              | 用途                                                                           |
-| --------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------ |
-| `PORT`                                                          | `3000`                              | サーバーの待受ポート                                                           |
-| `HAKONIWA_DB_PATH`                                              | `./data/hakoniwa.sqlite`            | SQLite データベースファイル                                                    |
-| `HAKONIWA_BACKUP_DIR`                                           | `./data/backups`                    | バックアップの出力先                                                           |
-| `HAKONIWA_TURN_CHECK_INTERVAL_SEC`                              | `60`                                | ターン進行判定のタイマー間隔 (秒)。`0` で無効                                  |
-| `HAKONIWA_BASE_URL`                                             | `http://localhost:5173`             | better-auth の baseURL。OAuth コールバックと Origin 検査に使う                 |
-| `HAKONIWA_AUTH_SECRET`                                          | (なし、**必須**)                    | better-auth の secret と CSRF トークンの鍵。`openssl rand -base64 32` 等       |
-| `HAKONIWA_X_CLIENT_ID` / `HAKONIWA_X_CLIENT_SECRET`             | (なし)                              | 両方設定すると X (Twitter) ログインが有効になる                                |
-| `HAKONIWA_DISCORD_CLIENT_ID` / `HAKONIWA_DISCORD_CLIENT_SECRET` | (なし)                              | 両方設定すると Discord ログインが有効になる                                    |
-| `HAKONIWA_DEV_LOGIN`                                            | `false`                             | `true` で開発ログイン (任意のメールアドレスでログイン) を有効化                |
-| `HAKONIWA_ADMIN_EMAILS`                                         | (なし)                              | 管理者とみなすメールアドレス (カンマ区切り)                                    |
-| `HAKONIWA_RESEND_API_KEY`                                       | (なし)                              | メール送信 (Resend)。未設定ならコンソールにリンクを出力するだけの開発用 Mailer |
-| `HAKONIWA_MAIL_FROM`                                            | `hakoniwa@example.com`              | メールの送信元アドレス                                                         |
-| `HAKONIWA_NG_WORDS`                                             | (なし)                              | 追加の NG ワード (カンマ区切り)                                                |
-| `HAKONIWA_DEBUG`                                                | `false`                             | `true` でトップに「ターンを進める」ボタンを表示 (管理者ログイン必須)           |
-| `HAKONIWA_ADMIN_ENABLED`                                        | `true`                              | 管理画面 (`/admin`) の有効 / 無効                                              |
-| `HAKONIWA_USE_LBBS`                                             | `false`                             | 島ごとのローカル掲示板の有効 / 無効                                            |
-| `HAKONIWA_UNIT_TIME_SEC`                                        | `21600`                             | 1 ターンの長さ (秒)                                                            |
-| `HAKONIWA_MAX_CATCH_UP_TURNS`                                   | `1`                                 | 1 回の判定で進める最大ターン数                                                 |
-| `HAKONIWA_SITE_TITLE`                                           | `箱庭諸島２`                        | サイトタイトル                                                                 |
-| `HAKONIWA_ADMIN_NAME`                                           | `管理者の名前`                      | フッタの管理者名                                                               |
-| `HAKONIWA_EMAIL`                                                | `管理者@どこか.どこか.どこか`       | フッタの連絡先                                                                 |
-| `HAKONIWA_BBS_URL`                                              | `http://サーバー/掲示板.cgi`        | フッタの掲示板リンク                                                           |
-| `HAKONIWA_TOPPAGE_URL`                                          | `http://サーバー/ホームページ.html` | フッタのトップページリンク                                                     |
+| 環境変数                                                        | 既定値                                    | 用途                                                                                                                                     |
+| --------------------------------------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`                                                          | `3000`                                    | サーバーの待受ポート                                                                                                                     |
+| `HAKONIWA_DB_PATH`                                              | `./data/hakoniwa.sqlite`                  | SQLite データベースファイル                                                                                                              |
+| `HAKONIWA_BACKUP_DIR`                                           | `./data/backups`                          | バックアップの出力先                                                                                                                     |
+| `HAKONIWA_TURN_CHECK_INTERVAL_SEC`                              | `60`                                      | ターン進行判定のタイマー間隔 (秒)。`0` で無効                                                                                            |
+| `HAKONIWA_BASE_URL`                                             | (なし = リクエストのオリジンから自動判定) | better-auth の baseURL。OAuth コールバックと Origin 検査に使う。通常は不要。カスタムドメインや逆プロキシ配下で明示したいときだけ設定する |
+| `HAKONIWA_AUTH_SECRET`                                          | (なし、**必須**)                          | better-auth の secret と CSRF トークンの鍵。`openssl rand -base64 32` 等                                                                 |
+| `HAKONIWA_X_CLIENT_ID` / `HAKONIWA_X_CLIENT_SECRET`             | (なし)                                    | 両方設定すると X (Twitter) ログインが有効になる                                                                                          |
+| `HAKONIWA_DISCORD_CLIENT_ID` / `HAKONIWA_DISCORD_CLIENT_SECRET` | (なし)                                    | 両方設定すると Discord ログインが有効になる                                                                                              |
+| `HAKONIWA_DEV_LOGIN`                                            | `false`                                   | `true` で開発ログイン (任意のメールアドレスでログイン) を有効化                                                                          |
+| `HAKONIWA_ADMIN_EMAILS`                                         | (なし)                                    | 管理者とみなすメールアドレス (カンマ区切り)                                                                                              |
+| `HAKONIWA_RESEND_API_KEY`                                       | (なし)                                    | メール送信 (Resend)。未設定ならコンソールにリンクを出力するだけの開発用 Mailer                                                           |
+| `HAKONIWA_MAIL_FROM`                                            | `hakoniwa@example.com`                    | メールの送信元アドレス                                                                                                                   |
+| `HAKONIWA_NG_WORDS`                                             | (なし)                                    | 追加の NG ワード (カンマ区切り)                                                                                                          |
+| `HAKONIWA_DEBUG`                                                | `false`                                   | `true` でトップに「ターンを進める」ボタンを表示 (管理者ログイン必須)                                                                     |
+| `HAKONIWA_ADMIN_ENABLED`                                        | `true`                                    | 管理画面 (`/admin`) の有効 / 無効                                                                                                        |
+| `HAKONIWA_USE_LBBS`                                             | `false`                                   | 島ごとのローカル掲示板の有効 / 無効                                                                                                      |
+| `HAKONIWA_UNIT_TIME_SEC`                                        | `21600`                                   | 1 ターンの長さ (秒)                                                                                                                      |
+| `HAKONIWA_MAX_CATCH_UP_TURNS`                                   | `1`                                       | 1 回の判定で進める最大ターン数                                                                                                           |
+| `HAKONIWA_SITE_TITLE`                                           | `箱庭諸島２`                              | サイトタイトル                                                                                                                           |
+| `HAKONIWA_ADMIN_NAME`                                           | `管理者の名前`                            | フッタの管理者名                                                                                                                         |
+| `HAKONIWA_EMAIL`                                                | `管理者@どこか.どこか.どこか`             | フッタの連絡先                                                                                                                           |
+| `HAKONIWA_BBS_URL`                                              | `http://サーバー/掲示板.cgi`              | フッタの掲示板リンク                                                                                                                     |
+| `HAKONIWA_TOPPAGE_URL`                                          | `http://サーバー/ホームページ.html`       | フッタのトップページリンク                                                                                                               |
 
 v1 にあった `HAKONIWA_MASTER_PASSWORD` / `HAKONIWA_SPECIAL_PASSWORD` は v2 で廃止されました (パスワード認証を全廃し、better-auth によるログインに置き換えたため)。管理画面へは管理者メールでログインします。資金・食料の最大化は管理画面の操作 (`/admin` の「資金・食料の最大化」) として引き継いでいます。
 
@@ -126,62 +130,74 @@ v1 にあった `HAKONIWA_MASTER_PASSWORD` / `HAKONIWA_SPECIAL_PASSWORD` は v2 
 
 `packages/server-workers` は Cloudflare Workers (Durable Objects の SQLite バックエンド) 向けの Adapter です。世界全体を 1 つの Durable Object (`HakoniwaGame`) に収め、`packages/game` が提供する Hono app をそのまま動かします。ゲームロジックやスキーマは Node 版と共通で、`SqlDriver`/`BackupStore` の実装だけが異なります。
 
-### 前提
+Wrangler の設定はリポジトリ直下の `wrangler.jsonc` 1 つだけです (`main` は `packages/server-workers/src/worker.ts`、静的アセットは `packages/game/public` を指します)。`packages/server-workers` は workspace 依存の `@hakoniwa/game` を参照するため、Wrangler をそのパッケージ単体では完結させられず、リポジトリ全体を 1 つのデプロイ単位にしています。
 
-- [Cloudflare アカウント](https://dash.cloudflare.com/sign-up) と `wrangler login` (実際にデプロイする場合のみ必要。ローカルの `wrangler dev` だけならログイン不要)
-- `packages/server-workers/wrangler.jsonc` の `name`・`vars.HAKONIWA_BASE_URL` を自分の Workers サブドメインに合わせて書き換える
+[Cloudflare アカウント](https://dash.cloudflare.com/sign-up) が必要です。手動デプロイや `wrangler dev` を使う場合は `wrangler login` も必要です (ワンクリックデプロイはブラウザ上の GitHub 連携のみで完結し、ログインは不要です)。
 
-### ローカル開発 (`wrangler dev`)
+### ワンクリックデプロイ (Deploy to Cloudflare ボタン)
 
-`wrangler dev` は `.env` (mise 経由) を読みません。ローカル用の秘密情報は `packages/server-workers/.dev.vars` に書きます (git 管理外。このリポジトリには同梱していないので、以下の内容で自分で作成してください)。
+一番手軽な方法です。
 
-```sh
-# packages/server-workers/.dev.vars
-HAKONIWA_AUTH_SECRET=（openssl rand -base64 32 などで生成した32バイト以上のランダム文字列）
-HAKONIWA_DEV_LOGIN=true
-HAKONIWA_ADMIN_EMAILS=you@example.com
-HAKONIWA_BASE_URL=http://localhost:8787
-```
+1. README 冒頭の「Deploy to Cloudflare」ボタンを押す
+2. Cloudflare のダッシュボードに遷移するので、GitHub と連携してこのリポジトリを自分のアカウントにフォークする
+3. 変数・secret の入力画面が出るので、最低限次の 2 つを入力する (他は空でもデプロイできる)
+   - `HAKONIWA_AUTH_SECRET` (必須。`openssl rand -base64 32` などで生成したランダム文字列)
+   - `HAKONIWA_ADMIN_EMAILS` (自分を管理者にするメールアドレス。X ログインはメールを返さないため、Discord かメールログインで使うアドレスを指定する)
+4. デプロイを実行する
+5. デプロイ完了後に表示される公開 URL (`https://<name>.<subdomain>.workers.dev` 形式) を確認する
+6. X / Discord ログインを使いたい場合は、[X Developer Portal](https://developer.x.com/) / [Discord Developer Portal](https://discord.com/developers/applications) でアプリを作成し、コールバック URL に `<公開 URL>/api/auth/callback/twitter` または `.../callback/discord` を登録した上で、Cloudflare ダッシュボードの当該 Worker の Settings → Variables and Secrets から `HAKONIWA_X_CLIENT_ID`/`HAKONIWA_X_CLIENT_SECRET` や `HAKONIWA_DISCORD_CLIENT_ID`/`HAKONIWA_DISCORD_CLIENT_SECRET` を追加する (Secret として登録する)
+7. 公開 URL の `/login` から、手順 3 で指定した `HAKONIWA_ADMIN_EMAILS` のメールアドレスでログインする (X/Discord/メールいずれか設定した方法で。開発ログインは本番では無効)
+8. `/admin` に入り、「新しいデータを作る」でゲームを初期化し、必要なログイン方法を有効化する
 
-```sh
-pnpm --filter @hakoniwa/server-workers dev
-# もしくは
-cd packages/server-workers && vp run dev   # = wrangler dev
-```
+`HAKONIWA_BASE_URL` はここでは設定不要です (未設定ならリクエストから自動判定されます)。カスタムドメインを使う場合だけ、あとから Variables and Secrets に追加してください。
 
-`.dev.vars` を作らずに一時的な値で試したい場合は `--var` オプションでも指定できます。
+### 手動デプロイ
 
 ```sh
-cd packages/server-workers
-wrangler dev --port 8787 \
-  --var HAKONIWA_AUTH_SECRET:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \
-  --var HAKONIWA_DEV_LOGIN:true \
-  --var HAKONIWA_ADMIN_EMAILS:you@example.com \
-  --var HAKONIWA_BASE_URL:http://localhost:8787
-```
-
-初回のデータ作成手順は Node 版と同じです (`/login` から開発ログイン → `/admin` で「新しいデータを作る」)。ローカルの DO の状態は `packages/server-workers/.wrangler/state` に保存されます (git 管理外)。
-
-### デプロイ
-
-```sh
-pnpm --filter @hakoniwa/server-workers deploy
-# もしくは
-cd packages/server-workers && wrangler deploy
-```
-
-秘密情報は `wrangler secret put <NAME>` で登録します (`wrangler.jsonc` の `vars` には書かない)。
-
-```sh
+wrangler login
 wrangler secret put HAKONIWA_AUTH_SECRET
 wrangler secret put HAKONIWA_X_CLIENT_ID
 wrangler secret put HAKONIWA_X_CLIENT_SECRET
 wrangler secret put HAKONIWA_DISCORD_CLIENT_ID
 wrangler secret put HAKONIWA_DISCORD_CLIENT_SECRET
 wrangler secret put HAKONIWA_RESEND_API_KEY
+pnpm deploy
 ```
 
-非秘密の設定 (`HAKONIWA_BASE_URL`、`HAKONIWA_UNIT_TIME_SEC`、`HAKONIWA_ADMIN_EMAILS` 等) は `wrangler.jsonc` の `vars` に書きます。`HAKONIWA_DEV_LOGIN` は本番の `vars` では必ず `false` のままにしてください。
+コマンドはすべてリポジトリ直下 (root) から実行してください (`wrangler.jsonc` が root にあるため)。`pnpm deploy` は root `package.json` の `deploy` スクリプト (`wrangler deploy`) です。`wrangler.jsonc` の `name` は必要に応じて自分の Workers サブドメインに合わせて書き換えてください。
+
+非秘密の設定 (`HAKONIWA_UNIT_TIME_SEC`、`HAKONIWA_ADMIN_EMAILS` 等) は `wrangler.jsonc` の `vars` に書きます。`HAKONIWA_DEV_LOGIN` は本番の `vars` では必ず `false` のままにしてください。`HAKONIWA_BASE_URL` は通常不要です (カスタムドメイン時のみ `vars` に追加してください)。
+
+### ローカル開発 (`wrangler dev`)
+
+ローカル用の秘密情報は root の `.dev.vars` に書きます (git 管理外。このリポジトリには同梱していないので、以下の内容で自分で作成してください)。
+
+> [!NOTE]
+> 設計書との差異: `wrangler.jsonc` を root に置いたことで、Wrangler の「設定ファイルと同じディレクトリの `.env`/`.env.local` を自動的に読み込む」機能により、`wrangler dev` は Node 版の開発で使っている root の `.env` も (`.dev.vars` と合わせて) 読み込みます。`.env` に `HAKONIWA_BASE_URL=http://localhost:5173` を設定している場合、`wrangler dev --port 8788` のように別ポートで動かすと Origin 検査の基準が食い違うことがあります (通常ブラウザが送る `Origin` はリクエスト先のポートと一致するので実害は無いことが多いですが、気になる場合は `.env` の `HAKONIWA_BASE_URL` をコメントアウトするか、`--var HAKONIWA_BASE_URL:http://localhost:8788` で明示的に上書きしてください)。`wrangler deploy` (本番デプロイ) はこの自動読み込みの対象外で、`wrangler.jsonc` の `vars` と `wrangler secret put` で登録した secret だけが使われます。
+
+```sh
+# .dev.vars (リポジトリ直下)
+HAKONIWA_AUTH_SECRET=（openssl rand -base64 32 などで生成した32バイト以上のランダム文字列）
+HAKONIWA_DEV_LOGIN=true
+HAKONIWA_ADMIN_EMAILS=you@example.com
+```
+
+```sh
+pnpm --filter @hakoniwa/server-workers dev
+# もしくは
+cd packages/server-workers && vp run dev   # = wrangler dev --config ../../wrangler.jsonc
+```
+
+`.dev.vars` を作らずに一時的な値で試したい場合は `--var` オプションでも指定できます。
+
+```sh
+wrangler dev --port 8787 \
+  --var HAKONIWA_AUTH_SECRET:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \
+  --var HAKONIWA_DEV_LOGIN:true \
+  --var HAKONIWA_ADMIN_EMAILS:you@example.com
+```
+
+初回のデータ作成手順は Node 版と同じです (`/login` から開発ログイン → `/admin` で「新しいデータを作る」)。ローカルの DO の状態は `.wrangler/state` (リポジトリ直下) に保存されます (git 管理外)。
 
 ### ターン進行の仕組み (Cron Trigger)
 

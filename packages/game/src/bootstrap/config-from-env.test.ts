@@ -17,11 +17,11 @@ describe("loadConfigFromEnv", () => {
     expect(config.ngWords).toEqual([]);
     expect(config.mail).toEqual({ mailFrom: "hakoniwa@example.com" });
     expect(config.auth).toEqual({
-      baseUrl: "http://localhost:5173",
       secret: AUTH_SECRET,
       devLogin: false,
       adminEmails: [],
     });
+    expect(config.auth.baseUrl).toBeUndefined();
   });
 
   it("HAKONIWA_AUTH_SECRET が無ければ Error (生成方法を含むメッセージ)", () => {

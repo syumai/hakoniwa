@@ -4,6 +4,8 @@
 // このミドルウェアより前で処理が終わるため、ここでは対象にならない
 // (better-auth 自身は trustedOrigins で Origin を検証する)。
 // 加えて Origin ヘッダがあれば HAKONIWA_BASE_URL のオリジンと比較する (除外ルートも含む)。
+// 設計書との差異: HAKONIWA_BASE_URL 省略可能化 (tmp/12「Deploy to Cloudflare ボタン」節) に伴い、
+// baseUrl が未設定の場合はリクエスト URL のオリジン (`new URL(c.req.url).origin`) と比較する。
 import type { Context, MiddlewareHandler } from "hono";
 import { createCsrfToken, verifyCsrfToken } from "../../bootstrap/csrf.ts";
 import type { GameConfig } from "../../core/config.ts";
@@ -13,20 +15,20 @@ import { ErrorPage } from "../views/messages.tsx";
 
 export interface CsrfMiddlewareDeps {
   secret: string;
-  baseUrl: string;
+  /** 未設定ならリクエスト URL のオリジンと比較する (HAKONIWA_BASE_URL 省略可能化)。 */
+  baseUrl?: string;
   gameConfig: GameConfig;
 }
 
 /** `_csrf` を要求しない自前ルート (セッション確立前の POST)。 */
 const NO_CSRF_PATHS = new Set(["/auth/dev", "/auth/magic-link"]);
 
-function originMismatch(originHeader: string | undefined, baseUrl: string): boolean {
+function originMismatch(originHeader: string | undefined, expectedHost: string): boolean {
   if (originHeader === undefined || originHeader === "") {
     return false;
   }
   try {
     const originHost = new URL(originHeader).host;
-    const expectedHost = new URL(baseUrl).host;
     return originHost !== expectedHost;
   } catch {
     return true;
@@ -51,7 +53,9 @@ export function csrfMiddleware(deps: CsrfMiddlewareDeps): MiddlewareHandler<AppE
     }
 
     if (c.req.method === "POST") {
-      if (originMismatch(c.req.header("origin"), deps.baseUrl)) {
+      const expectedHost =
+        deps.baseUrl !== undefined ? new URL(deps.baseUrl).host : new URL(c.req.url).host;
+      if (originMismatch(c.req.header("origin"), expectedHost)) {
         return forbidden(c, deps);
       }
       // 未ログインの POST は _csrf を検査しない (ログインが必要な操作は各ユースケースが

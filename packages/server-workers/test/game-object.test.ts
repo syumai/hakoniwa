@@ -77,4 +77,36 @@ describe("HakoniwaGame (DO 経由の Hono app)", () => {
     expect(topAfterInit.status).toBe(200);
     expect(await topAfterInit.text()).toContain("ターン1");
   });
+
+  // HAKONIWA_BASE_URL は vitest.config.ts の miniflare.bindings で設定していない
+  // (tmp/12-workers-adapter.md「Deploy to Cloudflare ボタン」節: 省略可能)。
+  // この場合の Origin 検査はリクエスト URL のオリジンを基準にする
+  // (packages/game/src/web/middleware/csrf.tsx)。
+  it("HAKONIWA_BASE_URL 未設定でも、Origin がリクエストのオリジンと一致すれば POST が通る", async () => {
+    const stub = getStub("game-test-origin-match");
+    const res = await stub.fetch("http://example.com/auth/dev", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        origin: "http://example.com",
+      },
+      body: "email=origin-match%40example.com",
+      redirect: "manual",
+    });
+    expect(res.status).toBe(302);
+  });
+
+  it("HAKONIWA_BASE_URL 未設定で Origin がリクエストのオリジンと異なれば 403", async () => {
+    const stub = getStub("game-test-origin-mismatch");
+    const res = await stub.fetch("http://example.com/auth/dev", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        origin: "http://evil.example",
+      },
+      body: "email=origin-mismatch%40example.com",
+      redirect: "manual",
+    });
+    expect(res.status).toBe(403);
+  });
 });

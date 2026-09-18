@@ -13,6 +13,9 @@
 // - 14 のコード例は `magicLink`/`APIError`/`createAuthMiddleware` を `better-auth/plugins`,
 //   `better-auth/api` から import する形を示しており、実際にそのパスで export されていることを
 //   node_modules で確認済み。
+// - tmp/12-workers-adapter.md「Deploy to Cloudflare ボタン」節: HAKONIWA_BASE_URL は省略可能。
+//   未設定なら baseURL を渡さず (リクエストから推定させる)、trustedOrigins はリクエストの
+//   オリジンを返す関数にする。
 import { betterAuth } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { magicLink } from "better-auth/plugins";
@@ -40,11 +43,18 @@ export function createAuth(input: CreateAuthInput) {
   const { auth } = config;
 
   return betterAuth({
-    baseURL: auth.baseUrl,
+    // baseUrl が未設定なら baseURL を渡さない (better-auth がリクエストから推定する)。
+    // trustedOrigins も同様に、baseUrl があれば固定の配列、無ければリクエストのオリジンを
+    // 返す関数にする (better-auth の trustedOrigins は関数形をサポートしている。
+    // node_modules/@better-auth/core の型定義で確認済み)。
+    ...(auth.baseUrl !== undefined ? { baseURL: auth.baseUrl } : {}),
     basePath: "/api/auth",
     secret: auth.secret,
     database: betterAuthSqliteAdapter({ driver }),
-    trustedOrigins: [auth.baseUrl],
+    trustedOrigins:
+      auth.baseUrl !== undefined
+        ? [auth.baseUrl]
+        : (request) => (request !== undefined ? [new URL(request.url).origin] : []),
     advanced: {
       // Cookie 名は `hako.session_token` になる (v1 の `hako_defaults` は廃止)。
       cookiePrefix: "hako",

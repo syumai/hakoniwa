@@ -32,7 +32,7 @@ export function createApp(deps: WebDeps): Hono<AppEnv> {
     "*",
     csrfMiddleware({
       secret: deps.config.auth.secret,
-      baseUrl: deps.config.auth.baseUrl,
+      ...(deps.config.auth.baseUrl !== undefined ? { baseUrl: deps.config.auth.baseUrl } : {}),
       gameConfig: deps.config.game,
     }),
   );

@@ -13,7 +13,7 @@ import type { PluginOption } from "vite-plus";
 export default defineConfig({
   // cloudflare() は既に Plugin[] を返すため、配列でくるまない
   // (くるむと Plugin[][] になり、defineConfig 側の型比較が深くなりすぎてエラーになる)。
-  plugins: cloudflare({ configPath: "./wrangler.jsonc" }) as unknown as PluginOption[],
+  plugins: cloudflare({ configPath: "../../wrangler.jsonc" }) as unknown as PluginOption[],
   // @hakoniwa/game の JSX (hono/jsx) をこのパッケージのバンドルでも変換する必要がある
   // (packages/server-node/vite.config.ts と同じ理由: vite-plus は rolldown-vite ベースで
   // esbuild オプションが deprecated のため oxc オプションを使う)。
