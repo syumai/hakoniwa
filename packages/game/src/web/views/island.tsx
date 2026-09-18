@@ -17,6 +17,28 @@ export interface IslandPageProps {
   notice?: string;
 }
 
+/**
+ * OGP メタタグ。tmp/17-ogp.md 「メタタグ」節。認証・セッションに依存しないため `Vary: Cookie` は
+ * 付けない (呼び出し側 (routes/islands.tsx) も同様)。
+ * `origin` は絶対 URL のベース (`config.auth.baseUrl` があればそれ、無ければリクエストのオリジン)。
+ */
+export function IslandOgpHead({ vm, origin }: { vm: IslandPageVM; origin: string }) {
+  const pageUrl = `${origin}/islands/${vm.id}`;
+  const imageUrl = `${origin}${vm.ogp.imagePath}`;
+  return (
+    <>
+      <meta property="og:type" content="website" />
+      <meta property="og:title" content={vm.ogp.title} />
+      <meta property="og:description" content={vm.ogp.description} />
+      <meta property="og:image" content={imageUrl} />
+      <meta property="og:image:width" content={String(vm.ogp.width)} />
+      <meta property="og:image:height" content={String(vm.ogp.height)} />
+      <meta property="og:url" content={pageUrl} />
+      <meta name="twitter:card" content="summary_large_image" />
+    </>
+  );
+}
+
 /** 観光画面。Perl 版 printIslandMain。 */
 export function IslandPage({ vm, config, csrfToken, notice }: IslandPageProps) {
   return (

@@ -13,6 +13,13 @@
   // workerd を使うため問題なく動く。テストと dev で workerd のバージョンが揃うよう、
   // 依存更新時にこの日付も見直すこと)。
   "compatibility_date": "2026-08-22",
+  // Workers Cache (https://developers.cloudflare.com/workers/cache/)。応答の Cache-Control に
+  // 従って Cloudflare 側が自動でキャッシュする (workers.dev でも有効)。tmp/17-ogp.md
+  // 「キャッシュ (Workers Cache)」節。Cache-Control の無い応答もヒューリスティックにキャッシュ
+  // されるため、web 層 (packages/game/src/web/app.tsx) の既定 no-store ミドルウェアとセットで使う。
+  "cache": {
+    "enabled": true,
+  },
   // packages/game/public (images/style.css/owner.js) を Worker より先に配信する。
   "assets": {
     "directory": "packages/game/public",

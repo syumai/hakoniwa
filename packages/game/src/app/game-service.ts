@@ -15,7 +15,7 @@ import {
 import type { GameRepository, IslandSummary, UserPrefs } from "./ports.ts";
 import type { Clock } from "./ports.ts";
 import { buildSeasonVM, isFinished } from "./season.ts";
-import { buildMoneyDisplay } from "./view-models.ts";
+import { buildIslandOgpVM, buildMoneyDisplay } from "./view-models.ts";
 import type {
   IslandDetailVM,
   IslandPageVM,
@@ -154,11 +154,13 @@ export class GameService {
     const meta = repo.getMeta();
     const sinceTurn = meta.turn - config.logKeepTurns + 1;
     const logs = repo.listLogs({ sinceTurn, islandId: id });
+    const detail = buildDetailVM(island, rank, meta.turn);
     return {
-      ...buildDetailVM(island, rank, meta.turn),
+      ...detail,
       moneyDisplay: buildMoneyDisplay(island.money, config, false),
       lbbs: island.lbbs,
       logs,
+      ogp: buildIslandOgpVM(detail, config),
     };
   }
 
@@ -242,6 +244,20 @@ export class GameService {
   getIslandPage(id: number): IslandPageVM {
     this.#ensureInitialized();
     return this.#buildIslandPageVM(id);
+  }
+
+  /**
+   * OGP 画像 (地図 PNG) 生成用。tmp/17-ogp.md。認証・セッションに依存しない (誰でも同じ画像)。
+   * Perl 版には無い (v2 独自の追加)。
+   */
+  getIslandOgp(id: number): { island: Island; turn: number } {
+    this.#ensureInitialized();
+    const { repo } = this.#deps;
+    const island = repo.findIsland(id);
+    if (island === undefined) {
+      throw new AppError("island_not_found");
+    }
+    return { island, turn: repo.getMeta().turn };
   }
 
   /** Perl 版 Map.pm ownerMain の移植。actor 自身の島を開く (1 ユーザー 1 島)。 */

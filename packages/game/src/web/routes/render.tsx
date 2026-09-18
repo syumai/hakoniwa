@@ -11,9 +11,16 @@ export function renderPage(
   deps: WebDeps,
   children: Child,
   status?: ContentfulStatusCode,
+  /** `<head>` に追加する要素 (OGP メタタグ等)。tmp/17-ogp.md。 */
+  extraHead?: Child,
 ) {
   return c.html(
-    <Layout config={deps.config.game} user={c.get("user")} csrfToken={c.get("csrfToken")}>
+    <Layout
+      config={deps.config.game}
+      user={c.get("user")}
+      csrfToken={c.get("csrfToken")}
+      extraHead={extraHead}
+    >
       {children}
     </Layout>,
     status,

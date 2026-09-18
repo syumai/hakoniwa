@@ -6,6 +6,7 @@ import type { UserPrefs } from "./ports.ts";
 import type { SeasonVM } from "./season.ts";
 import type { GameConfig } from "../core/config.ts";
 import type { FormattedCommand } from "../core/commands/format.ts";
+import { OGP_HEIGHT, OGP_WIDTH } from "../ogp/render.ts";
 import type { FlagPrizeView, KilledMonstersView } from "../core/prize.ts";
 import type { Command, HistoryEntry, LbbsPost, LogEntry, Terrain } from "../core/types.ts";
 
@@ -110,12 +111,42 @@ export interface IslandDetailVM {
   terrain: Terrain;
 }
 
+/** OGP 画像・メタタグ用の情報。tmp/17-ogp.md 「メタタグ」節。 */
+export interface IslandOgpVM {
+  /** og:title。「<島名>島 - <サイトタイトル>」。 */
+  title: string;
+  /** og:description。「ターンN / 人口 X人・面積 Y万坪・順位 Z位」。 */
+  description: string;
+  /** `/islands/:id/ogp.png?turn=N` (相対パス)。絶対 URL 化は web 層 (views/island.tsx) が行う。 */
+  imagePath: string;
+  width: number;
+  height: number;
+}
+
+/** IslandDetailVM から IslandOgpVM を組み立てる。 */
+export function buildIslandOgpVM(
+  detail: Pick<IslandDetailVM, "id" | "name" | "rank" | "turn" | "pop" | "area">,
+  config: GameConfig,
+): IslandOgpVM {
+  return {
+    title: `${detail.name}島 - ${config.site.title}`,
+    description:
+      `ターン${detail.turn} / 人口 ${detail.pop}${config.units.pop}・` +
+      `面積 ${detail.area}${config.units.area}・順位 ${detail.rank}位`,
+    imagePath: `/islands/${detail.id}/ogp.png?turn=${detail.turn}`,
+    width: OGP_WIDTH,
+    height: OGP_HEIGHT,
+  };
+}
+
 /** 観光画面。Perl 版 printIslandMain。 */
 export interface IslandPageVM extends IslandDetailVM {
   moneyDisplay: MoneyDisplay;
   lbbs: LbbsPost[];
   /** mode 0 (機密除外)。 */
   logs: LogEntry[];
+  /** tmp/17-ogp.md。GET /islands/:id の OGP メタタグ用。 */
+  ogp: IslandOgpVM;
 }
 
 /** 開発画面。Perl 版 ownerMain。島主本人向けなので資金は実値。 */

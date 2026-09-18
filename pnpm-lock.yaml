@@ -36,6 +36,9 @@ importers:
         specifier: ^4.5.4
         version: 4.6.5
     devDependencies:
+      omggif:
+        specifier: ^1.0.10
+        version: 1.0.10
       vitest:
         specifier: 4.1.11
         version: 4.1.11(@types/node@24.13.5)(@vitest/browser-preview@4.1.11)(vite@8.3.0(@types/node@24.13.5)(esbuild@0.28.1))
@@ -1728,6 +1731,9 @@ packages:
     resolution: {integrity: sha512-XrsrhT5sybtKI6wakr2SPOlGZWWYbUXZ7a0jT8/QOeAPau+1X/bSegNe5YR75oJmEZQbKningirmGOEJCIk61Q==}
     engines: {node: '>=12.20.0'}
 
+  omggif@1.0.10:
+    resolution: {integrity: sha512-LMJTtvgc/nugXj0Vcrrs68Mn2D1r0zf630VNtqtpI1FEO7e+O9FP4gqs9AcnBaSEeoHIPm28u6qgPR0oyEpGSw==}
+
   oxfmt@0.67.0:
     resolution: {integrity: sha512-vV7sSiPsaO0mSxdoUdayipVDFPzW/UQ+hrezEHa20+Tx1dnMdZLSRHMT0PdS67FFbhd74M1n08asW21aLGeCrA==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -3208,6 +3214,8 @@ snapshots:
   naughty-words@1.2.0: {}
 
   obug@2.2.1: {}
+
+  omggif@1.0.10: {}
 
   oxfmt@0.67.0(vite-plus@0.3.2(@types/node@24.13.5)(esbuild@0.28.1)(typescript@5.9.3)):
     dependencies:

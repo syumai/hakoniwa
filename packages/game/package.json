@@ -6,6 +6,9 @@
     ".": "./src/index.ts",
     "./public/*": "./public/*"
   },
+  "scripts": {
+    "generate:ogp-tiles": "node --experimental-strip-types scripts/generate-ogp-tiles.ts"
+  },
   "dependencies": {
     "better-auth": "1.7.5",
     "hono": "^4.13.8",
@@ -13,6 +16,7 @@
     "zod": "^4.5.4"
   },
   "devDependencies": {
+    "omggif": "^1.0.10",
     "vitest": "4.1.11"
   }
 }

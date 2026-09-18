@@ -485,6 +485,41 @@ describe("GameService.getTopPage / getIslandPage", () => {
     expect(owner.season).toMatchObject({ turn: 1, finalTurn: null, state: "running" });
     void created;
   });
+
+  it("tmp/17-ogp.md: getIslandPage の ogp は島名・ターン・人口・面積・順位を含む", () => {
+    const { service } = setup();
+    const created = service.createIsland(user("u1"), "しま");
+    const page = service.getIslandPage(created.id);
+    expect(page.ogp.title).toBe(`${created.name}島 - ${defaultConfig.site.title}`);
+    expect(page.ogp.description).toBe(
+      `ターン${page.turn} / 人口 ${page.pop}${defaultConfig.units.pop}・` +
+        `面積 ${page.area}${defaultConfig.units.area}・順位 ${page.rank}位`,
+    );
+    expect(page.ogp.imagePath).toBe(`/islands/${created.id}/ogp.png?turn=${page.turn}`);
+    expect(page.ogp.width).toBe(800);
+    expect(page.ogp.height).toBe(420);
+  });
+});
+
+describe("GameService.getIslandOgp", () => {
+  it("island と現在ターンを返す", () => {
+    const { service, repo } = setup();
+    const created = service.createIsland(user("u1"), "しま");
+    const { island, turn } = service.getIslandOgp(created.id);
+    expect(island.id).toBe(created.id);
+    expect(turn).toBe(repo.getMeta().turn);
+  });
+
+  it("存在しない島は island_not_found", () => {
+    const { service } = setup();
+    expectAppError(() => service.getIslandOgp(999), "island_not_found");
+  });
+
+  it("not_initialized: 初期化前は例外", () => {
+    const repo = new FakeGameRepository();
+    const { service } = setup({ repo }, { skipInit: true });
+    expectAppError(() => service.getIslandOgp(1), "not_initialized");
+  });
 });
 
 describe("GameService 終了後 (game_finished)", () => {

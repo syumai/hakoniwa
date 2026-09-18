@@ -8,6 +8,9 @@ const nonTypeScriptAssetPatterns = [
   // Adapter が配信する静的アセット (画像/CSS/座標選択補助スクリプト)。
   // ブラウザにそのまま配信する素の JS であり、プロジェクトの ESM/TS Lint 対象ではない。
   "packages/*/public/**",
+  // tmp/17-ogp.md: generate-ogp-tiles.ts の生成物 (GIF タイルのパレット/インデックス)。
+  // 手で編集しないため fmt/lint の対象から外す。
+  "packages/game/src/ogp/tiles.generated.ts",
 ];
 
 export default defineConfig({
@@ -57,6 +60,13 @@ export default defineConfig({
               ],
             },
           ],
+        },
+      },
+      // tmp/17-ogp.md: scripts/** は Node 専用のタイル生成スクリプト。node:* を許可する。
+      {
+        files: ["packages/game/scripts/**"],
+        rules: {
+          "no-restricted-imports": "off",
         },
       },
     ],

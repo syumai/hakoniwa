@@ -1,7 +1,7 @@
 // Perl 版 Main.pm tempHeader/tempFooter の移植。
 // ライセンス上必須の配布元リンク (tmp/01-overview.md) を本文先頭に固定で埋め込む。
 // tmp/14-users-auth.md によりログイン状態のナビゲーションを追加する (Phase 6b)。
-import type { PropsWithChildren } from "hono/jsx";
+import type { Child, PropsWithChildren } from "hono/jsx";
 import type { AuthUser } from "../../app/auth.ts";
 import type { GameConfig } from "../../core/config.ts";
 
@@ -11,6 +11,8 @@ export interface LayoutProps {
   user?: AuthUser | undefined;
   /** ログアウトフォーム用。未ログインなら undefined。 */
   csrfToken?: string | undefined;
+  /** `<head>` に追加する要素 (OGP メタタグ等)。tmp/17-ogp.md。 */
+  extraHead?: Child | undefined;
 }
 
 const SCRIPT_SOURCE_URL = "http://www.bekkoame.ne.jp/~tokuoka/hakoniwa.html";
@@ -120,7 +122,13 @@ function Nav({
   );
 }
 
-export function Layout({ config, user, csrfToken, children }: PropsWithChildren<LayoutProps>) {
+export function Layout({
+  config,
+  user,
+  csrfToken,
+  extraHead,
+  children,
+}: PropsWithChildren<LayoutProps>) {
   return (
     <html lang="ja">
       <head>
@@ -128,6 +136,7 @@ export function Layout({ config, user, csrfToken, children }: PropsWithChildren<
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>{config.site.title}</title>
         <link rel="stylesheet" href="/style.css" />
+        {extraHead ?? ""}
       </head>
       <body>
         <p class="distribution-link">

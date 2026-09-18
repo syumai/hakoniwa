@@ -61,6 +61,9 @@ export {
   isHardened,
 } from "./core/terrain.ts";
 
+export type { TileMode, TileView } from "./core/tile.ts";
+export { tileFor } from "./core/tile.ts";
+
 export type { NewIslandInit } from "./core/island.ts";
 export { makeNewLand, makeNewIsland, estimate } from "./core/island.ts";
 
@@ -157,11 +160,12 @@ export type {
   TopPageVM,
   IslandDetailVM,
   IslandPageVM,
+  IslandOgpVM,
   OwnerPageVM,
   NewIslandVM,
   IslandSelectVM,
 } from "./app/view-models.ts";
-export { aboutMoney, buildMoneyDisplay } from "./app/view-models.ts";
+export { aboutMoney, buildMoneyDisplay, buildIslandOgpVM } from "./app/view-models.ts";
 
 export type { GameServiceDeps, CommandInput } from "./app/game-service.ts";
 export { GameService } from "./app/game-service.ts";
@@ -231,3 +235,10 @@ export { ConsoleMailer, ResendMailer } from "./bootstrap/mailer.ts";
 
 export type { WebDeps } from "./web/deps.ts";
 export { createApp } from "./web/app.tsx";
+
+// ----------------------------------------------------------------------
+// OGP 画像 (tmp/17-ogp.md)。PNG エンコードと島の地図の描画。
+// ----------------------------------------------------------------------
+
+export { encodePng } from "./ogp/png.ts";
+export { OGP_WIDTH, OGP_HEIGHT, renderIslandOgp } from "./ogp/render.ts";

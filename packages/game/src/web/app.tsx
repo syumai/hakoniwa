@@ -1,6 +1,7 @@
 // tmp/06-web-routes-and-views.md 「ルーティング」「ミドルウェア」節、tmp/14-users-auth.md
 // のルート表・ミドルウェア順 (session → csrf → turn-check) への置き換え。ランタイム非依存の
 // Hono app 組み立て。
+import type { MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import { AppError } from "../app/errors.ts";
 import type { WebDeps } from "./deps.ts";
@@ -18,9 +19,28 @@ import { createMyIslandRoutes } from "./routes/my-island.tsx";
 import { createTopRoutes } from "./routes/top.tsx";
 import { ErrorPage, errorMessage, errorStatus } from "./views/messages.tsx";
 
+/**
+ * tmp/17-ogp.md 「キャッシュ (Workers Cache)」節: Workers Cache は `Cache-Control` の無い応答も
+ * RFC 9111 のヒューリスティックでキャッシュしてしまう (Cookie 付きリクエストもバイパスしない。
+ * `Set-Cookie` を含む応答と `Authorization` 付きリクエストだけがバイパス対象)。セッション依存の
+ * HTML (`/api/auth/*` の better-auth 応答を含む) が他人に配られないよう、ここで全応答に既定
+ * `Cache-Control: private, no-store` を付ける。ルート側が既に `Cache-Control` を設定していれば
+ * それを優先する (`/islands/:id/ogp.png` は `public, max-age=3600` を明示している)。
+ */
+const defaultCacheControlMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
+  await next();
+  if (!c.res.headers.has("Cache-Control")) {
+    c.res.headers.set("Cache-Control", "private, no-store");
+  }
+};
+
 /** ランタイム非依存の Hono app を組み立てる。静的配信 (`/images/*`, `/style.css`, `/owner.js`) は Adapter の責務。 */
 export function createApp(deps: WebDeps): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
+
+  // すべての応答 (/api/auth/* を含む) に既定の Cache-Control を付ける。最初に登録し、
+  // 他のすべてのルート/ミドルウェアの外側で作用させる。
+  app.use("*", defaultCacheControlMiddleware);
 
   // better-auth の HTTP エンドポイント。session/csrf/turn-check より前に (最初に) マウントし、
   // それらのミドルウェアを経由させない (better-auth 自身が Cookie とセッションを扱う。

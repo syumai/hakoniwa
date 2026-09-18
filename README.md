@@ -133,6 +133,20 @@ node packages/server-node/dist/cli.js backup list|create [label]|restore <label>
 
 v1 にあった `HAKONIWA_MASTER_PASSWORD` / `HAKONIWA_SPECIAL_PASSWORD` は v2 で廃止されました (パスワード認証を全廃し、better-auth によるログインに置き換えたため)。管理画面へは管理者メールでログインします。資金・食料の最大化は管理画面の操作 (`/admin` の「資金・食料の最大化」) として引き継いでいます。
 
+## OGP 画像
+
+島の URL (`/islands/:id`) を X や Discord、Slack 等でシェアすると、`GET /islands/:id/ogp.png` (800×420 PNG) の地図画像が OGP (`og:image`) として表示されます。地図は観光者向けの表示 (基地→森、海底基地→海、ハリボテ→防衛施設に見える偽装ルールを含む) をそのまま敷き詰めたもので、文字は描画しません (島名やターン・人口・面積・順位は `og:title`/`og:description` に載せます)。画像 URL には現在ターンの `?turn=N` が付き、ターンが進むと URL が変わるため、SNS 側のキャッシュも新しい地図に更新されます。
+
+画像は外部サービスやネイティブライブラリを使わず、`packages/game/src/ogp/` の純粋な TypeScript (自前の PNG エンコーダ + 事前生成したタイル画像データ) で毎回組み立てます。`GET /islands/:id/ogp.png` のレスポンスは `Cache-Control: public, max-age=3600` (1 時間) を返します。
+
+### キャッシュ (Workers Cache)
+
+Cloudflare Workers 版は、自前で Cache API (`caches.default`) を呼ぶ実装は持たず、代わりに [Workers Cache](https://developers.cloudflare.com/workers/cache/) (`wrangler.jsonc` の `cache.enabled: true`) を使います。これは応答の `Cache-Control` に従って Cloudflare 側が自動でキャッシュする機能で、**`*.workers.dev` のデフォルトドメインでも有効**です (Cache API と違いカスタムドメインは不要)。
+
+Workers Cache は `Cache-Control` の無い応答も RFC 9111 のヒューリスティックでキャッシュしてしまい、しかも Cookie 付きリクエストをバイパスしません (バイパス対象は `Set-Cookie` を含む応答と `Authorization` 付きリクエストのみ)。そのため、セッション依存の HTML (`/api/auth/*` の better-auth の応答を含む) が他人に配信されてしまわないよう、`packages/game/src/web/app.tsx` の `defaultCacheControlMiddleware` が **すべての応答に既定で `Cache-Control: private, no-store` を付け**、ルートが明示的に `Cache-Control` を設定している場合だけそちらを優先します。`GET /islands/:id/ogp.png` は自身で `public, max-age=3600` (と、将来のパージ用に `Cache-Tag: island-<id>`) を設定するので、そちらがキャッシュされます。
+
+この既定 no-store のミドルウェアは Node 版でも同じように動きますが、Node 版自体はキャッシュ層を持たないため実質無害です (必要ならリバースプロキシ側でキャッシュしてください)。
+
 ## Cloudflare Workers 版
 
 `packages/server-workers` は Cloudflare Workers (Durable Objects の SQLite バックエンド) 向けの Adapter です。世界全体を 1 つの Durable Object (`HakoniwaGame`) に収め、`packages/game` が提供する Hono app をそのまま動かします。ゲームロジックやスキーマは Node 版と共通で、`SqlDriver`/`BackupStore` の実装だけが異なります。
