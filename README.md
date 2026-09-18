@@ -37,7 +37,7 @@ v2 (better-auth によるログイン) では、島の作成やログインに�
 「開発ログイン」(任意のメールアドレスでログインできる機能) を使うのが手軽です。
 
 ```sh
-cp .env.example .env
+cp .env.node.example .env
 ```
 
 `.env` を開き、少なくとも次の 2 つを設定してください。
@@ -136,6 +136,8 @@ Wrangler の設定はリポジトリ直下の `wrangler.jsonc` 1 つだけです
 
 ### ワンクリックデプロイ (Deploy to Cloudflare ボタン)
 
+デプロイ画面に表示される項目は、`wrangler.jsonc` の `vars` (環境変数) と `.dev.vars.example` (secret) から決まり、各項目の説明は `package.json` の `cloudflare.bindings` に書いてあります。
+
 一番手軽な方法です。
 
 1. README 冒頭の「Deploy to Cloudflare」ボタンを押す
@@ -170,7 +172,7 @@ pnpm deploy
 
 ### ローカル開発 (`wrangler dev`)
 
-ローカル用の秘密情報は root の `.dev.vars` に書きます (git 管理外。このリポジトリには同梱していないので、以下の内容で自分で作成してください)。
+ローカル用の秘密情報は root の `.dev.vars` に書きます (git 管理外)。secret の一覧は `.dev.vars.example` にあるので、コピーして値を入れてください (`cp .dev.vars.example .dev.vars`)。開発ログイン等の非秘密の設定は `--var` か `.dev.vars` への追記で指定します。
 
 > [!NOTE]
 > 設計書との差異: `wrangler.jsonc` を root に置いたことで、Wrangler の「設定ファイルと同じディレクトリの `.env`/`.env.local` を自動的に読み込む」機能により、`wrangler dev` は Node 版の開発で使っている root の `.env` も (`.dev.vars` と合わせて) 読み込みます。`.env` に `HAKONIWA_BASE_URL=http://localhost:5173` を設定している場合、`wrangler dev --port 8788` のように別ポートで動かすと Origin 検査の基準が食い違うことがあります (通常ブラウザが送る `Origin` はリクエスト先のポートと一致するので実害は無いことが多いですが、気になる場合は `.env` の `HAKONIWA_BASE_URL` をコメントアウトするか、`--var HAKONIWA_BASE_URL:http://localhost:8788` で明示的に上書きしてください)。`wrangler deploy` (本番デプロイ) はこの自動読み込みの対象外で、`wrangler.jsonc` の `vars` と `wrangler secret put` で登録した secret だけが使われます。

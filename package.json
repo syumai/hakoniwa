@@ -48,6 +48,9 @@
       },
       "HAKONIWA_MAIL_FROM": {
         "description": "メールの送信元アドレス。任意 (既定値は `hakoniwa@example.com`)。`HAKONIWA_RESEND_API_KEY` を設定する場合に合わせて指定してください。"
+      },
+      "HAKONIWA_DEV_LOGIN": {
+        "description": "開発ログイン (任意のメールアドレスでログインできる機能) の有効/無効。**本番では必ず `false`** のままにしてください。"
       }
     }
   }
