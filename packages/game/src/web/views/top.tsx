@@ -2,6 +2,8 @@
 // tmp/14-users-auth.md によりパスワード関連フォームを撤去し、ログイン状態で出し分ける。
 import type { GameConfig } from "../../core/config.ts";
 import { monsters } from "../../core/constants.ts";
+import type { SeasonVM } from "../../app/season.ts";
+import { formatDateTime } from "../../app/timezone.ts";
 import type { IslandRowVM, TopPageVM } from "../../app/view-models.ts";
 import { facilityScale } from "./island-info.tsx";
 import { HistoryList, LogList } from "./logs.tsx";
@@ -117,6 +119,15 @@ function MyIslandSection({ vm, csrfToken }: { vm: TopPageVM; csrfToken: string |
       </>
     );
   }
+  // tmp/16-season.md「表示」節: 終了後は新しい島を探すフォームを出さない。
+  if (vm.season.state === "finished") {
+    return (
+      <>
+        <h1>新しい島を探す</h1>
+        <p>ゲームは終了しました。</p>
+      </>
+    );
+  }
   return (
     <>
       <h1>新しい島を探す</h1>
@@ -136,14 +147,83 @@ function MyIslandSection({ vm, csrfToken }: { vm: TopPageVM; csrfToken: string |
   );
 }
 
+/** 残り時間の表示。「あとN時間M分」。0 秒以下なら「まもなく」。 */
+function formatRemaining(diffSeconds: number): string {
+  if (diffSeconds <= 0) {
+    return "まもなく";
+  }
+  const totalMinutes = Math.floor(diffSeconds / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `あと${hours}時間${minutes}分`;
+}
+
+/**
+ * 次のターンの予定時刻と残り時間。進行中 (`nextTurnAt` が設定されているとき) のみ表示する。
+ * サーバー描画時点の静的表示であり、JavaScript によるカウントダウンは行わない。
+ */
+function NextTurnNotice({
+  nextTurnAt,
+  now,
+  timezone,
+}: {
+  nextTurnAt: number;
+  now: number;
+  timezone: string;
+}) {
+  return (
+    <p>
+      次のターン:{formatDateTime(nextTurnAt, timezone)} ({formatRemaining(nextTurnAt - now)})
+    </p>
+  );
+}
+
+/** ターン見出し。tmp/16-season.md「表示」節: 開始前/進行中/終了で出し分ける。 */
+function SeasonHeading({
+  season,
+  now,
+  timezone,
+}: {
+  season: SeasonVM;
+  now: number;
+  timezone: string;
+}) {
+  if (season.state === "finished") {
+    return <h1>結果発表 (ターン{season.finishedAtTurn}終了時点)</h1>;
+  }
+  return (
+    <>
+      <h1>
+        ターン{season.turn}
+        {season.finalTurn !== null ? ` / 最終ターン${season.finalTurn}` : ""}
+      </h1>
+      {season.state === "before" ? (
+        <p>
+          ゲーム開始:{formatDateTime(season.startAt, timezone)}({timezone})
+        </p>
+      ) : (
+        ""
+      )}
+      {season.nextTurnAt !== null ? (
+        <NextTurnNotice nextTurnAt={season.nextTurnAt} now={now} timezone={timezone} />
+      ) : (
+        ""
+      )}
+    </>
+  );
+}
+
 export interface TopPageProps {
   vm: TopPageVM;
   config: GameConfig;
+  timezone: string;
+  /** 表示時点の unix 秒。次のターンまでの残り時間の計算に使う。 */
+  now: number;
   csrfToken?: string | undefined;
   notice?: string | undefined;
 }
 
-export function TopPage({ vm, config, csrfToken, notice }: TopPageProps) {
+export function TopPage({ vm, config, timezone, now, csrfToken, notice }: TopPageProps) {
   const showMoneyColumn = config.hideMoneyMode !== 0;
   return (
     <div class="top-page">
@@ -158,7 +238,7 @@ export function TopPage({ vm, config, csrfToken, notice }: TopPageProps) {
         ""
       )}
 
-      <h1>ターン{vm.turn}</h1>
+      <SeasonHeading season={vm.season} now={now} timezone={timezone} />
 
       <hr />
       <MyIslandSection vm={vm} csrfToken={csrfToken} />

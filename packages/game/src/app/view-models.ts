@@ -3,6 +3,7 @@
 // 表示していた情報を構造化したもの。
 import type { AuthUser } from "./auth.ts";
 import type { UserPrefs } from "./ports.ts";
+import type { SeasonVM } from "./season.ts";
 import type { GameConfig } from "../core/config.ts";
 import type { FormattedCommand } from "../core/commands/format.ts";
 import type { FlagPrizeView, KilledMonstersView } from "../core/prize.ts";
@@ -85,6 +86,8 @@ export interface TopPageVM {
   history: HistoryEntry[];
   debug: boolean;
   viewer: ViewerVM;
+  /** 開始時刻・最終ターン・状態 (開始前/進行中/終了)。tmp/16-season.md。 */
+  season: SeasonVM;
 }
 
 /** 観光/開発/新規発見画面で共通の島情報。Perl 版 islandInfo + islandMap の情報部分。 */
@@ -129,6 +132,8 @@ export interface OwnerPageVM extends IslandDetailVM {
   logs: LogEntry[];
   /** 計画登録フォームの初期値 (user_prefs)。未保存なら空オブジェクト。 */
   defaults: UserPrefs;
+  /** 開始時刻・最終ターン・状態 (開始前/進行中/終了)。tmp/16-season.md。終了後はフォームを隠す。 */
+  season: SeasonVM;
 }
 
 /** 新規発見画面。Perl 版 newIslandMain (tempNewIslandHead + islandInfo + islandMap(owner))。 */

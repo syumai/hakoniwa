@@ -16,7 +16,14 @@ export function createTopRoutes(deps: WebDeps): Hono<AppEnv> {
     return renderPage(
       c,
       deps,
-      <TopPage vm={vm} config={deps.config.game} csrfToken={c.get("csrfToken")} notice={notice} />,
+      <TopPage
+        vm={vm}
+        config={deps.config.game}
+        timezone={deps.config.timezone}
+        now={deps.clock.now()}
+        csrfToken={c.get("csrfToken")}
+        notice={notice}
+      />,
     );
   });
 

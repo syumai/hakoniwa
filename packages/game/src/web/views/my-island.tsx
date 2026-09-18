@@ -187,6 +187,8 @@ export function MyIslandPage({ vm, config, targets, csrfToken, notice }: MyIslan
         <IslandInfo detail={vm} money={buildMoneyDisplay(vm.money, config, true)} config={config} />
       </div>
 
+      {vm.season.state === "finished" ? <Notice message="ゲームは終了しました。" /> : ""}
+
       <hr />
       <h1>開発計画</h1>
       <div class="owner-layout">
@@ -199,14 +201,18 @@ export function MyIslandPage({ vm, config, targets, csrfToken, notice }: MyIslan
             commands={vm.rawCommands}
           />
         </div>
-        <div class="owner-form-col">
-          <CommandForm
-            config={config}
-            defaults={vm.defaults}
-            targets={targets}
-            csrfToken={csrfToken}
-          />
-        </div>
+        {vm.season.state !== "finished" ? (
+          <div class="owner-form-col">
+            <CommandForm
+              config={config}
+              defaults={vm.defaults}
+              targets={targets}
+              csrfToken={csrfToken}
+            />
+          </div>
+        ) : (
+          ""
+        )}
         <div class="owner-commands-col">
           {vm.commands.map((command, index) => (
             <CommandLine index={index} command={command} key={index} />
@@ -214,21 +220,27 @@ export function MyIslandPage({ vm, config, targets, csrfToken, notice }: MyIslan
         </div>
       </div>
 
-      <hr />
-      <h1>コメント更新</h1>
-      <form action="/my-island/comment" method="post">
-        <input type="hidden" name="_csrf" value={csrfToken} />
-        <input type="text" name="message" size={80} placeholder="コメント" />
-        <input type="submit" value="コメント更新" />
-      </form>
+      {vm.season.state !== "finished" ? (
+        <>
+          <hr />
+          <h1>コメント更新</h1>
+          <form action="/my-island/comment" method="post">
+            <input type="hidden" name="_csrf" value={csrfToken} />
+            <input type="text" name="message" size={80} placeholder="コメント" />
+            <input type="submit" value="コメント更新" />
+          </form>
 
-      <hr />
-      <h1>名前の変更</h1>
-      <NameChangeForm
-        costChangeName={config.costChangeName}
-        unit={config.units.money}
-        csrfToken={csrfToken}
-      />
+          <hr />
+          <h1>名前の変更</h1>
+          <NameChangeForm
+            costChangeName={config.costChangeName}
+            unit={config.units.money}
+            csrfToken={csrfToken}
+          />
+        </>
+      ) : (
+        ""
+      )}
 
       {config.useLbbs ? (
         <>

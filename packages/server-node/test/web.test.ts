@@ -46,6 +46,7 @@ function setup(options: SetupOptions = {}): Ctx {
     ngWords: [],
     adminEnabled: true,
     debug,
+    timezone: "Asia/Tokyo",
     port: 0,
     dbPath: ":memory:",
     backupDir,

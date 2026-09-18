@@ -58,11 +58,32 @@ describe("AdminService.initialize", () => {
   it("既存データがあっても上書きしてやり直せる", () => {
     const { repo, admin } = setup();
     admin.initialize(0);
-    repo.saveMeta({ turn: 99, lastTime: 0, nextIslandId: 5 });
+    repo.saveMeta({ turn: 99, lastTime: 0, nextIslandId: 5, finalTurn: null, startAt: 0 });
 
     admin.initialize(defaultConfig.unitTimeSec);
 
     expect(repo.getMeta().turn).toBe(1);
+  });
+
+  it("tmp/16-season.md: startAt を指定すると、切り下げずそのまま lastTime/startAt になる", () => {
+    const { repo, admin } = setup();
+    const now = defaultConfig.unitTimeSec * 3 + 123;
+
+    admin.initialize(now, { startAt: 999 });
+
+    const meta = repo.getMeta();
+    expect(meta.lastTime).toBe(999);
+    expect(meta.startAt).toBe(999);
+  });
+
+  it("tmp/16-season.md: finalTurn を指定すると保存される。省略時は null (無期限)", () => {
+    const { repo, admin } = setup();
+
+    admin.initialize(0, { finalTurn: 42 });
+    expect(repo.getMeta().finalTurn).toBe(42);
+
+    admin.initialize(0);
+    expect(repo.getMeta().finalTurn).toBeNull();
   });
 });
 

@@ -14,6 +14,7 @@ import {
 } from "./sanitize.ts";
 import type { GameRepository, IslandSummary, UserPrefs } from "./ports.ts";
 import type { Clock } from "./ports.ts";
+import { buildSeasonVM, isFinished } from "./season.ts";
 import { buildMoneyDisplay } from "./view-models.ts";
 import type {
   IslandDetailVM,
@@ -124,6 +125,16 @@ export class GameService {
     }
   }
 
+  /**
+   * tmp/16-season.md「ターン進行」節: ゲーム終了後は更新系操作を拒否する
+   * (createIsland/registerCommand/updateComment/changeName)。掲示板の記帳 (postLbbs) は対象外。
+   */
+  #ensureNotFinished(): void {
+    if (isFinished(this.#deps.repo.getMeta())) {
+      throw new AppError("game_finished");
+    }
+  }
+
   #findRank(id: number, summaries: { id: number }[]): number {
     const index = summaries.findIndex((s) => s.id === id);
     return index === -1 ? 0 : index + 1;
@@ -168,6 +179,7 @@ export class GameService {
       formatCommand(command, index, config, resolveIslandName),
     );
     const defaults: UserPrefs = repo.getUserPrefs(userId) ?? {};
+    const season = buildSeasonVM(meta, this.#deps.clock.now(), config.unitTimeSec);
     return {
       ...buildDetailVM(island, rank, meta.turn),
       money: island.money,
@@ -176,6 +188,7 @@ export class GameService {
       lbbs: island.lbbs,
       logs,
       defaults,
+      season,
     };
   }
 
@@ -212,6 +225,7 @@ export class GameService {
     const logs = repo.listLogs({ sinceTurn });
     const history = repo.listHistory(config.historyMax);
     const hasIsland = actor !== undefined && repo.findIslandByOwner(actor.id) !== undefined;
+    const season = buildSeasonVM(meta, this.#deps.clock.now(), config.unitTimeSec);
     return {
       turn: meta.turn,
       islands,
@@ -220,6 +234,7 @@ export class GameService {
       history,
       debug: config.debug,
       viewer: { ...(actor !== undefined ? { user: actor } : {}), hasIsland },
+      season,
     };
   }
 
@@ -243,6 +258,7 @@ export class GameService {
   /** Perl 版 Turn.pm newIslandMain の移植。ログイン必須、1 ユーザー 1 島。 */
   createIsland(actor: AuthUser | undefined, name: string): NewIslandVM {
     this.#ensureInitialized();
+    this.#ensureNotFinished();
     const user = this.#requireLogin(actor);
     const { repo, config } = this.#deps;
     const cleanName = sanitizeText(name, MAX_NAME_LEN);
@@ -331,6 +347,7 @@ export class GameService {
     input: CommandInput,
   ): OwnerPageVM & { notice: string } {
     this.#ensureInitialized();
+    this.#ensureNotFinished();
     const { user, summary } = this.#requireOwnIsland(actor);
     const id = summary.id;
     this.#validateCommandInput(input);
@@ -391,6 +408,7 @@ export class GameService {
   /** Perl 版 Map.pm commentMain の移植。actor 自身の島に対してのみ実行できる。 */
   updateComment(actor: AuthUser | undefined, message: string): OwnerPageVM & { notice: string } {
     this.#ensureInitialized();
+    this.#ensureNotFinished();
     const { user, summary } = this.#requireOwnIsland(actor);
     const { repo } = this.#deps;
     const comment = sanitizeText(message, MAX_COMMENT_LEN);
@@ -414,6 +432,7 @@ export class GameService {
   /** Perl 版 Turn.pm changeMain の移植。actor 自身の島に対してのみ実行できる。 */
   changeName(actor: AuthUser | undefined, name: string): OwnerPageVM & { notice: string } {
     this.#ensureInitialized();
+    this.#ensureNotFinished();
     const { user, summary } = this.#requireOwnIsland(actor);
     const { repo, config } = this.#deps;
     const cleanName = sanitizeText(name, MAX_NAME_LEN);

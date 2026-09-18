@@ -1,6 +1,7 @@
 // tmp/08-turn-trigger-admin-cli.md 「ターン進行トリガー」節の移植。
 // Perl 版 Main.pm readIslandsFile のターン判定 + Turn.pm turnMain の移植。
 import type { BackupStore, GameMeta, GameRepository, Logger } from "./ports.ts";
+import { isFinished } from "./season.ts";
 import type { GameConfig } from "../core/config.ts";
 import type { Rng } from "../core/rng.ts";
 import type { World } from "../core/types.ts";
@@ -36,6 +37,10 @@ export class TurnService {
     let count = 0;
     for (let i = 0; i < config.maxCatchUpTurns; i++) {
       const meta = repo.getMeta();
+      // tmp/16-season.md「ターン進行」節: 終了後はそれ以上進めない。
+      if (isFinished(meta)) {
+        break;
+      }
       if (now - meta.lastTime < config.unitTimeSec) {
         break;
       }
@@ -48,11 +53,14 @@ export class TurnService {
     return count;
   }
 
-  /** 期限に関係なく 1 ターン進める (デバッグ/管理用)。 */
+  /** 期限に関係なく 1 ターン進める (デバッグ/管理用)。終了後は何もしない。 */
   advanceTurn(_now: number): void {
     // now は将来の拡張 (例: 進行時刻の記録) 用に受け取るのみで、判定には使わない
     // (Perl の TurnButton / 管理画面の「ターンを進める」と同じく無条件に 1 ターン進める)。
     const meta = this.#deps.repo.getMeta();
+    if (isFinished(meta)) {
+      return;
+    }
     this.#advanceOnce(meta);
   }
 
@@ -66,9 +74,9 @@ export class TurnService {
 
     const advanced = repo.transaction(() => {
       const next: GameMeta = {
+        ...meta,
         turn: meta.turn + 1,
         lastTime: meta.lastTime + config.unitTimeSec,
-        nextIslandId: meta.nextIslandId,
       };
       if (!repo.tryBumpTurn(meta.turn, next)) {
         return false;

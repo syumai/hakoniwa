@@ -20,7 +20,9 @@ export type AppErrorKind =
   /** ログイン済みだが自分の島を持っていない (開発画面等)。 */
   | "no_island"
   /** NG ワードを含む入力 (島名・コメント・掲示板)。15「NG ワード」節。 */
-  | "ng_word";
+  | "ng_word"
+  /** ゲームが終了している (最終ターンを超えた) 状態での更新系操作。16「ターン進行」節。 */
+  | "game_finished";
 
 /** app 層のユースケースが throw する唯一のエラー型。 */
 export class AppError extends Error {

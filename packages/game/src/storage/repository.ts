@@ -16,6 +16,8 @@ interface GameRow {
   turn: number;
   last_time: number;
   next_island_id: number;
+  final_turn: number | null;
+  start_at: number;
 }
 
 interface LogRow {
@@ -86,29 +88,40 @@ export class SqliteGameRepository implements GameRepository {
 
   getMeta(): GameMeta {
     const row = this.#driver.get<GameRow>(
-      "SELECT turn, last_time, next_island_id FROM game WHERE id = 1",
+      "SELECT turn, last_time, next_island_id, final_turn, start_at FROM game WHERE id = 1",
     );
     if (row === undefined) {
       throw new Error("SqliteGameRepository: not initialized");
     }
-    return { turn: row.turn, lastTime: row.last_time, nextIslandId: row.next_island_id };
+    return {
+      turn: row.turn,
+      lastTime: row.last_time,
+      nextIslandId: row.next_island_id,
+      finalTurn: row.final_turn,
+      startAt: row.start_at,
+    };
   }
 
   saveMeta(meta: GameMeta): void {
     this.#driver.run(
-      "UPDATE game SET turn = ?, last_time = ?, next_island_id = ? WHERE id = 1",
+      "UPDATE game SET turn = ?, last_time = ?, next_island_id = ?, final_turn = ?, start_at = ? WHERE id = 1",
       meta.turn,
       meta.lastTime,
       meta.nextIslandId,
+      meta.finalTurn,
+      meta.startAt,
     );
   }
 
   tryBumpTurn(expectedTurn: number, next: GameMeta): boolean {
     this.#driver.run(
-      "UPDATE game SET turn = ?, last_time = ?, next_island_id = ? WHERE id = 1 AND turn = ?",
+      `UPDATE game SET turn = ?, last_time = ?, next_island_id = ?, final_turn = ?, start_at = ?
+       WHERE id = 1 AND turn = ?`,
       next.turn,
       next.lastTime,
       next.nextIslandId,
+      next.finalTurn,
+      next.startAt,
       expectedTurn,
     );
     const row = this.#driver.get<{ n: number }>("SELECT changes() AS n");
@@ -325,12 +338,16 @@ export class SqliteGameRepository implements GameRepository {
 
   initialize(meta: GameMeta): void {
     this.#driver.run(
-      `INSERT INTO game (id, turn, last_time, next_island_id) VALUES (1, ?, ?, ?)
+      `INSERT INTO game (id, turn, last_time, next_island_id, final_turn, start_at)
+       VALUES (1, ?, ?, ?, ?, ?)
        ON CONFLICT (id) DO UPDATE SET
-         turn = excluded.turn, last_time = excluded.last_time, next_island_id = excluded.next_island_id`,
+         turn = excluded.turn, last_time = excluded.last_time, next_island_id = excluded.next_island_id,
+         final_turn = excluded.final_turn, start_at = excluded.start_at`,
       meta.turn,
       meta.lastTime,
       meta.nextIslandId,
+      meta.finalTurn,
+      meta.startAt,
     );
   }
 

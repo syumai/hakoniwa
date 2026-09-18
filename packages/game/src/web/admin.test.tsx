@@ -214,3 +214,72 @@ describe("管理画面 (/admin)", () => {
     expect(island?.food).toBe(9999);
   });
 });
+
+describe("tmp/16-season.md: 管理画面の開始時刻・最終ターン", () => {
+  it("GET /admin: 現役データに開始時刻・最終ターン・状態を表示する", async () => {
+    const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL], finalTurn: 20 });
+    const admin = await loginAdmin(testApp);
+    const res = await testApp.app.request("/admin", { headers: { cookie: admin.cookie } });
+    const html = await res.text();
+    expect(html).toContain("開始時刻");
+    expect(html).toContain("最終ターン");
+    expect(html).toContain("20");
+    expect(html).toContain("進行中");
+  });
+
+  it("POST /admin/init: 開始日時 (start-at) と最終ターン数 (final-turn) を指定して初期化できる", async () => {
+    const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL], skipInit: true });
+    const admin = await loginAdmin(testApp);
+    const res = await postForm(
+      testApp.app,
+      "/admin/init",
+      { "start-at": "2026-10-01T21:00", "final-turn": 50, _csrf: admin.csrfToken },
+      { cookie: admin.cookie },
+    );
+    expect(res.status).toBe(200);
+    const meta = testApp.repo.getMeta();
+    expect(meta.finalTurn).toBe(50);
+    expect(meta.turn).toBe(1);
+    expect(meta.lastTime).toBe(meta.startAt);
+  });
+
+  it("POST /admin/init: start-at/final-turn を省略すると従来どおり (現在時刻の切り下げ・無期限)", async () => {
+    const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL], skipInit: true });
+    const admin = await loginAdmin(testApp);
+    const res = await postForm(
+      testApp.app,
+      "/admin/init",
+      { _csrf: admin.csrfToken },
+      { cookie: admin.cookie },
+    );
+    expect(res.status).toBe(200);
+    expect(testApp.repo.getMeta().finalTurn).toBeNull();
+  });
+
+  it("POST /admin/final-turn: 最終ターン数を変更できる", async () => {
+    const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL] });
+    const admin = await loginAdmin(testApp);
+    const res = await postForm(
+      testApp.app,
+      "/admin/final-turn",
+      { "final-turn": 30, _csrf: admin.csrfToken },
+      { cookie: admin.cookie },
+    );
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("最終ターン数を変更しました");
+    expect(testApp.repo.getMeta().finalTurn).toBe(30);
+  });
+
+  it("POST /admin/final-turn: 空欄なら無期限 (null) に戻せる", async () => {
+    const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL], finalTurn: 10 });
+    const admin = await loginAdmin(testApp);
+    const res = await postForm(
+      testApp.app,
+      "/admin/final-turn",
+      { "final-turn": "", _csrf: admin.csrfToken },
+      { cookie: admin.cookie },
+    );
+    expect(res.status).toBe(200);
+    expect(testApp.repo.getMeta().finalTurn).toBeNull();
+  });
+});

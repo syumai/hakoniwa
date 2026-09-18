@@ -16,7 +16,7 @@ function user(id: string, name = `user-${id}`): AuthUser {
 function setup(overrides: Partial<GameServiceDeps> = {}, options: { skipInit?: boolean } = {}) {
   const repo = overrides.repo ?? new FakeGameRepository();
   if (!options.skipInit && !repo.isInitialized()) {
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 1 });
+    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 1, finalTurn: null, startAt: 0 });
   }
   const deps: GameServiceDeps = {
     repo,
@@ -474,5 +474,75 @@ describe("GameService.getTopPage / getIslandPage", () => {
   it("存在しない島は island_not_found", () => {
     const { service } = setup();
     expectAppError(() => service.getIslandPage(999), "island_not_found");
+  });
+
+  it("tmp/16-season.md: getTopPage/getIslandPage は season を含む", () => {
+    const { service } = setup();
+    const created = service.createIsland(user("u1"), "島1");
+    const top = service.getTopPage(undefined);
+    expect(top.season).toMatchObject({ turn: 1, finalTurn: null, state: "running" });
+    const owner = service.openOwnerPage(user("u1"));
+    expect(owner.season).toMatchObject({ turn: 1, finalTurn: null, state: "running" });
+    void created;
+  });
+});
+
+describe("GameService 終了後 (game_finished)", () => {
+  /** 島を1つ作ってから、repo 上で強制的にゲームを終了状態 (turn > finalTurn) にする。 */
+  function setupFinished() {
+    const s = setup({ config: { ...defaultConfig, useLbbs: true } });
+    const created = s.service.createIsland(user("u1"), "テスト島");
+    const meta = s.repo.getMeta();
+    s.repo.saveMeta({ ...meta, turn: 2, finalTurn: 1 });
+    return { ...s, islandId: created.id };
+  }
+
+  it("createIsland は game_finished", () => {
+    const { service } = setupFinished();
+    expectAppError(() => service.createIsland(user("u2"), "新しい島"), "game_finished");
+  });
+
+  it("registerCommand は game_finished", () => {
+    const { service } = setupFinished();
+    expectAppError(
+      () =>
+        service.registerCommand(user("u1"), {
+          number: 0,
+          kind: CommandKind.Prepare,
+          x: 0,
+          y: 0,
+          amount: 0,
+          target: 0,
+          mode: "write",
+        }),
+      "game_finished",
+    );
+  });
+
+  it("updateComment は game_finished", () => {
+    const { service } = setupFinished();
+    expectAppError(() => service.updateComment(user("u1"), "こんにちは"), "game_finished");
+  });
+
+  it("changeName は game_finished", () => {
+    const { service } = setupFinished();
+    expectAppError(() => service.changeName(user("u1"), "新しい名前"), "game_finished");
+  });
+
+  it("postLbbs は終了後も許可される", () => {
+    const { service, islandId } = setupFinished();
+    const result = service.postLbbs(user("u2", "旅人"), islandId, "感想です");
+    expect(result.lbbs[0]).toMatchObject({ name: "旅人", message: "感想です" });
+  });
+
+  it("getTopPage / getIslandPage / openOwnerPage は終了後も閲覧できる (season.state === 'finished')", () => {
+    const { service, islandId } = setupFinished();
+    const top = service.getTopPage(undefined);
+    expect(top.season.state).toBe("finished");
+    expect(top.season.finishedAtTurn).toBe(1);
+    const island = service.getIslandPage(islandId);
+    expect(island.name).toBe("テスト島");
+    const owner = service.openOwnerPage(user("u1"));
+    expect(owner.season.state).toBe("finished");
   });
 });

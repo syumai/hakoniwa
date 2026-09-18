@@ -107,6 +107,14 @@ export interface SetupOptions {
   gameOverrides?: Partial<GameConfig>;
   /** 初期化 (repo.initialize) をスキップする (not_initialized のテスト用)。 */
   skipInit?: boolean;
+  /** tmp/16-season.md のテスト用。省略時は null (無期限)。 */
+  finalTurn?: number | null;
+  /** tmp/16-season.md のテスト用。省略時は INITIAL_CLOCK (開始済み)。 */
+  startAt?: number;
+  /** 省略時は INITIAL_CLOCK (turn=1 の meta.lastTime)。開始前状態のテストに使う。 */
+  lastTime?: number;
+  /** 省略時は "Asia/Tokyo"。 */
+  timezone?: string;
 }
 
 export interface TestApp {
@@ -123,7 +131,13 @@ export interface TestApp {
 export function setupTestApp(options: SetupOptions = {}): TestApp {
   const repo = new FakeGameRepository();
   if (options.skipInit !== true) {
-    repo.initialize({ turn: 1, lastTime: INITIAL_CLOCK, nextIslandId: 1 });
+    repo.initialize({
+      turn: 1,
+      lastTime: options.lastTime ?? INITIAL_CLOCK,
+      nextIslandId: 1,
+      finalTurn: options.finalTurn ?? null,
+      startAt: options.startAt ?? INITIAL_CLOCK,
+    });
   }
   const clock = new FakeClock(INITIAL_CLOCK);
   const rng = createSeededRng(42);
@@ -146,6 +160,7 @@ export function setupTestApp(options: SetupOptions = {}): TestApp {
     ngWords: options.ngWords ?? [],
     adminEnabled: options.adminEnabled ?? true,
     debug,
+    timezone: options.timezone ?? "Asia/Tokyo",
   };
 
   const gameService = new GameService({ repo, clock, config: game, rng, ngWords: config.ngWords });

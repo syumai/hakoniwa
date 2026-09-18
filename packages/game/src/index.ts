@@ -169,8 +169,18 @@ export { GameService } from "./app/game-service.ts";
 export type { TurnServiceDeps } from "./app/turn-service.ts";
 export { TurnService } from "./app/turn-service.ts";
 
-export type { AdminStatus, AdminServiceDeps, AuthMethodsVM } from "./app/admin-service.ts";
+export type {
+  AdminStatus,
+  AdminServiceDeps,
+  AdminInitializeOptions,
+  AuthMethodsVM,
+} from "./app/admin-service.ts";
 export { AdminService } from "./app/admin-service.ts";
+
+export type { SeasonState, SeasonVM } from "./app/season.ts";
+export { isFinished, isBeforeStart, buildSeasonVM } from "./app/season.ts";
+
+export { parseLocalDateTime, formatDateTime, formatDateTimeLocalValue } from "./app/timezone.ts";
 
 export {
   FakeGameRepository,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { defaultConfig } from "../core/config.ts";
-import { loginAs, postForm, setupTestApp } from "./test-helpers.ts";
+import { INITIAL_CLOCK, loginAs, postForm, setupTestApp } from "./test-helpers.ts";
 
 describe("GET /", () => {
   it("200 で配布元リンク、ターン数、各見出しを含む (未ログイン)", async () => {
@@ -225,5 +225,42 @@ describe("POST /turn (デバッグ用)", () => {
     const html = await res.text();
     expect(html).toContain("ターン2");
     expect(testApp.repo.getMeta().turn).toBe(2);
+  });
+});
+
+describe("tmp/16-season.md: トップの3状態 (開始前/進行中/終了)", () => {
+  it("進行中: 「ターンN」/「最終ターンM」と「次のターン:」+残り時間を表示する", async () => {
+    const { app } = setupTestApp({ finalTurn: 10 });
+    const res = await app.request("/");
+    const html = await res.text();
+    expect(html).toContain("ターン1");
+    expect(html).toContain("最終ターン10");
+    expect(html).toContain("次のターン:");
+    expect(html).not.toContain("結果発表");
+    expect(html).not.toContain("ゲーム開始:");
+  });
+
+  it("開始前: 「ゲーム開始: …」を表示し、「次のターン:」は表示しない", async () => {
+    const futureStart = INITIAL_CLOCK + 10_000;
+    const { app } = setupTestApp({ startAt: futureStart, lastTime: futureStart });
+    const res = await app.request("/");
+    const html = await res.text();
+    expect(html).toContain("ゲーム開始:");
+    expect(html).not.toContain("次のターン:");
+    expect(html).not.toContain("結果発表");
+  });
+
+  it("終了後: 「結果発表 (ターンM終了時点)」を表示し、「次のターン:」は表示しない", async () => {
+    const testApp = setupTestApp({ finalTurn: 1 });
+    const meta = testApp.repo.getMeta();
+    testApp.repo.saveMeta({ ...meta, turn: 2 });
+
+    const res = await testApp.app.request("/");
+    const html = await res.text();
+    expect(html).toContain("結果発表");
+    expect(html).toContain("ターン1終了時点");
+    expect(html).not.toContain("次のターン:");
+    // 終了後も既存の順位表 (諸島の状況) はそのまま表示する。
+    expect(html).toContain("諸島の状況");
   });
 });

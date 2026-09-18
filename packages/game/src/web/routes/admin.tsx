@@ -9,8 +9,10 @@ import type { AppEnv } from "../env.ts";
 import { parseStrictNonNegativeInt, parseStringBody } from "../forms/common.ts";
 import {
   parseAdminBackupForm,
+  parseAdminInitForm,
   parseAdminLastTimeForm,
   parseAuthMethodsForm,
+  parseFinalTurnForm,
 } from "../forms/admin-forms.ts";
 import { listIslandSelectOptions } from "./helpers.ts";
 import { renderPage } from "./render.tsx";
@@ -41,6 +43,11 @@ async function renderAdmin(c: Context<AppEnv>, deps: WebDeps, notice: string | u
       status={status}
       authMethods={authMethods}
       islands={islands}
+      timezone={deps.config.timezone}
+      initDefaults={{
+        ...(deps.config.startAt !== undefined ? { startAt: deps.config.startAt } : {}),
+        ...(deps.config.finalTurn !== undefined ? { finalTurn: deps.config.finalTurn } : {}),
+      }}
       csrfToken={c.get("csrfToken") ?? ""}
       notice={notice}
     />,
@@ -57,7 +64,9 @@ export function createAdminRoutes(deps: WebDeps): Hono<AppEnv> {
 
   app.post("/admin/init", async (c) => {
     requireAdmin(c);
-    deps.adminService.initialize(deps.clock.now());
+    const body = await parseStringBody(c);
+    const form = parseAdminInitForm(body, deps.config.timezone);
+    deps.adminService.initialize(deps.clock.now(), form);
     return renderAdmin(c, deps, "新しいデータを作成しました。");
   });
 
@@ -70,9 +79,18 @@ export function createAdminRoutes(deps: WebDeps): Hono<AppEnv> {
   app.post("/admin/last-time", async (c) => {
     requireAdmin(c);
     const body = await parseStringBody(c);
-    const form = parseAdminLastTimeForm(body);
+    const form = parseAdminLastTimeForm(body, deps.config.timezone);
     deps.adminService.setLastTime(form.unix);
     return renderAdmin(c, deps, "最終更新時間を変更しました。");
+  });
+
+  // 追加: tmp/16-season.md「設定の入口」節。「ゲーム設定」の最終ターン数変更。
+  app.post("/admin/final-turn", async (c) => {
+    requireAdmin(c);
+    const body = await parseStringBody(c);
+    const finalTurn = parseFinalTurnForm(body);
+    deps.adminService.setFinalTurn(finalTurn);
+    return renderAdmin(c, deps, "最終ターン数を変更しました。");
   });
 
   app.post("/admin/turn", async (c) => {

@@ -3,11 +3,25 @@
 // ログイン方法のトグルと資金・食料最大化フォームを追加した。
 import type { AdminStatus, AuthMethodsVM } from "../../app/admin-service.ts";
 import type { BackupInfo } from "../../app/ports.ts";
+import type { SeasonState } from "../../app/season.ts";
+import { formatDateTime, formatDateTimeLocalValue } from "../../app/timezone.ts";
 import type { IslandSelectVM } from "../../app/view-models.ts";
 
 /** unix 秒 → ローカル日時文字列。Perl 版 timeToString。 */
 function timeToString(unixSeconds: number): string {
   return new Date(unixSeconds * 1000).toLocaleString("ja-JP");
+}
+
+/** SeasonState → 表示文言。tmp/16-season.md「管理画面」節。 */
+function seasonStateLabel(state: SeasonState): string {
+  switch (state) {
+    case "before":
+      return "開始前";
+    case "running":
+      return "進行中";
+    case "finished":
+      return "終了";
+  }
 }
 
 function BackupRow({ backup, csrfToken }: { backup: BackupInfo; csrfToken: string }) {
@@ -124,17 +138,65 @@ export interface AdminPageProps {
   status: AdminStatus;
   authMethods: AuthMethodsVM;
   islands: readonly IslandSelectVM[];
+  /** datetime-local の解釈・表示に使うタイムゾーン。tmp/16-season.md「タイムゾーン」節。 */
+  timezone: string;
+  /** 「新しいデータを作る」フォームの既定値 (HAKONIWA_START_AT / HAKONIWA_FINAL_TURN 由来)。 */
+  initDefaults: { startAt?: number; finalTurn?: number };
   csrfToken: string;
   notice: string | undefined;
 }
 
-export function AdminPage({ status, authMethods, islands, csrfToken, notice }: AdminPageProps) {
+/** 「新しいデータを作る」フォーム。開始日時 (省略可) と最終ターン数 (省略可) を入力する。 */
+function InitForm({
+  timezone,
+  initDefaults,
+  csrfToken,
+}: {
+  timezone: string;
+  initDefaults: { startAt?: number; finalTurn?: number };
+  csrfToken: string;
+}) {
+  return (
+    <form action="/admin/init" method="post">
+      <input type="hidden" name="_csrf" value={csrfToken} />
+      <p>
+        開始日時 (省略時: 現在時刻を切り下げ。{timezone})
+        <br />
+        <input
+          type="datetime-local"
+          name="start-at"
+          value={
+            initDefaults.startAt !== undefined
+              ? formatDateTimeLocalValue(initDefaults.startAt, timezone)
+              : ""
+          }
+        />
+      </p>
+      <p>
+        最終ターン数 (省略時: 無期限)
+        <br />
+        <input type="number" name="final-turn" min={1} value={initDefaults.finalTurn ?? ""} />
+      </p>
+      <input type="submit" value="新しいデータを作る" />
+    </form>
+  );
+}
+
+export function AdminPage({
+  status,
+  authMethods,
+  islands,
+  timezone,
+  initDefaults,
+  csrfToken,
+  notice,
+}: AdminPageProps) {
   return (
     <div class="admin-page">
       <h1>箱島２ メンテナンスツール</h1>
       {notice !== undefined ? <p class="notice big">{notice}</p> : ""}
 
-      {status.initialized ? (
+      {status.initialized && status.season !== undefined ? (
         <div class="current-data">
           <h2>現役データ</h2>
           <p>
@@ -145,6 +207,15 @@ export function AdminPage({ status, authMethods, islands, csrfToken, notice }: A
           </p>
           <p>
             <b>最終更新時間(秒数表示)</b>:1970年1月1日から{status.lastTime}秒
+          </p>
+          <p>
+            <b>開始時刻</b>:{formatDateTime(status.season.startAt, timezone)}({timezone})
+          </p>
+          <p>
+            <b>最終ターン</b>:{status.season.finalTurn ?? "無期限"}
+          </p>
+          <p>
+            <b>状態</b>:{seasonStateLabel(status.season.state)}
           </p>
           <form action="/admin/reset" method="post">
             <input type="hidden" name="_csrf" value={csrfToken} />
@@ -170,16 +241,21 @@ export function AdminPage({ status, authMethods, islands, csrfToken, notice }: A
             <input type="submit" value="ターンを進める" />
           </form>
 
+          <h3>ゲーム設定</h3>
+          <form action="/admin/final-turn" method="post">
+            <input type="hidden" name="_csrf" value={csrfToken} />
+            最終ターン数 (空欄で無期限)
+            <input type="number" name="final-turn" min={1} value={status.season.finalTurn ?? ""} />
+            <input type="submit" value="最終ターン数を変更" />
+          </form>
+
           <h3>資金・食料の最大化</h3>
           <MaximizeForm islands={islands} csrfToken={csrfToken} />
         </div>
       ) : (
         <div class="current-data">
           <h2>現役データ</h2>
-          <form action="/admin/init" method="post">
-            <input type="hidden" name="_csrf" value={csrfToken} />
-            <input type="submit" value="新しいデータを作る" />
-          </form>
+          <InitForm timezone={timezone} initDefaults={initDefaults} csrfToken={csrfToken} />
         </div>
       )}
 

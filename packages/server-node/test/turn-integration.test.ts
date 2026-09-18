@@ -32,6 +32,7 @@ function setup(overrides: Partial<typeof defaultConfig> = {}) {
     ngWords: [],
     adminEnabled: true,
     debug: false,
+    timezone: "Asia/Tokyo",
   };
   const deps = buildDeps({
     driver,

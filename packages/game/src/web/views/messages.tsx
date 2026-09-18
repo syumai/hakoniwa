@@ -57,6 +57,9 @@ export function errorMessage(kind: AppErrorKind): string {
       return "まだ島を発見していません。";
     case "ng_word":
       return "その名前/内容は使えません。";
+    // tmp/16-season.md「ターン進行」節。
+    case "game_finished":
+      return "ゲームは終了しました。";
     default: {
       const exhaustive: never = kind;
       return exhaustive;
@@ -91,6 +94,9 @@ export function errorStatus(kind: AppErrorKind): 400 | 401 | 403 | 404 | 409 | 5
     // 設計書との差異: tmp/14-users-auth.md には無いが、Phase 6b の指示により
     // 「島はひとり1つまでです。」は 409 (island_full と同じ「もう作れない」系の意味) にした。
     case "already_has_island":
+      return 409;
+    // tmp/16-season.md「ターン進行」節。
+    case "game_finished":
       return 409;
     default: {
       const exhaustive: never = kind;

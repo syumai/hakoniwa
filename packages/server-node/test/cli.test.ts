@@ -145,3 +145,95 @@ describe("cli", () => {
     expect(await runCli(["backup", "delete"], env, createIO())).toBe(2);
   });
 });
+
+describe("cli (tmp/16-season.md: 開始時刻・最終ターン)", () => {
+  let dir: string;
+  let env: Record<string, string | undefined>;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "hakoniwa-cli-season-test-"));
+    env = {
+      HAKONIWA_DB_PATH: join(dir, "hakoniwa.sqlite"),
+      HAKONIWA_BACKUP_DIR: join(dir, "backups"),
+      HAKONIWA_AUTH_SECRET: "a".repeat(32),
+    };
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("db init --start-at --final-turn で開始時刻と最終ターンを指定できる", async () => {
+    const io = createIO();
+    expect(
+      await runCli(
+        ["db", "init", "--start-at", "2026-10-01T21:00:00+09:00", "--final-turn", "100"],
+        env,
+        io,
+      ),
+    ).toBe(0);
+
+    const statusIO = createIO();
+    expect(await runCli(["db", "status"], env, statusIO)).toBe(0);
+    const status = statusIO.lines.join("\n");
+    expect(status).toContain("最終ターン: 100");
+    expect(status).toContain("状態(シーズン): 開始前");
+  });
+
+  it("db init は HAKONIWA_START_AT / HAKONIWA_FINAL_TURN を既定値として使う", async () => {
+    const envWithDefaults = {
+      ...env,
+      HAKONIWA_START_AT: "2026-10-01T21:00:00+09:00",
+      HAKONIWA_FINAL_TURN: "200",
+    };
+    expect(await runCli(["db", "init"], envWithDefaults, createIO())).toBe(0);
+
+    const statusIO = createIO();
+    expect(await runCli(["db", "status"], envWithDefaults, statusIO)).toBe(0);
+    expect(statusIO.lines.join("\n")).toContain("最終ターン: 200");
+  });
+
+  it("game set-final-turn <N> で最終ターンを変更できる", async () => {
+    await runCli(["db", "init"], env, createIO());
+    const io = createIO();
+    expect(await runCli(["game", "set-final-turn", "5"], env, io)).toBe(0);
+    expect(io.lines.join("\n")).toContain("5");
+
+    const statusIO = createIO();
+    await runCli(["db", "status"], env, statusIO);
+    expect(statusIO.lines.join("\n")).toContain("最終ターン: 5");
+  });
+
+  it("game set-final-turn none で無期限に戻せる", async () => {
+    await runCli(["db", "init", "--final-turn", "5"], env, createIO());
+    const io = createIO();
+    expect(await runCli(["game", "set-final-turn", "none"], env, io)).toBe(0);
+    expect(io.lines.join("\n")).toContain("無期限");
+
+    const statusIO = createIO();
+    await runCli(["db", "status"], env, statusIO);
+    expect(statusIO.lines.join("\n")).toContain("最終ターン: 無期限");
+  });
+
+  it("game set-final-turn に不正な値を渡すと 2 を返す", async () => {
+    await runCli(["db", "init"], env, createIO());
+    expect(await runCli(["game", "set-final-turn", "abc"], env, createIO())).toBe(2);
+  });
+
+  it("db status: 終了後は状態(シーズン)が「終了」になる", async () => {
+    await runCli(["db", "init", "--final-turn", "1"], env, createIO());
+    await runCli(["turn", "advance"], env, createIO());
+
+    const io = createIO();
+    await runCli(["db", "status"], env, io);
+    const status = io.lines.join("\n");
+    expect(status).toContain("状態(シーズン): 終了");
+
+    // 終了後は turn advance / turn check とも進まない。
+    const advanceIO = createIO();
+    await runCli(["turn", "advance"], env, advanceIO);
+    const statusAfterIO = createIO();
+    await runCli(["db", "status"], env, statusAfterIO);
+    expect(statusAfterIO.lines.join("\n")).toContain("ターン: 2");
+  });
+});

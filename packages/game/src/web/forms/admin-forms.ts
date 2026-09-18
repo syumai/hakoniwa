@@ -2,6 +2,7 @@
 // 「ログイン方法の設定」節のフォームパース。v2 でパスワード欄は撤去された (セッション + isAdmin で保護)。
 import { AppError } from "../../app/errors.ts";
 import type { AuthMethodsFlags } from "../../app/auth-methods.ts";
+import { parseLocalDateTime } from "../../app/timezone.ts";
 import { field } from "./common.ts";
 
 export interface AdminBackupForm {
@@ -21,7 +22,10 @@ export interface AdminLastTimeForm {
   unix: number;
 }
 
-export function parseAdminLastTimeForm(body: Record<string, string>): AdminLastTimeForm {
+export function parseAdminLastTimeForm(
+  body: Record<string, string>,
+  timezone: string,
+): AdminLastTimeForm {
   const unixRaw = field(body, "unix");
   const datetimeRaw = field(body, "datetime");
 
@@ -33,13 +37,54 @@ export function parseAdminLastTimeForm(body: Record<string, string>): AdminLastT
   }
   if (datetimeRaw !== "") {
     // datetime-local: "YYYY-MM-DDTHH:mm" (ローカル時刻扱い。タイムゾーン情報を含まない)。
-    const ms = new Date(datetimeRaw).getTime();
-    if (Number.isNaN(ms)) {
+    // tmp/16-season.md「タイムゾーン」節: HAKONIWA_TIMEZONE で解釈する (実行環境依存の
+    // `new Date(datetimeRaw)` は使わない)。
+    try {
+      return { unix: parseLocalDateTime(datetimeRaw, timezone) };
+    } catch {
       throw new AppError("invalid_input", "datetime must be a valid datetime-local value");
     }
-    return { unix: Math.floor(ms / 1000) };
   }
   throw new AppError("invalid_input", "either datetime or unix is required");
+}
+
+/** 「新しいデータを作る」フォーム。開始日時 (省略可) と最終ターン数 (省略可) を受け取る。 */
+export interface AdminInitForm {
+  startAt?: number;
+  finalTurn?: number | null;
+}
+
+export function parseAdminInitForm(body: Record<string, string>, timezone: string): AdminInitForm {
+  const startAtRaw = field(body, "start-at");
+  const finalTurnRaw = field(body, "final-turn");
+  const form: AdminInitForm = {};
+
+  if (startAtRaw !== "") {
+    try {
+      form.startAt = parseLocalDateTime(startAtRaw, timezone);
+    } catch {
+      throw new AppError("invalid_input", "start-at must be a valid datetime-local value");
+    }
+  }
+  if (finalTurnRaw !== "") {
+    if (!/^\d+$/.test(finalTurnRaw) || Number(finalTurnRaw) <= 0) {
+      throw new AppError("invalid_input", "final-turn must be a positive integer");
+    }
+    form.finalTurn = Number(finalTurnRaw);
+  }
+  return form;
+}
+
+/** 「ゲーム設定」の最終ターン数変更フォーム。空欄なら無期限 (null)。 */
+export function parseFinalTurnForm(body: Record<string, string>): number | null {
+  const raw = field(body, "final-turn");
+  if (raw === "") {
+    return null;
+  }
+  if (!/^\d+$/.test(raw) || Number(raw) <= 0) {
+    throw new AppError("invalid_input", "final-turn must be a positive integer");
+  }
+  return Number(raw);
 }
 
 /** チェックボックスの有無 (存在すれば "on" 等の非空文字列) を真偽値に変換する。 */

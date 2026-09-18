@@ -4,6 +4,8 @@
 // `node dist/cli.js <command>` または root で `vp run --filter ./packages/server-node cli -- <command>`。
 import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
+import { formatDateTime } from "@hakoniwa/game";
+import type { SeasonState } from "@hakoniwa/game";
 import { composeNode } from "./compose.ts";
 import type { ComposedNode } from "./compose.ts";
 import { loadNodeConfig } from "./config.ts";
@@ -33,14 +35,17 @@ const HELP_TEXT = `hakoniwa CLI
 
 コマンド:
   db init                新しいデータを作る
+    --start-at <ISO8601>    開始日時 (省略時: HAKONIWA_START_AT、それも無ければ現在時刻を切り下げ)
+    --final-turn <N>        最終ターン数 (省略時: HAKONIWA_FINAL_TURN、それも無ければ無期限)
   db reset --yes         現役データを削除する (要 --yes)
                           ※ v1 (パスワード認証) の DB は v2 (better-auth) のスキーマと
                             互換性が無いため、v1 の DB ファイルを使い続けている場合は
                             このコマンドで一度リセットしてから db init してください。
-  db status              現役データの状態を表示する
-  turn check             期限が来ていればターンを進める
-  turn advance           期限に関係なく強制的に 1 ターン進める
+  db status              現役データの状態を表示する (開始時刻・最終ターン・状態を含む)
+  turn check             期限が来ていればターンを進める (終了後は 0)
+  turn advance           期限に関係なく強制的に 1 ターン進める (終了後は何もしない)
   time set <unix|ISO8601> 最終更新時間を変更する
+  game set-final-turn <N|none> 最終ターン数を変更する (none で無期限に戻す)
   backup list            バックアップ一覧を表示する
   backup create [label]  バックアップを作成する (label 省略可)
   backup restore <label> バックアップを現役データへ復元する
@@ -50,6 +55,20 @@ const HELP_TEXT = `hakoniwa CLI
 
 環境変数は @hakoniwa/game の loadConfigFromEnv と config.ts (HAKONIWA_DB_PATH 等) を参照する。
 `;
+
+const SEASON_STATE_LABELS: Record<SeasonState, string> = {
+  before: "開始前",
+  running: "進行中",
+  finished: "終了",
+};
+
+/** 正の整数文字列を検証して数値に変換する。`game set-final-turn`/`db init --final-turn` 共通。 */
+function parsePositiveIntArg(raw: string, label: string): number {
+  if (!/^\d+$/.test(raw) || Number(raw) <= 0) {
+    throw new UsageError(`${label} は正の整数で指定してください (got: ${raw})`);
+  }
+  return Number(raw);
+}
 
 /** unix 秒 (整数文字列) または ISO8601 文字列を unix 秒に変換する。 */
 function parseUnixOrIso8601(raw: string): number {
@@ -77,14 +96,25 @@ function formatTimestamp(unixSeconds: number): string {
 
 async function runDb(
   positionals: string[],
-  values: { yes?: boolean },
+  values: { yes?: boolean; "start-at"?: string; "final-turn"?: string },
   node: ComposedNode,
   io: CliIO,
 ): Promise<void> {
   const sub = requirePositional(positionals, 0, "db サブコマンド");
   switch (sub) {
     case "init": {
-      node.adminService.initialize(Math.floor(Date.now() / 1000));
+      const startAtRaw = values["start-at"];
+      const startAt =
+        startAtRaw !== undefined ? parseUnixOrIso8601(startAtRaw) : node.config.startAt;
+      const finalTurnRaw = values["final-turn"];
+      const finalTurn =
+        finalTurnRaw !== undefined
+          ? parsePositiveIntArg(finalTurnRaw, "--final-turn")
+          : node.config.finalTurn;
+      node.adminService.initialize(Math.floor(Date.now() / 1000), {
+        ...(startAt !== undefined ? { startAt } : {}),
+        ...(finalTurn !== undefined ? { finalTurn } : {}),
+      });
       io.stdout("新しいデータを作成しました。");
       return;
     }
@@ -108,6 +138,12 @@ async function runDb(
         io.stdout(`ターン: ${status.turn}`);
         io.stdout(`最終更新時間: ${formatTimestamp(status.lastTime ?? 0)}`);
         io.stdout(`島数: ${islandCount}`);
+        if (status.season !== undefined) {
+          const { timezone } = node.config;
+          io.stdout(`開始時刻: ${formatDateTime(status.season.startAt, timezone)} (${timezone})`);
+          io.stdout(`最終ターン: ${status.season.finalTurn ?? "無期限"}`);
+          io.stdout(`状態(シーズン): ${SEASON_STATE_LABELS[status.season.state]}`);
+        }
       }
       io.stdout(`バックアップ数: ${status.backups.length}`);
       for (const backup of status.backups) {
@@ -153,6 +189,25 @@ async function runTime(positionals: string[], node: ComposedNode, io: CliIO): Pr
     }
     default:
       throw new UsageError(`time: 未知のサブコマンドです: ${sub}`);
+  }
+}
+
+async function runGame(positionals: string[], node: ComposedNode, io: CliIO): Promise<void> {
+  const sub = requirePositional(positionals, 0, "game サブコマンド");
+  switch (sub) {
+    case "set-final-turn": {
+      const raw = requirePositional(positionals, 1, "game set-final-turn の値 (N または none)");
+      const finalTurn = raw === "none" ? null : parsePositiveIntArg(raw, "game set-final-turn");
+      node.adminService.setFinalTurn(finalTurn);
+      io.stdout(
+        finalTurn === null
+          ? "最終ターンを無期限にしました。"
+          : `最終ターンを ${finalTurn} に設定しました。`,
+      );
+      return;
+    }
+    default:
+      throw new UsageError(`game: 未知のサブコマンドです: ${sub}`);
   }
 }
 
@@ -204,7 +259,12 @@ export async function runCli(
   env: Record<string, string | undefined> = process.env,
   io: CliIO = defaultIO,
 ): Promise<number> {
-  let values: { help?: boolean; yes?: boolean };
+  let values: {
+    help?: boolean;
+    yes?: boolean;
+    "start-at"?: string;
+    "final-turn"?: string;
+  };
   let positionals: string[];
   try {
     const parsed = parseArgs({
@@ -212,6 +272,8 @@ export async function runCli(
       options: {
         help: { type: "boolean", short: "h" },
         yes: { type: "boolean" },
+        "start-at": { type: "string" },
+        "final-turn": { type: "string" },
       },
       allowPositionals: true,
     });
@@ -250,6 +312,9 @@ export async function runCli(
         break;
       case "time":
         await runTime(rest, node, io);
+        break;
+      case "game":
+        await runGame(rest, node, io);
         break;
       case "backup":
         await runBackup(rest, node, io);

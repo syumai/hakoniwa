@@ -8,6 +8,15 @@ export interface GameMeta {
   turn: number;
   lastTime: number;
   nextIslandId: number;
+  /** 最終ターン (tmp/16-season.md)。NULL なら無期限。 */
+  finalTurn: number | null;
+  /**
+   * ターン1が始まる (始まった) unix 秒。tmp/16-season.md は `last_time` の初期値から逆算する
+   * 設計だったが、`unitTimeSec` の変更に弱く分かりにくいため、DB に直接持つ列にした
+   * (設計書との差異)。`initialize` 時に `lastTime` と同じ値で設定され、ターン1の間は
+   * `setLastTime` (管理画面「最終更新時刻の変更」) が同期して更新する。ターン2以降は不変。
+   */
+  startAt: number;
 }
 
 /** 一覧用の軽量な島情報。地形・コマンド・掲示板を含まない (トップ画面/セレクト用)。 */

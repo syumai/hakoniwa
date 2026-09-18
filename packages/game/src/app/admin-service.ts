@@ -2,6 +2,8 @@
 // 「ログイン方法の設定」節の移植。Perl 版 Maintenance.pm (hako-mente.cgi) の各モードのユースケース化。
 import type { AuthMethodsFlags, AuthMethodPolicy } from "./auth-methods.ts";
 import type { BackupInfo, BackupStore, Clock, GameRepository } from "./ports.ts";
+import type { SeasonVM } from "./season.ts";
+import { buildSeasonVM } from "./season.ts";
 import type { TurnService } from "./turn-service.ts";
 import type { GameConfig } from "../core/config.ts";
 
@@ -10,6 +12,16 @@ export interface AdminStatus {
   turn?: number;
   lastTime?: number;
   backups: BackupInfo[];
+  /** 開始時刻・最終ターン・状態 (開始前/進行中/終了)。tmp/16-season.md。初期化済みのときのみ。 */
+  season?: SeasonVM;
+}
+
+/** `AdminService.initialize` の追加オプション。tmp/16-season.md「設定の入口」節。 */
+export interface AdminInitializeOptions {
+  /** 省略時は従来どおり `now` を `unitTimeSec` で切り下げる。 */
+  startAt?: number;
+  /** 省略時 (または未指定) は無期限 (null)。 */
+  finalTurn?: number | null;
 }
 
 /** 管理画面のログイン方法設定 UI 向け VM。 */
@@ -45,22 +57,29 @@ export class AdminService {
   }
 
   async status(): Promise<AdminStatus> {
-    const { repo, backupStore } = this.#deps;
+    const { repo, backupStore, clock, config } = this.#deps;
     const backups = await backupStore.list();
     if (!repo.isInitialized()) {
       return { initialized: false, backups };
     }
     const meta = repo.getMeta();
-    return { initialized: true, turn: meta.turn, lastTime: meta.lastTime, backups };
+    const season = buildSeasonVM(meta, clock.now(), config.unitTimeSec);
+    return { initialized: true, turn: meta.turn, lastTime: meta.lastTime, backups, season };
   }
 
-  /** Perl 版 Maintenance.pm newMode の移植: turn=1, lastTime を unitTimeSec で切り下げ, nextIslandId=1。 */
-  initialize(now: number): void {
+  /**
+   * Perl 版 Maintenance.pm newMode の移植: turn=1, nextIslandId=1。
+   * tmp/16-season.md「設定の入口」節: `startAt` 省略時は従来どおり `now` を `unitTimeSec` で
+   * 切り下げる。`finalTurn` 省略時は無期限 (null)。
+   */
+  initialize(now: number, options: AdminInitializeOptions = {}): void {
     const { repo, config } = this.#deps;
-    const lastTime = now - (now % config.unitTimeSec);
+    const lastTime = options.startAt ?? now - (now % config.unitTimeSec);
+    const finalTurn = options.finalTurn ?? null;
     repo.transaction(() => {
       repo.reset();
-      repo.initialize({ turn: 1, lastTime, nextIslandId: 1 });
+      // startAt はターン1の lastTime と同じ値で初期化する (16「開始時刻」の定義)。
+      repo.initialize({ turn: 1, lastTime, nextIslandId: 1, finalTurn, startAt: lastTime });
     });
   }
 
@@ -69,12 +88,29 @@ export class AdminService {
     this.#deps.repo.reset();
   }
 
-  /** Perl 版 Maintenance.pm timeMode/stimeMode の移植。unix 秒を直接設定する。 */
+  /**
+   * Perl 版 Maintenance.pm timeMode/stimeMode の移植。unix 秒を直接設定する。
+   * tmp/16-season.md「設定の入口」節: ターン1の間は最終更新時刻の変更が開始時刻の変更と同義なので
+   * `startAt` も追従させる。ターン2以降は `startAt` を変えない (開始済みの記録として固定する)。
+   */
   setLastTime(unix: number): void {
     const { repo } = this.#deps;
     repo.transaction(() => {
       const meta = repo.getMeta();
-      repo.saveMeta({ ...meta, lastTime: unix });
+      const startAt = meta.turn === 1 ? unix : meta.startAt;
+      repo.saveMeta({ ...meta, lastTime: unix, startAt });
+    });
+  }
+
+  /**
+   * 最終ターン数の変更。tmp/16-season.md「設定の入口」節 (管理画面「ゲーム設定」/ CLI
+   * `game set-final-turn`)。null で無期限に戻せる。
+   */
+  setFinalTurn(finalTurn: number | null): void {
+    const { repo } = this.#deps;
+    repo.transaction(() => {
+      const meta = repo.getMeta();
+      repo.saveMeta({ ...meta, finalTurn });
     });
   }
 

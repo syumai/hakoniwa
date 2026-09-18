@@ -39,6 +39,18 @@ export interface AppConfig {
   ngWords: string[];
   adminEnabled: boolean;
   debug: boolean;
+  /**
+   * datetime-local の解釈と画面の日時表示に使う IANA タイムゾーン名。tmp/16-season.md
+   * 「タイムゾーン」節。`HAKONIWA_TIMEZONE` (既定 `Asia/Tokyo`)。
+   */
+  timezone: string;
+  /**
+   * `HAKONIWA_START_AT` (ISO 8601) 由来。管理画面の初期化フォームの既定値、CLI `db init` の
+   * 既定値として使う (未指定なら「現在時刻を unitTimeSec で切り下げ」が既定のまま)。
+   */
+  startAt?: number;
+  /** `HAKONIWA_FINAL_TURN` 由来。未設定なら初期化フォーム/CLI の既定は無期限のまま。 */
+  finalTurn?: number;
 }
 
 function parseBool(name: string, raw: string | undefined, fallback: boolean): boolean {
@@ -102,6 +114,35 @@ function parseOAuthClientConfig(
     );
   }
   return { clientId: id, clientSecret: secret };
+}
+
+/** `HAKONIWA_START_AT` (ISO 8601) を unix 秒に変換する。`Date.parse` で解釈できなければ Error。 */
+function parseStartAt(raw: string | undefined): number | undefined {
+  const value = nonEmpty(raw);
+  if (value === undefined) {
+    return undefined;
+  }
+  const ms = Date.parse(value);
+  if (Number.isNaN(ms)) {
+    throw new Error(
+      `loadConfigFromEnv: HAKONIWA_START_AT must be a valid ISO 8601 datetime (got: ${JSON.stringify(value)})`,
+    );
+  }
+  return Math.floor(ms / 1000);
+}
+
+/** `HAKONIWA_FINAL_TURN` を正の整数に変換する。未設定なら undefined。 */
+function parseFinalTurnEnv(raw: string | undefined): number | undefined {
+  const value = nonEmpty(raw);
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!/^\d+$/.test(value) || Number(value) <= 0) {
+    throw new Error(
+      `loadConfigFromEnv: HAKONIWA_FINAL_TURN must be a positive integer (got: ${JSON.stringify(value)})`,
+    );
+  }
+  return Number(value);
 }
 
 function loadMailConfig(env: Record<string, string | undefined>): MailConfig {
@@ -181,6 +222,10 @@ export function loadConfigFromEnv(env: Record<string, string | undefined>): AppC
     },
   };
 
+  const timezone = nonEmpty(env.HAKONIWA_TIMEZONE) ?? "Asia/Tokyo";
+  const startAt = parseStartAt(env.HAKONIWA_START_AT);
+  const finalTurn = parseFinalTurnEnv(env.HAKONIWA_FINAL_TURN);
+
   return {
     game,
     auth: loadAuthConfig(env),
@@ -188,5 +233,8 @@ export function loadConfigFromEnv(env: Record<string, string | undefined>): AppC
     ngWords: parseCsvList(env.HAKONIWA_NG_WORDS),
     adminEnabled,
     debug,
+    timezone,
+    ...(startAt !== undefined ? { startAt } : {}),
+    ...(finalTurn !== undefined ? { finalTurn } : {}),
   };
 }

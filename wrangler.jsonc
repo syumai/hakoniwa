@@ -42,6 +42,12 @@
     "HAKONIWA_ADMIN_EMAILS": "",
     "HAKONIWA_MAIL_FROM": "hakoniwa@example.com",
     "HAKONIWA_DEV_LOGIN": "false",
+    // 開始時刻と最終ターン (シーズン)。空文字列なら「現在時刻を切り下げ」「無期限」が既定になる。
+    // 管理画面の初期化フォーム・CLI db init の既定値としても使われる。
+    "HAKONIWA_START_AT": "",
+    "HAKONIWA_FINAL_TURN": "",
+    // datetime-local の解釈と日時表示に使うタイムゾーン (IANA 名)。
+    "HAKONIWA_TIMEZONE": "Asia/Tokyo",
     // サイト情報。adminName/email/bbsUrl/topPageUrl を空のままにすると、
     // フッタの該当行は表示されない (game/src/web/views/layout.tsx 参照)。
     "HAKONIWA_SITE_TITLE": "箱庭諸島２",
