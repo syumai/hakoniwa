@@ -1,19 +1,14 @@
-# Cloudflare Workers 版の secret の一覧です。
-# - Deploy to Cloudflare ボタンは、このファイルを「デプロイ時に入力する secret」として読みます。
-# - ローカルの `wrangler dev` で使う場合は .dev.vars にコピーして値を入れてください (.dev.vars は git 管理外)。
+# Cloudflare Workers 版の secret です。
+# - Deploy to Cloudflare ボタンは、このファイルの項目を「デプロイ時に入力する secret」として読みます (すべて必須扱いになります)。
+#   そのため、ここには必須の HAKONIWA_AUTH_SECRET だけを置いています。
+# - X / Discord ログインやメール送信 (Resend) の secret は任意なので、デプロイ後に
+#   ダッシュボードの Settings → Variables and Secrets か `wrangler secret put <NAME>` で追加してください:
+#     HAKONIWA_X_CLIENT_ID, HAKONIWA_X_CLIENT_SECRET
+#     HAKONIWA_DISCORD_CLIENT_ID, HAKONIWA_DISCORD_CLIENT_SECRET
+#     HAKONIWA_RESEND_API_KEY
+# - ローカルの `wrangler dev` で使う場合は .dev.vars にコピーし、必要な secret を追記してください (.dev.vars は git 管理外)。
 # 非秘密の設定 (HAKONIWA_ADMIN_EMAILS, HAKONIWA_DEV_LOGIN, HAKONIWA_UNIT_TIME_SEC など) は wrangler.jsonc の vars にあります。
 # Node 版の開発用の例は .env.node.example を参照してください。
 
 # 必須。better-auth の secret と CSRF トークンの鍵。openssl rand -base64 32 などで生成した 32 バイト以上の文字列。
 HAKONIWA_AUTH_SECRET=
-
-# X (Twitter) ログイン (任意)。両方揃うと有効化できます。
-HAKONIWA_X_CLIENT_ID=
-HAKONIWA_X_CLIENT_SECRET=
-
-# Discord ログイン (任意)。両方揃うと有効化できます。
-HAKONIWA_DISCORD_CLIENT_ID=
-HAKONIWA_DISCORD_CLIENT_SECRET=
-
-# メールログインで実際にメールを送る場合 (任意)。Resend の API キー。
-HAKONIWA_RESEND_API_KEY=

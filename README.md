@@ -136,7 +136,7 @@ Wrangler の設定はリポジトリ直下の `wrangler.jsonc` 1 つだけです
 
 ### ワンクリックデプロイ (Deploy to Cloudflare ボタン)
 
-デプロイ画面に表示される項目は、`wrangler.jsonc` の `vars` (環境変数) と `.dev.vars.example` (secret) から決まり、各項目の説明は `package.json` の `cloudflare.bindings` に書いてあります。
+デプロイ画面に表示される項目は、`wrangler.jsonc` の `vars` (環境変数) と `.dev.vars.example` (secret) から決まり、各項目の説明は `package.json` の `cloudflare.bindings` に書いてあります。デプロイ時に入力する secret は必須の `HAKONIWA_AUTH_SECRET` だけです。X / Discord / Resend の secret は任意なので、デプロイ後にダッシュボード (Settings → Variables and Secrets) か `wrangler secret put` で追加します。
 
 一番手軽な方法です。
 
@@ -147,8 +147,8 @@ Wrangler の設定はリポジトリ直下の `wrangler.jsonc` 1 つだけです
    - `HAKONIWA_ADMIN_EMAILS` (自分を管理者にするメールアドレス。X ログインはメールを返さないため、Discord かメールログインで使うアドレスを指定する)
 4. デプロイを実行する
 5. デプロイ完了後に表示される公開 URL (`https://<name>.<subdomain>.workers.dev` 形式) を確認する
-6. X / Discord ログインを使いたい場合は、[X Developer Portal](https://developer.x.com/) / [Discord Developer Portal](https://discord.com/developers/applications) でアプリを作成し、コールバック URL に `<公開 URL>/api/auth/callback/twitter` または `.../callback/discord` を登録した上で、Cloudflare ダッシュボードの当該 Worker の Settings → Variables and Secrets から `HAKONIWA_X_CLIENT_ID`/`HAKONIWA_X_CLIENT_SECRET` や `HAKONIWA_DISCORD_CLIENT_ID`/`HAKONIWA_DISCORD_CLIENT_SECRET` を追加する (Secret として登録する)
-7. 公開 URL の `/login` から、手順 3 で指定した `HAKONIWA_ADMIN_EMAILS` のメールアドレスでログインする (X/Discord/メールいずれか設定した方法で。開発ログインは本番では無効)
+6. X / Discord ログインを使いたい場合は、[X Developer Portal](https://developer.x.com/) / [Discord Developer Portal](https://discord.com/developers/applications) でアプリを作成し、コールバック URL に `https://あなたのWorkerのURL/api/auth/callback/twitter` または `.../callback/discord` を登録した上で、Cloudflare ダッシュボードの当該 Worker の Settings → Variables and Secrets から `HAKONIWA_X_CLIENT_ID`/`HAKONIWA_X_CLIENT_SECRET` や `HAKONIWA_DISCORD_CLIENT_ID`/`HAKONIWA_DISCORD_CLIENT_SECRET` を追加する (Secret として登録する)
+7. 公開 URL の `/login` から、手順 3 で指定した `HAKONIWA_ADMIN_EMAILS` のメールアドレスでログインする (開発ログインは本番では無効)。Discord や Resend をまだ設定していない場合は「メールでログイン」を使う。Resend 未設定のときはメールは送られず、ログイン用リンクが Worker のログに出力されるので、ダッシュボードの当該 Worker の Logs (リアルタイムログ) か `wrangler tail` でリンクを確認して開く
 8. `/admin` に入り、「新しいデータを作る」でゲームを初期化し、必要なログイン方法を有効化する
 
 `HAKONIWA_BASE_URL` はここでは設定不要です (未設定ならリクエストから自動判定されます)。カスタムドメインを使う場合だけ、あとから Variables and Secrets に追加してください。
