@@ -119,12 +119,14 @@ export interface GameConfig {
 }
 
 export const defaultConfig: GameConfig = {
+  // adminName/email/bbsUrl/topPageUrl は Perl 版の既定値 (プレースホルダ) を出さないよう
+  // 空文字列にする。未設定時は web/views/layout.tsx のフッタで該当行ごと省略する。
   site: {
     title: "箱庭諸島２",
-    adminName: "管理者の名前",
-    email: "管理者@どこか.どこか.どこか",
-    bbsUrl: "http://サーバー/掲示板.cgi",
-    topPageUrl: "http://サーバー/ホームページ.html",
+    adminName: "",
+    email: "",
+    bbsUrl: "",
+    topPageUrl: "",
   },
 
   unitTimeSec: 21600,

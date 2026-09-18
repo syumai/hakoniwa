@@ -15,6 +15,61 @@ export interface LayoutProps {
 
 const SCRIPT_SOURCE_URL = "http://www.bekkoame.ne.jp/~tokuoka/hakoniwa.html";
 
+/** `http://` `https://` から始まる文字列だけリンクにする (それ以外はそのまま文字列で表示)。 */
+function isHttpUrl(value: string): boolean {
+  return /^https?:\/\//.test(value);
+}
+
+function UrlOrText({ value }: { value: string }) {
+  return isHttpUrl(value) ? <a href={value}>{value}</a> : <>{value}</>;
+}
+
+/**
+ * フッタ。管理者名・メール・掲示板・トップページは環境変数が未設定 (空文字列) なら
+ * 行ごと出さない。箱庭諸島のページ (配布元 URL) はライセンス上必須のため常に出す。
+ */
+function Footer({ config }: { config: GameConfig }) {
+  const { adminName, email, bbsUrl, topPageUrl } = config.site;
+  const hasAdminName = adminName !== "";
+  const hasEmail = email !== "";
+  return (
+    <p class="footer">
+      {hasAdminName || hasEmail ? (
+        <>
+          管理者:{hasAdminName ? adminName : ""}
+          {hasEmail ? (
+            <>
+              (<a href={`mailto:${email}`}>{email}</a>)
+            </>
+          ) : (
+            ""
+          )}
+          <br />
+        </>
+      ) : (
+        ""
+      )}
+      {bbsUrl !== "" ? (
+        <>
+          掲示板(
+          <UrlOrText value={bbsUrl} />)<br />
+        </>
+      ) : (
+        ""
+      )}
+      {topPageUrl !== "" ? (
+        <>
+          トップページ(
+          <UrlOrText value={topPageUrl} />)<br />
+        </>
+      ) : (
+        ""
+      )}
+      箱庭諸島のページ(<a href={SCRIPT_SOURCE_URL}>{SCRIPT_SOURCE_URL}</a>)<br />
+    </p>
+  );
+}
+
 /**
  * ヘッダナビゲーション。タイトルへのリンクと、ログイン状態のリンク群を横並び・
  * 折り返し可能に (Phase 7 モバイル UI)。class 名 "nav*" は Phase 6b からの引き継ぎ。
@@ -81,13 +136,7 @@ export function Layout({ config, user, csrfToken, children }: PropsWithChildren<
         <Nav config={config} user={user} csrfToken={csrfToken} />
         <main>{children}</main>
         <hr />
-        <p class="footer">
-          管理者:{config.site.adminName}(
-          <a href={`mailto:${config.site.email}`}>{config.site.email}</a>)<br />
-          掲示板(<a href={config.site.bbsUrl}>{config.site.bbsUrl}</a>)<br />
-          トップページ(<a href={config.site.topPageUrl}>{config.site.topPageUrl}</a>)<br />
-          箱庭諸島のページ(<a href={SCRIPT_SOURCE_URL}>{SCRIPT_SOURCE_URL}</a>)<br />
-        </p>
+        <Footer config={config} />
       </body>
     </html>
   );

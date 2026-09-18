@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { defaultConfig } from "../core/config.ts";
 import { loginAs, postForm, setupTestApp } from "./test-helpers.ts";
 
 describe("GET /", () => {
@@ -113,6 +114,68 @@ describe("GET /", () => {
     const html = await res.text();
     expect(html).toContain('class="island-name-faded"');
     expect(html).toContain("てすと島(25)");
+  });
+});
+
+describe("フッタ", () => {
+  it("管理者名・メール・掲示板・トップページ URL が未設定なら該当行を表示しない (配布元リンクは常に表示)", async () => {
+    const { app } = setupTestApp();
+    const res = await app.request("/");
+    const html = await res.text();
+    expect(html).not.toContain("管理者:");
+    expect(html).not.toContain("掲示板(");
+    expect(html).not.toContain("トップページ(");
+    expect(html).toContain("箱庭諸島のページ(");
+  });
+
+  it("管理者名だけ設定なら「管理者:名前」のみ表示する (メールの括弧は付かない)", async () => {
+    const { app } = setupTestApp({
+      gameOverrides: { site: { ...defaultConfig.site, adminName: "かんりしゃ" } },
+    });
+    const res = await app.request("/");
+    const html = await res.text();
+    expect(html).toContain("管理者:かんりしゃ");
+    expect(html).not.toContain("管理者:かんりしゃ(");
+  });
+
+  it("メールだけ設定なら「管理者:(mailto リンク)」を表示する", async () => {
+    const { app } = setupTestApp({
+      gameOverrides: { site: { ...defaultConfig.site, email: "admin@example.com" } },
+    });
+    const res = await app.request("/");
+    const html = await res.text();
+    expect(html).toContain('管理者:(<a href="mailto:admin@example.com">admin@example.com</a>)');
+  });
+
+  it("すべて設定されていれば管理者・掲示板・トップページの行を表示する", async () => {
+    const { app } = setupTestApp({
+      gameOverrides: {
+        site: {
+          title: defaultConfig.site.title,
+          adminName: "かんりしゃ",
+          email: "admin@example.com",
+          bbsUrl: "https://example.com/bbs",
+          topPageUrl: "https://example.com/",
+        },
+      },
+    });
+    const res = await app.request("/");
+    const html = await res.text();
+    expect(html).toContain(
+      '管理者:かんりしゃ(<a href="mailto:admin@example.com">admin@example.com</a>)',
+    );
+    expect(html).toContain('掲示板(<a href="https://example.com/bbs">https://example.com/bbs</a>)');
+    expect(html).toContain('トップページ(<a href="https://example.com/">https://example.com/</a>)');
+  });
+
+  it("http(s) で始まらない掲示板 URL はリンクにせず文字列のまま表示する", async () => {
+    const { app } = setupTestApp({
+      gameOverrides: { site: { ...defaultConfig.site, bbsUrl: "掲示板は別紙参照" } },
+    });
+    const res = await app.request("/");
+    const html = await res.text();
+    expect(html).toContain("掲示板(掲示板は別紙参照)");
+    expect(html).not.toContain('<a href="掲示板は別紙参照"');
   });
 });
 

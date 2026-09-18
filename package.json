@@ -51,6 +51,21 @@
       },
       "HAKONIWA_DEV_LOGIN": {
         "description": "開発ログイン (任意のメールアドレスでログインできる機能) の有効/無効。**本番では必ず `false`** のままにしてください。"
+      },
+      "HAKONIWA_SITE_TITLE": {
+        "description": "サイトタイトル (ヘッダやページタイトルに表示)。任意 (既定値は `箱庭諸島２`)。"
+      },
+      "HAKONIWA_ADMIN_NAME": {
+        "description": "フッタに表示する管理者名。任意。未設定ならフッタに管理者名の行を表示しません。"
+      },
+      "HAKONIWA_EMAIL": {
+        "description": "フッタに表示する管理者の連絡先メールアドレス。任意。未設定ならフッタにメールアドレスを表示しません。"
+      },
+      "HAKONIWA_BBS_URL": {
+        "description": "フッタに表示する掲示板の URL。任意。未設定ならフッタに掲示板の行を表示しません。"
+      },
+      "HAKONIWA_TOPPAGE_URL": {
+        "description": "フッタに表示するトップページの URL。任意。未設定ならフッタにトップページの行を表示しません。"
       }
     }
   }

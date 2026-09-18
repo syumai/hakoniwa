@@ -119,10 +119,10 @@ node packages/server-node/dist/cli.js backup list|create [label]|restore <label>
 | `HAKONIWA_UNIT_TIME_SEC`                                        | `21600`                                   | 1 ターンの長さ (秒)                                                                                                                      |
 | `HAKONIWA_MAX_CATCH_UP_TURNS`                                   | `1`                                       | 1 回の判定で進める最大ターン数                                                                                                           |
 | `HAKONIWA_SITE_TITLE`                                           | `箱庭諸島２`                              | サイトタイトル                                                                                                                           |
-| `HAKONIWA_ADMIN_NAME`                                           | `管理者の名前`                            | フッタの管理者名                                                                                                                         |
-| `HAKONIWA_EMAIL`                                                | `管理者@どこか.どこか.どこか`             | フッタの連絡先                                                                                                                           |
-| `HAKONIWA_BBS_URL`                                              | `http://サーバー/掲示板.cgi`              | フッタの掲示板リンク                                                                                                                     |
-| `HAKONIWA_TOPPAGE_URL`                                          | `http://サーバー/ホームページ.html`       | フッタのトップページリンク                                                                                                               |
+| `HAKONIWA_ADMIN_NAME`                                           | (なし)                                    | フッタの管理者名。未設定ならフッタに表示しない                                                                                           |
+| `HAKONIWA_EMAIL`                                                | (なし)                                    | フッタの連絡先。未設定ならフッタに表示しない                                                                                             |
+| `HAKONIWA_BBS_URL`                                              | (なし)                                    | フッタの掲示板リンク。未設定ならフッタに表示しない                                                                                       |
+| `HAKONIWA_TOPPAGE_URL`                                          | (なし)                                    | フッタのトップページリンク。未設定ならフッタに表示しない                                                                                 |
 
 v1 にあった `HAKONIWA_MASTER_PASSWORD` / `HAKONIWA_SPECIAL_PASSWORD` は v2 で廃止されました (パスワード認証を全廃し、better-auth によるログインに置き換えたため)。管理画面へは管理者メールでログインします。資金・食料の最大化は管理画面の操作 (`/admin` の「資金・食料の最大化」) として引き継いでいます。
 

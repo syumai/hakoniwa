@@ -171,11 +171,13 @@ export function loadConfigFromEnv(env: Record<string, string | undefined>): AppC
     unitTimeSec,
     maxCatchUpTurns,
     site: {
-      title: env.HAKONIWA_SITE_TITLE ?? defaultConfig.site.title,
-      adminName: env.HAKONIWA_ADMIN_NAME ?? defaultConfig.site.adminName,
-      email: env.HAKONIWA_EMAIL ?? defaultConfig.site.email,
-      bbsUrl: env.HAKONIWA_BBS_URL ?? defaultConfig.site.bbsUrl,
-      topPageUrl: env.HAKONIWA_TOPPAGE_URL ?? defaultConfig.site.topPageUrl,
+      // Cloudflare の wrangler.jsonc vars は key を省略できず空文字列を置くため、
+      // undefined だけでなく "" も「未設定」として defaultConfig にフォールバックする。
+      title: nonEmpty(env.HAKONIWA_SITE_TITLE) ?? defaultConfig.site.title,
+      adminName: nonEmpty(env.HAKONIWA_ADMIN_NAME) ?? defaultConfig.site.adminName,
+      email: nonEmpty(env.HAKONIWA_EMAIL) ?? defaultConfig.site.email,
+      bbsUrl: nonEmpty(env.HAKONIWA_BBS_URL) ?? defaultConfig.site.bbsUrl,
+      topPageUrl: nonEmpty(env.HAKONIWA_TOPPAGE_URL) ?? defaultConfig.site.topPageUrl,
     },
   };
 

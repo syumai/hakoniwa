@@ -42,5 +42,12 @@
     "HAKONIWA_ADMIN_EMAILS": "",
     "HAKONIWA_MAIL_FROM": "hakoniwa@example.com",
     "HAKONIWA_DEV_LOGIN": "false",
+    // サイト情報。adminName/email/bbsUrl/topPageUrl を空のままにすると、
+    // フッタの該当行は表示されない (game/src/web/views/layout.tsx 参照)。
+    "HAKONIWA_SITE_TITLE": "箱庭諸島２",
+    "HAKONIWA_ADMIN_NAME": "",
+    "HAKONIWA_EMAIL": "",
+    "HAKONIWA_BBS_URL": "",
+    "HAKONIWA_TOPPAGE_URL": "",
   },
 }

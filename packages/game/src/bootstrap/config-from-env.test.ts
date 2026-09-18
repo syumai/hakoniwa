@@ -66,6 +66,18 @@ describe("loadConfigFromEnv", () => {
     expect(config.ngWords).toEqual(["だめなことば", "もうひとつ"]);
   });
 
+  it("サイト情報の環境変数が空文字列なら defaultConfig にフォールバックする (Cloudflare vars 対策)", () => {
+    const config = loadConfigFromEnv({
+      HAKONIWA_AUTH_SECRET: AUTH_SECRET,
+      HAKONIWA_SITE_TITLE: "",
+      HAKONIWA_ADMIN_NAME: "",
+      HAKONIWA_EMAIL: "",
+      HAKONIWA_BBS_URL: "",
+      HAKONIWA_TOPPAGE_URL: "",
+    });
+    expect(config.game.site).toEqual(defaultConfig.site);
+  });
+
   it("X/Discord のクライアント ID・シークレットが両方揃えば有効になる", () => {
     const config = loadConfigFromEnv({
       HAKONIWA_AUTH_SECRET: AUTH_SECRET,
