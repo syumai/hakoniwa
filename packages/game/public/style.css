@@ -1,12 +1,11 @@
 /*
- * 箱庭諸島 画面スタイル。モバイルファースト (tmp/15-ng-words-and-mobile.md「スマートフォン対応 UI」)。
+ * 箱庭諸島 画面スタイル。
  * lib/Hako/Const.pm 「外見関係」(FONT COLOR / BGCOLOR) の設定を CSS クラスへ移植する。
  * 対応する Perl 側の変数名をコメントに残す。
+ * 方針 (tmp/15-ng-words-and-mobile.md「スマートフォン対応 UI」): 見た目は Perl 版に揃え、
+ * ボタン/input/select は既定スタイルのまま。追加するのはスマートフォンの幅で操作できる
+ * ための最小限のみ (viewport, 地図の縮小, 表の横スクロール, 開発画面の縦積み, 16px 入力欄)。
  */
-
-* {
-  box-sizing: border-box;
-}
 
 html,
 body {
@@ -18,11 +17,7 @@ body {
   /* Perl 版 $htmlBody = 'BGCOLOR="#EEFFFF"' */
   background-color: #eeffff;
   color: #000000;
-  font-family: "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 0 12px;
-  line-height: 1.5;
+  margin: 8px;
 }
 
 a {
@@ -31,8 +26,6 @@ a {
 
 hr {
   margin: 12px 0;
-  border: 0;
-  border-top: 1px solid #cccccc;
 }
 
 .distribution-link {
@@ -46,107 +39,53 @@ hr {
 
 /* ==================== ナビゲーション ==================== */
 
+/* リンク群を折り返し可能にするだけ (装飾なし)。 */
 .nav {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 16px;
-  padding: 8px 0;
+  gap: 4px 12px;
+  margin: 4px 0;
 }
 
+/* サイトタイトル「箱庭諸島２」(Perl 版 $HtagTitle_ = FONT SIZE=7 COLOR="#8888ff")。
+   ページ内の見出し重複を避けるため、サイト名はここ 1 箇所のみに表示する。 */
 .nav-title {
-  font-size: 1.3em;
+  font-size: 1.6em;
   font-weight: bold;
   color: #8888ff;
   text-decoration: none;
-  margin-right: auto;
 }
 
 .nav-links {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 14px;
+  gap: 4px 12px;
 }
 
 .nav-links form.nav-logout {
-  display: inline-flex;
+  display: inline;
   margin: 0;
-}
-
-.nav-user {
-  font-weight: bold;
-}
-
-/* ==================== レイアウト / カード ==================== */
-
-.container {
-  padding: 0;
-}
-
-.card {
-  background: #ffffff;
-  border-radius: 10px;
-  padding: 12px 16px 16px;
-  margin: 14px 0;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
-}
-
-.card h2 {
-  margin-top: 0;
-  /* Perl 版 $HtagHeader_ = FONT COLOR="#4444ff" */
-  color: #4444ff;
-}
-
-/* サイトタイトル「箱庭諸島２」(Perl 版 $HtagTitle_ = FONT SIZE=7 COLOR="#8888ff")。 */
-.title {
-  font-size: 2em;
-  color: #8888ff;
-  margin: 12px 0 4px;
-}
-
-/* 大きい文字 (Perl 版 $HtagBig_)。 */
-.big {
-  font-size: 1.4em;
-}
-
-.notice {
-  margin: 8px 0;
-}
-
-.error {
-  color: #ff0000;
 }
 
 /* ==================== テーブル ==================== */
 
+/* テーブルは border 付き。 */
 table {
   border-collapse: collapse;
-  margin: 0;
-  width: 100%;
+  margin: 8px 0;
 }
 
 table th,
 table td {
   border: 1px solid #333333;
-  padding: 4px 8px;
+  padding: 2px 6px;
 }
 
-/* 横スクロール可能なテーブル (順位表、島情報、掲示板、管理画面の表)。 */
+/* 幅の広い表 (順位表、島情報、掲示板、管理画面の表) を横スクロール可能にする。 */
 .table-scroll {
   overflow-x: auto;
-  margin: 8px 0;
-  -webkit-overflow-scrolling: touch;
-}
-
-.table-scroll table {
-  width: max-content;
-  min-width: 100%;
-}
-
-.table-scroll th,
-.table-scroll td {
-  white-space: nowrap;
 }
 
 /* 順位表における見出し (Perl 版 $HtagTH_ / $HbgTitleCell)。 */
@@ -215,139 +154,47 @@ th {
 
 .comment-cell {
   background-color: #ccffcc;
-  white-space: normal !important;
+}
+
+/* 開発計画: フォーム/地図/計画一覧セル (Perl 版 $HbgInputCell / $HbgMapCell / $HbgCommandCell)。 */
+td.input-cell,
+td.map-cell,
+td.command-cell {
+  background-color: #ccffcc;
+  vertical-align: top;
+}
+
+/* 大きい文字 (Perl 版 $HtagBig_)。 */
+.big {
+  font-size: 1.6em;
+}
+
+.notice {
+  margin: 8px 0;
+}
+
+.error {
+  color: #ff0000;
 }
 
 .backup-row {
   border: 1px solid #999999;
-  border-radius: 4px;
   padding: 8px;
-  margin: 8px 0;
-}
-
-/* ==================== フォーム / ボタン ==================== */
-
-label {
-  display: block;
-}
-
-/* ラベルとフィールドの縦積み。 */
-.field {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  margin: 10px 0;
-}
-
-.field > label {
-  font-weight: bold;
-}
-
-.field-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin: 10px 0;
-}
-
-/* 座標 (x, y) など、select を横並びの 2 列グリッドにする。 */
-.coord-fields {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin: 6px 0;
-}
-
-input,
-select,
-button,
-textarea {
-  font-size: 16px;
-  font-family: inherit;
-}
-
-/* iOS のズーム防止 (16px) と、タップしやすい最小高さ 44px。 */
-input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
-select,
-button,
-textarea {
-  min-height: 44px;
-  padding: 6px 10px;
-  border: 1px solid #999999;
-  border-radius: 6px;
-  box-sizing: border-box;
-}
-
-input[type="checkbox"],
-input[type="radio"] {
-  width: 20px;
-  height: 20px;
-  vertical-align: middle;
-}
-
-input[type="text"],
-input[type="email"],
-input[type="datetime-local"] {
-  width: 100%;
-  max-width: 100%;
-}
-
-/* ボタン (Perl 版の SUBMIT ボタンに相当)。 */
-.btn,
-input[type="submit"],
-input[type="button"],
-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: #f0f0f0;
-  color: #000000;
-  border: 1px solid #999999;
-  border-radius: 6px;
-  cursor: pointer;
-  padding: 8px 14px;
-}
-
-.btn:hover,
-input[type="submit"]:hover,
-input[type="button"]:hover,
-button:hover {
-  background: #e0e0e0;
-}
-
-/* 主要操作のボタン。 */
-.btn-primary,
-input.btn-primary[type="submit"] {
-  background: #4444ff;
-  border-color: #4444ff;
-  color: #ffffff;
-  font-weight: bold;
-}
-
-.btn-primary:hover {
-  background: #3333dd;
-}
-
-form.inline-form {
   margin: 8px 0;
 }
 
 /* ==================== 地図 ==================== */
 
+/* 地図: 画像を隙間なく並べる。480px 以下ではセルを縮小する。 */
 .map {
   --cell: 32px;
   white-space: nowrap;
   line-height: 0;
   overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  padding-bottom: 4px;
 }
 
 .map img {
   vertical-align: top;
-  display: inline-block;
   border: 0;
 }
 
@@ -390,14 +237,14 @@ a.map-cell img {
 
 /* ==================== 開発画面 (計画フォーム / 地図 / 計画一覧) ==================== */
 
+/* 900px 以上: Perl 版どおり横並び (フォーム / 地図 / 計画一覧)。
+   900px 未満: 縦積み。地図 → 計画フォーム → 計画一覧の順に並べ替える。 */
 .owner-layout {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 16px;
-  align-items: start;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-/* 900px 未満: 縦積み。地図 → 計画フォーム → 計画一覧の順。 */
 .owner-map-col {
   order: 1;
 }
@@ -412,7 +259,8 @@ a.map-cell img {
 
 @media (min-width: 900px) {
   .owner-layout {
-    grid-template-columns: 260px auto 1fr;
+    flex-direction: row;
+    align-items: flex-start;
   }
 
   .owner-form-col {
@@ -425,35 +273,19 @@ a.map-cell img {
 
   .owner-commands-col {
     order: 3;
+    flex: 1;
   }
-}
-
-.command-line {
-  min-height: 36px;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px;
-  line-height: 1.4;
-  border-bottom: 1px solid #e0e0e0;
-  padding: 4px 0;
 }
 
 .command-number {
   color: #800000;
   font-weight: bold;
   text-decoration: none;
-  min-width: 2em;
 }
 
 .log-list,
 .history-list {
   line-height: 1.4;
-}
-
-.log-entry,
-.history-entry {
-  padding: 2px 0;
 }
 
 .log-turn {
@@ -462,4 +294,15 @@ a.map-cell img {
 
 .log-secret {
   font-weight: bold;
+}
+
+/* ==================== フォーム ==================== */
+
+/* iOS の自動ズーム防止 (16px)。それ以外のサイズ・高さは触らない。 */
+@media (max-width: 480px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }

@@ -14,11 +14,11 @@ export function LoginPage({ methods, devLogin }: LoginPageProps) {
       <p class="big">ログイン</p>
 
       {methods.enabled.x || methods.enabled.discord ? (
-        <section class="card">
-          <h2>SNS アカウントでログイン</h2>
+        <>
+          <h1>SNS アカウントでログイン</h1>
           {methods.enabled.x ? (
             <p>
-              <a href="/auth/x" class="login-x btn btn-primary">
+              <a href="/auth/x" class="login-x">
                 X (Twitter) でログイン
               </a>
             </p>
@@ -27,43 +27,41 @@ export function LoginPage({ methods, devLogin }: LoginPageProps) {
           )}
           {methods.enabled.discord ? (
             <p>
-              <a href="/auth/discord" class="login-discord btn btn-primary">
+              <a href="/auth/discord" class="login-discord">
                 Discord でログイン
               </a>
             </p>
           ) : (
             ""
           )}
-        </section>
+          <hr />
+        </>
       ) : (
         ""
       )}
 
       {methods.enabled.email ? (
-        <section class="login-email card">
-          <h2>メールでログイン</h2>
-          <form action="/auth/magic-link" method="post" class="field-row">
+        <>
+          <h1>メールでログイン</h1>
+          <form action="/auth/magic-link" method="post">
             <input type="email" name="email" size={32} required placeholder="you@example.com" />
-            <button type="submit" class="btn btn-primary">
-              ログイン用リンクを送る
-            </button>
+            <input type="submit" value="ログイン用リンクを送る" />
           </form>
-        </section>
+          <hr />
+        </>
       ) : (
         ""
       )}
 
       {devLogin ? (
-        <section class="login-dev card">
-          <h2>開発ログイン</h2>
+        <>
+          <h1>開発ログイン</h1>
           <p>ローカル開発専用: 任意のメールアドレスでログインできます。</p>
-          <form action="/auth/dev" method="post" class="field-row">
+          <form action="/auth/dev" method="post">
             <input type="email" name="email" size={32} required placeholder="you@example.com" />
-            <button type="submit" class="btn">
-              開発ログイン
-            </button>
+            <input type="submit" value="開発ログイン" />
           </form>
-        </section>
+        </>
       ) : (
         ""
       )}

@@ -100,7 +100,7 @@ function MyIslandSection({ vm, csrfToken }: { vm: TopPageVM; csrfToken: string |
   if (viewer.user === undefined) {
     return (
       <>
-        <h2>自分の島へ</h2>
+        <h1>自分の島へ</h1>
         <p>
           島を持つには<a href="/login">ログイン</a>してください。
         </p>
@@ -110,30 +110,24 @@ function MyIslandSection({ vm, csrfToken }: { vm: TopPageVM; csrfToken: string |
   if (viewer.hasIsland) {
     return (
       <>
-        <h2>自分の島へ</h2>
+        <h1>自分の島へ</h1>
         <p>
-          <a href="/my-island" class="btn btn-primary">
-            自分の島の開発計画へ
-          </a>
+          <a href="/my-island">自分の島の開発計画へ</a>
         </p>
       </>
     );
   }
   return (
     <>
-      <h2>新しい島を探す</h2>
+      <h1>新しい島を探す</h1>
       {vm.canCreate ? (
         <form action="/islands" method="post">
           <input type="hidden" name="_csrf" value={csrfToken ?? ""} />
-          <div class="field">
-            <label>
-              どんな名前をつける予定？
-              <input type="text" name="name" size={32} maxlength={32} />島
-            </label>
-          </div>
-          <button type="submit" class="btn btn-primary">
-            探しに行く
-          </button>
+          どんな名前をつける予定？
+          <br />
+          <input type="text" name="name" size={32} maxlength={32} />島
+          <br />
+          <input type="submit" value="探しに行く" />
         </form>
       ) : (
         <p>島の数が最大数です・・・現在登録できません。</p>
@@ -154,60 +148,52 @@ export function TopPage({ vm, config, csrfToken, notice }: TopPageProps) {
   return (
     <div class="top-page">
       {notice !== undefined ? <Notice message={notice} /> : ""}
-      <p class="title">{config.site.title}</p>
 
-      <section class="card">
-        <h2>ターン{vm.turn}</h2>
-        {vm.debug ? (
-          <form action="/turn" method="post" class="inline-form">
-            <input type="hidden" name="_csrf" value={csrfToken ?? ""} />
-            <button type="submit" class="btn">
-              ターンを進める
-            </button>
-          </form>
-        ) : (
-          ""
-        )}
-      </section>
+      {vm.debug ? (
+        <form action="/turn" method="post">
+          <input type="hidden" name="_csrf" value={csrfToken ?? ""} />
+          <input type="submit" value="ターンを進める" />
+        </form>
+      ) : (
+        ""
+      )}
 
-      <section class="card">
-        <MyIslandSection vm={vm} csrfToken={csrfToken} />
-      </section>
+      <h1>ターン{vm.turn}</h1>
 
-      <section class="card">
-        <h2>諸島の状況</h2>
-        <p>
-          島の名前をクリックすると、<b>観光</b>することができます。
-        </p>
-        <div class="table-scroll">
-          <table class="rank-table" border={1}>
-            <tr>
-              <th>順位</th>
-              <th>島</th>
-              <th>人口</th>
-              <th>面積</th>
-              {showMoneyColumn ? <th>資金</th> : ""}
-              <th>食料</th>
-              <th>農場規模</th>
-              <th>工場規模</th>
-              <th>採掘場規模</th>
-            </tr>
-            {vm.islands.map((island) => (
-              <IslandRow island={island} config={config} key={island.id} />
-            ))}
-          </table>
-        </div>
-      </section>
+      <hr />
+      <MyIslandSection vm={vm} csrfToken={csrfToken} />
 
-      <section class="card">
-        <h2>最近の出来事</h2>
-        <LogList logs={vm.logs} />
-      </section>
+      <hr />
+      <h1>諸島の状況</h1>
+      <p>
+        島の名前をクリックすると、<b>観光</b>することができます。
+      </p>
+      <div class="table-scroll">
+        <table class="rank-table" border={1}>
+          <tr>
+            <th>順位</th>
+            <th>島</th>
+            <th>人口</th>
+            <th>面積</th>
+            {showMoneyColumn ? <th>資金</th> : ""}
+            <th>食料</th>
+            <th>農場規模</th>
+            <th>工場規模</th>
+            <th>採掘場規模</th>
+          </tr>
+          {vm.islands.map((island) => (
+            <IslandRow island={island} config={config} key={island.id} />
+          ))}
+        </table>
+      </div>
 
-      <section class="card">
-        <h2>発見の記録</h2>
-        <HistoryList history={vm.history} />
-      </section>
+      <hr />
+      <h1>最近の出来事</h1>
+      <LogList logs={vm.logs} />
+
+      <hr />
+      <h1>発見の記録</h1>
+      <HistoryList history={vm.history} />
     </div>
   );
 }

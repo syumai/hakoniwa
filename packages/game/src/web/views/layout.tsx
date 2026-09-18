@@ -79,7 +79,7 @@ export function Layout({ config, user, csrfToken, children }: PropsWithChildren<
           <a href={SCRIPT_SOURCE_URL}>箱庭諸島スクリプト配布元</a>
         </p>
         <Nav config={config} user={user} csrfToken={csrfToken} />
-        <main class="container">{children}</main>
+        <main>{children}</main>
         <hr />
         <p class="footer">
           管理者:{config.site.adminName}(

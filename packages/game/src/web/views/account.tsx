@@ -42,82 +42,67 @@ export function AccountPage({
       {notice !== undefined ? <Notice message={notice} /> : ""}
       <p class="big">アカウント設定</p>
 
-      <section class="card">
-        <h2>連携中のログイン方法</h2>
-        {accounts.length === 0 ? (
-          <p>連携中のログイン方法はありません。</p>
-        ) : (
-          <div class="table-scroll">
-            <table class="account-links" border={1}>
-              <tr>
-                <th>方法</th>
-                <th>操作</th>
+      <h1>連携中のログイン方法</h1>
+      {accounts.length === 0 ? (
+        <p>連携中のログイン方法はありません。</p>
+      ) : (
+        <div class="table-scroll">
+          <table class="account-links" border={1}>
+            <tr>
+              <th>方法</th>
+              <th>操作</th>
+            </tr>
+            {accounts.map((account) => (
+              <tr key={account.id}>
+                <td>{providerLabel(account.providerId)}</td>
+                <td>
+                  <form action="/account/unlink" method="post">
+                    <input type="hidden" name="_csrf" value={csrfToken} />
+                    <input type="hidden" name="accountId" value={account.id} />
+                    <input type="submit" value="連携解除" />
+                  </form>
+                </td>
               </tr>
-              {accounts.map((account) => (
-                <tr key={account.id}>
-                  <td>{providerLabel(account.providerId)}</td>
-                  <td>
-                    <form action="/account/unlink" method="post" class="inline-form">
-                      <input type="hidden" name="_csrf" value={csrfToken} />
-                      <input type="hidden" name="accountId" value={account.id} />
-                      <button type="submit" class="btn">
-                        連携解除
-                      </button>
-                    </form>
-                  </td>
-                </tr>
-              ))}
-            </table>
-          </div>
-        )}
-      </section>
+            ))}
+          </table>
+        </div>
+      )}
 
-      <section class="card">
-        <h2>ログイン方法を追加</h2>
-        {methods.enabled.x && !linkedProviders.has("twitter") ? (
-          <form action="/account/link/x" method="post" class="inline-form">
-            <input type="hidden" name="_csrf" value={csrfToken} />
-            <button type="submit" class="btn">
-              X (Twitter) を連携する
-            </button>
-          </form>
-        ) : (
-          ""
-        )}
-        {methods.enabled.discord && !linkedProviders.has("discord") ? (
-          <form action="/account/link/discord" method="post" class="inline-form">
-            <input type="hidden" name="_csrf" value={csrfToken} />
-            <button type="submit" class="btn">
-              Discord を連携する
-            </button>
-          </form>
-        ) : (
-          ""
-        )}
-      </section>
-
-      <section class="card">
-        <h2>メールアドレス</h2>
-        <p>現在のメールアドレス: {isPlaceholderEmail ? "未設定" : email}</p>
-        <form action="/account/email" method="post" class="field-row">
-          <input type="email" name="email" size={32} placeholder="you@example.com" required />
+      <hr />
+      <h1>ログイン方法を追加</h1>
+      {methods.enabled.x && !linkedProviders.has("twitter") ? (
+        <form action="/account/link/x" method="post">
           <input type="hidden" name="_csrf" value={csrfToken} />
-          <button type="submit" class="btn">
-            メールアドレスを設定/変更する
-          </button>
+          <input type="submit" value="X (Twitter) を連携する" />
         </form>
-      </section>
-
-      <section class="card">
-        <h2>表示名</h2>
-        <form action="/account/name" method="post" class="field-row">
+      ) : (
+        ""
+      )}
+      {methods.enabled.discord && !linkedProviders.has("discord") ? (
+        <form action="/account/link/discord" method="post">
           <input type="hidden" name="_csrf" value={csrfToken} />
-          <input type="text" name="name" size={32} maxlength={32} value={name} />
-          <button type="submit" class="btn">
-            表示名を変更する
-          </button>
+          <input type="submit" value="Discord を連携する" />
         </form>
-      </section>
+      ) : (
+        ""
+      )}
+
+      <hr />
+      <h1>メールアドレス</h1>
+      <p>現在のメールアドレス: {isPlaceholderEmail ? "未設定" : email}</p>
+      <form action="/account/email" method="post">
+        <input type="email" name="email" size={32} placeholder="you@example.com" required />
+        <input type="hidden" name="_csrf" value={csrfToken} />
+        <input type="submit" value="メールアドレスを設定/変更する" />
+      </form>
+
+      <hr />
+      <h1>表示名</h1>
+      <form action="/account/name" method="post">
+        <input type="hidden" name="_csrf" value={csrfToken} />
+        <input type="text" name="name" size={32} maxlength={32} value={name} />
+        <input type="submit" value="表示名を変更する" />
+      </form>
     </div>
   );
 }

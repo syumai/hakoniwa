@@ -16,7 +16,7 @@ export function BackLink() {
 /** 計画登録/削除、コメント更新、記帳等の結果メッセージ。Perl 版 tempCommandAdd 等。 */
 export function Notice({ message }: { message: string }) {
   return (
-    <div class="notice card">
+    <div class="notice">
       <p class="big">{message}</p>
     </div>
   );
@@ -103,10 +103,8 @@ export function errorStatus(kind: AppErrorKind): 400 | 401 | 403 | 404 | 409 | 5
 export function ErrorPage({ message }: { message: string }) {
   return (
     <div class="error-page">
-      <section class="card">
-        <p class="big error">{message}</p>
-        <BackLink />
-      </section>
+      <p class="big error">{message}</p>
+      <BackLink />
     </div>
   );
 }
@@ -114,7 +112,7 @@ export function ErrorPage({ message }: { message: string }) {
 /** 名前/パスワード変更完了画面。Perl 版 Turn.pm tempChange。 */
 export function ChangeDonePage() {
   return (
-    <div class="notice card">
+    <div class="notice">
       <p class="big">変更完了しました</p>
       <BackLink />
     </div>

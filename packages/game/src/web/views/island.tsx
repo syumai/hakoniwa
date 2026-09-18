@@ -27,16 +27,16 @@ export function IslandPage({ vm, config, csrfToken, notice }: IslandPageProps) {
       </p>
       <BackLink />
 
-      <section class="card">
-        <h2>島の様子</h2>
-        <div class="table-scroll">
-          <IslandInfo detail={vm} money={vm.moneyDisplay} config={config} />
-        </div>
-        <IslandMap terrain={vm.terrain} mode="visitor" turn={vm.turn} config={config} />
-      </section>
+      <hr />
+      <h1>島の様子</h1>
+      <div class="table-scroll">
+        <IslandInfo detail={vm} money={vm.moneyDisplay} config={config} />
+      </div>
+      <IslandMap terrain={vm.terrain} mode="visitor" turn={vm.turn} config={config} />
 
       {config.useLbbs ? (
-        <section class="card">
+        <>
+          <hr />
           <LbbsHead islandName={vm.name} />
           {csrfToken !== undefined ? (
             <LbbsInput islandId={vm.id} csrfToken={csrfToken} />
@@ -48,17 +48,16 @@ export function IslandPage({ vm, config, csrfToken, notice }: IslandPageProps) {
           <div class="table-scroll">
             <LbbsContents posts={vm.lbbs} />
           </div>
-        </section>
+        </>
       ) : (
         ""
       )}
 
-      <section class="card">
-        <p class="big">
-          <span class="island-name">{vm.name}島</span>の近況
-        </p>
-        <LogList logs={vm.logs} />
-      </section>
+      <hr />
+      <p class="big">
+        <span class="island-name">{vm.name}島</span>の近況
+      </p>
+      <LogList logs={vm.logs} />
     </div>
   );
 }
