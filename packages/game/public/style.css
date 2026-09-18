@@ -18,6 +18,9 @@ body {
   background-color: #eeffff;
   color: #000000;
   margin: 8px;
+  /* 配布元 URL やコメント・ログ中の長い ASCII 文字列が折り返せず画面幅をはみ出すのを防ぐ
+     (日本語の通常の折り返しには影響しない)。 */
+  overflow-wrap: anywhere;
 }
 
 a {
@@ -245,6 +248,15 @@ a.map-cell img {
   gap: 12px;
 }
 
+.owner-map-col,
+.owner-form-col,
+.owner-commands-col {
+  /* flex item の自動最小幅 (内容の min-content) がビューポート幅を超えて
+     ページ全体を横に広げるのを防ぐ。 */
+  min-width: 0;
+  max-width: 100%;
+}
+
 .owner-map-col {
   order: 1;
 }
@@ -297,6 +309,21 @@ a.map-cell img {
 }
 
 /* ==================== フォーム ==================== */
+
+/* size="80" 等の幅指定が画面幅を超えてページ全体を横に広げるのを防ぐ。
+   size 属性自体は残したまま、表示上の最大幅だけを画面内に収める。 */
+input[type="text"],
+input[type="email"],
+input[type="datetime-local"],
+select,
+textarea {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+form {
+  max-width: 100%;
+}
 
 /* iOS の自動ズーム防止 (16px)。それ以外のサイズ・高さは触らない。 */
 @media (max-width: 480px) {
