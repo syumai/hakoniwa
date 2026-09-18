@@ -31,6 +31,27 @@ describe("管理画面 (/admin)", () => {
     expect(await res.text()).toContain("パスワードが違います");
   });
 
+  it("マスターパスワード未設定時: POST /admin/init は 403 で未設定メッセージを表示する", async () => {
+    const { app } = setupTestApp({ skipInit: true });
+    const res = await postForm(app, "/admin/init", { password: "anything" });
+    expect(res.status).toBe(403);
+    const html = await res.text();
+    expect(html).toContain("マスターパスワードが設定されていません");
+    expect(html).toContain("HAKONIWA_MASTER_PASSWORD");
+    expect(html).not.toContain("パスワードが違います");
+  });
+
+  it("マスターパスワード未設定時: GET /admin に注意文が常時表示される", async () => {
+    const { app } = setupTestApp();
+    const res = await app.request("/admin");
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain("マスターパスワードが設定されていません");
+    expect(html).toContain("HAKONIWA_MASTER_PASSWORD");
+    // フォーム自体は表示されたままである
+    expect(html).toContain("ターンを進める");
+  });
+
   it("POST /admin/init: 正しいパスワードで初期化できる", async () => {
     const { app, repo } = setupTestApp({ masterPassword: "master1", skipInit: true });
     const res = await postForm(app, "/admin/init", { password: "master1" });

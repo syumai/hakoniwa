@@ -2,3 +2,8 @@
 node = "24"
 pnpm = "10"
 vp = "0.3.2" # mise registry の `vp` (= npm:vite-plus)。npm の最新に合わせる
+
+[env]
+# リポジトリ直下に .env があれば mise 経由で自動的に環境変数として読み込む。
+# 存在しなくてもエラーにしない。
+_.file = ".env"

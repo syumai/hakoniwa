@@ -40,7 +40,15 @@ vp run dev
 - ブラウザで `/admin` を開き、マスターパスワードを入力して「新しいデータを作る」を実行する
 - CLI で初期化する: `vp run --filter ./packages/server-node cli -- db init`
 
-管理画面を使うには環境変数 `HAKONIWA_MASTER_PASSWORD` の設定が必要です。
+管理画面を使うには環境変数 `HAKONIWA_MASTER_PASSWORD` の設定が必要です。`.env.example` を `.env` にコピーし、パスワードを書き換えてください。
+
+```sh
+cp .env.example .env
+```
+
+mise 経由 (`mise exec -- ...` や `mise activate` 済みのシェル) であれば、リポジトリ直下の `.env` は自動的に読み込まれます。mise を使わない場合は、`HAKONIWA_MASTER_PASSWORD=xxxx vp run dev` のように同じシェルで環境変数を指定してください。
+
+環境変数を変更したときは、開発サーバー (`vp run dev`) を再起動しないと反映されません。
 
 ## ビルドと起動
 

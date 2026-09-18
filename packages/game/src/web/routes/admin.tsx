@@ -14,6 +14,15 @@ import type { DefaultsCookieEnv } from "../middleware/defaults-cookie.ts";
 import { Layout } from "../views/layout.tsx";
 import { AdminPage } from "../views/admin.tsx";
 
+/** マスターパスワードが設定されていないメッセージ。GET/POST 双方で共有する。 */
+const MASTER_PASSWORD_NOT_CONFIGURED_NOTICE =
+  "マスターパスワードが設定されていません。環境変数 HAKONIWA_MASTER_PASSWORD を設定してサーバーを起動し直してください。";
+
+function hasMasterPasswordConfigured(deps: WebDeps): boolean {
+  const master = deps.config.masterPassword;
+  return master !== undefined && master !== "";
+}
+
 function isMasterPassword(deps: WebDeps, password: string): boolean {
   const master = deps.config.masterPassword;
   return master !== undefined && master !== "" && password !== "" && safeEqual(password, master);
@@ -26,9 +35,13 @@ async function renderAdmin(
   status: 200 | 403 = 200,
 ) {
   const adminStatus = await deps.adminService.status();
+  // マスターパスワード未設定時は、どの画面でも常にその旨の注意文を優先して表示する。
+  const effectiveNotice = hasMasterPasswordConfigured(deps)
+    ? notice
+    : MASTER_PASSWORD_NOT_CONFIGURED_NOTICE;
   return c.html(
     <Layout config={deps.config.game}>
-      <AdminPage status={adminStatus} notice={notice} />
+      <AdminPage status={adminStatus} notice={effectiveNotice} />
     </Layout>,
     status,
   );
@@ -43,7 +56,10 @@ async function requireMasterPassword(
   if (isMasterPassword(deps, password)) {
     return undefined;
   }
-  return renderAdmin(c, deps, "パスワードが違います。", 403);
+  const message = hasMasterPasswordConfigured(deps)
+    ? "パスワードが違います。"
+    : MASTER_PASSWORD_NOT_CONFIGURED_NOTICE;
+  return renderAdmin(c, deps, message, 403);
 }
 
 export function createAdminRoutes(deps: WebDeps): Hono<DefaultsCookieEnv> {
