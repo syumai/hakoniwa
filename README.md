@@ -1,32 +1,31 @@
-# TypeScript 版
+# 箱庭諸島
 
-このリポジトリでは、オリジナルの Perl 版に加えて、TypeScript (Node.js + Hono) で書き直した版を提供しています。
-将来 Cloudflare Workers (Durable Objects) にも載せ替えられるよう、ゲームロジックと HTTP 層をランタイムから
-独立させて実装しています。
+徳岡宏樹氏による Web ブラウザゲーム「箱庭諸島２」を、TypeScript (Node.js + Hono + `node:sqlite`) で書き直したものです。
+ゲームロジックと HTTP 層をランタイムから独立させてあり、将来的に Cloudflare Workers (Durable Objects SQLite) でも動かせる構成にしています。
+
+プレイヤーは自分の島を発見し、開発計画 (整地、農場整備、ミサイル発射など) を登録します。
+一定時間 (既定 6 時間) ごとにターンが進み、すべての島で計画の実行、人口の増減、災害、怪獣の出現などが処理されます。
 
 ## 構成
 
-モノレポ (pnpm workspace) 構成になっています。
+pnpm workspace によるモノレポです。パッケージ化しているのは差し替え単位となる Adapter だけで、ゲーム本体は 1 パッケージです。
 
-| パッケージ | 役割 |
-| --- | --- |
-| `packages/game` (`@hakoniwa/game`) | ゲーム本体。ランタイム非依存 (Node/Cloudflare 固有 API を使わない)。ゲームロジック (`core`)、ユースケース (`app`)、ストレージ抽象 (`storage`)、Web 層 (`web`、Hono + hono/jsx) を含む |
-| `packages/server-node` (`@hakoniwa/server-node`) | Node.js 向け Adapter。`node:sqlite` によるストレージ実装、HTTP サーバー起動、CLI (`cli.ts`) |
-| `packages/server-workers` (`@hakoniwa/server-workers`) | Cloudflare Workers (Durable Objects SQLite) 向け Adapter。現時点では型定義のみのスケルトンで、実装は今後のフェーズで行う |
-
-Perl 版のソース (`lib/`, `cgi/`, `t/`, `app.psgi`, `cpanfile*`) はそのまま残しています。設計書は `tmp/` 配下にありますが
-`.gitignore` 対象です。
+| パッケージ                                             | 役割                                                                                                                                                                                                                                                             |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/game` (`@hakoniwa/game`)                     | ゲーム本体。ランタイム非依存で、Node や Cloudflare 固有の API を使いません。`core` (ゲームロジック)、`app` (ユースケース)、`storage` (SQLite 用ストレージ抽象)、`web` (Hono + hono/jsx の画面)、`bootstrap` (組み立て) と、画像や CSS などの `public` を含みます |
+| `packages/server-node` (`@hakoniwa/server-node`)       | Node.js 向け Adapter。`node:sqlite` によるストレージ、HTTP サーバー、ファイルバックアップ、CLI                                                                                                                                                                   |
+| `packages/server-workers` (`@hakoniwa/server-workers`) | Cloudflare Workers (Durable Objects SQLite) 向け Adapter。現時点では型定義のみのスケルトンです                                                                                                                                                                   |
 
 ## 必要なツール
 
-Node、pnpm、[Vite+](https://viteplus.dev/) (`vp`) は [mise](https://mise.jdx.dev/) で管理しています。
+Node.js、pnpm、[Vite+](https://viteplus.dev/) (`vp`) は [mise](https://mise.jdx.dev/) で管理しています。
 
 ```sh
 mise install
-mise exec -- vp install   # 全ワークスペースの依存をインストール (pnpm install 相当)
+mise exec -- vp install
 ```
 
-シェルで mise を activate していない場合は、以降のコマンドもすべて `mise exec -- ` を付けて実行してください。
+シェルで mise を有効化していない場合は、以降のコマンドにも `mise exec -- ` を付けて実行してください。
 
 ## 開発
 
@@ -34,116 +33,93 @@ mise exec -- vp install   # 全ワークスペースの依存をインストー�
 vp run dev
 ```
 
-`packages/server-node` の開発サーバーが起動し、http://localhost:5173/ で確認できます。
+開発サーバーが http://localhost:5173/ で起動します。初回はデータが未初期化なので、次のいずれかで作成してください。
 
-初回起動時はデータが未初期化の状態です。次のいずれかの方法で新しいデータを作成してください。
-
-- ブラウザで `/admin` を開き、「新しいデータを作る」を実行する
+- ブラウザで `/admin` を開き、マスターパスワードを入力して「新しいデータを作る」を実行する
 - CLI で初期化する: `vp run --filter ./packages/server-node cli -- db init`
+
+管理画面を使うには環境変数 `HAKONIWA_MASTER_PASSWORD` の設定が必要です。
 
 ## ビルドと起動
 
 ```sh
 vp run build
-HAKONIWA_MASTER_PASSWORD=好きなパスワード node packages/server-node/dist/server.js
+HAKONIWA_MASTER_PASSWORD=xxxx node packages/server-node/dist/server.js
 ```
 
-`vp run build` で `packages/server-node/dist/server.js` (サーバー) と `dist/cli.js` (CLI) が生成されます。
+`packages/server-node/dist/` にサーバー (`server.js`)、CLI (`cli.js`)、静的ファイルが生成されます。
 
-CLI は `node packages/server-node/dist/cli.js <command>` または
-`vp run --filter ./packages/server-node cli -- <command>` で実行できます (`--help` で使い方を表示)。
+### CLI
 
 ```sh
-node packages/server-node/dist/cli.js db init
-node packages/server-node/dist/cli.js db status
-node packages/server-node/dist/cli.js turn advance
-node packages/server-node/dist/cli.js backup create
+node packages/server-node/dist/cli.js --help
+node packages/server-node/dist/cli.js db init          # データの新規作成
+node packages/server-node/dist/cli.js db status        # ターン数、最終更新時刻、島数など
+node packages/server-node/dist/cli.js turn check       # 期限が来ていればターンを進める
+node packages/server-node/dist/cli.js turn advance     # 強制的に 1 ターン進める
+node packages/server-node/dist/cli.js time set <unix|ISO8601>
+node packages/server-node/dist/cli.js backup list|create [label]|restore <label>|delete <label>
 ```
+
+### ターン進行の仕組み
+
+ターンは「最終更新時刻から 1 ターン分の時間が経過しているか」で判定します。判定はリクエスト時に行われるほか、Node サーバーでは一定間隔のタイマーからも呼ばれるため、アクセスがなくてもターンが進みます。
 
 ## 環境変数
 
-| 環境変数 | 既定値 | 用途 |
-| --- | --- | --- |
-| `PORT` | `3000` | Node サーバーの待受ポート |
-| `HAKONIWA_DB_PATH` | `./data/hakoniwa.sqlite` | SQLite データベースファイルのパス |
-| `HAKONIWA_BACKUP_DIR` | `./data/backups` | バックアップファイルの出力先ディレクトリ |
-| `HAKONIWA_TURN_CHECK_INTERVAL_SEC` | `60` | ターン進行の外部トリガー間隔 (秒)。`0` で無効化 |
-| `HAKONIWA_MASTER_PASSWORD` | (なし) | 管理画面 (`/admin`) と全島共通パスワードの代用 |
-| `HAKONIWA_SPECIAL_PASSWORD` | (なし) | 名前/パスワード変更フォームの旧パスワード欄専用の代用パスワード |
-| `HAKONIWA_DEBUG` | `false` | `true` で `POST /turn` (デバッグ用手動ターン進行) を有効化 |
-| `HAKONIWA_ADMIN_ENABLED` | `true` | `/admin` (Web 管理画面) の有効/無効 |
-| `HAKONIWA_USE_LBBS` | `false` | ローカル掲示板機能の有効/無効 |
-| `HAKONIWA_UNIT_TIME_SEC` | `21600` | 1 ターンの長さ (秒) |
-| `HAKONIWA_MAX_CATCH_UP_TURNS` | `1` | 1 回の判定で進められる最大ターン数 |
-| `HAKONIWA_SITE_TITLE` | `箱庭諸島２` | サイトタイトル |
-| `HAKONIWA_ADMIN_NAME` | `管理者の名前` | フッタに表示する管理者名 |
-| `HAKONIWA_EMAIL` | `管理者@どこか.どこか.どこか` | フッタに表示する管理者連絡先 |
-| `HAKONIWA_BBS_URL` | `http://サーバー/掲示板.cgi` | フッタに表示する掲示板 URL |
-| `HAKONIWA_TOPPAGE_URL` | `http://サーバー/ホームページ.html` | フッタに表示するトップページ URL |
+| 環境変数                           | 既定値                              | 用途                                                         |
+| ---------------------------------- | ----------------------------------- | ------------------------------------------------------------ |
+| `PORT`                             | `3000`                              | サーバーの待受ポート                                         |
+| `HAKONIWA_DB_PATH`                 | `./data/hakoniwa.sqlite`            | SQLite データベースファイル                                  |
+| `HAKONIWA_BACKUP_DIR`              | `./data/backups`                    | バックアップの出力先                                         |
+| `HAKONIWA_TURN_CHECK_INTERVAL_SEC` | `60`                                | ターン進行判定のタイマー間隔 (秒)。`0` で無効                |
+| `HAKONIWA_MASTER_PASSWORD`         | (なし)                              | 管理画面のパスワード。全島のパスワードの代用にもなる         |
+| `HAKONIWA_SPECIAL_PASSWORD`        | (なし)                              | 設定変更フォームで使うと資金と食料が最大になる特殊パスワード |
+| `HAKONIWA_DEBUG`                   | `false`                             | `true` でトップに「ターンを進める」ボタンを表示              |
+| `HAKONIWA_ADMIN_ENABLED`           | `true`                              | 管理画面 (`/admin`) の有効 / 無効                            |
+| `HAKONIWA_USE_LBBS`                | `false`                             | 島ごとのローカル掲示板の有効 / 無効                          |
+| `HAKONIWA_UNIT_TIME_SEC`           | `21600`                             | 1 ターンの長さ (秒)                                          |
+| `HAKONIWA_MAX_CATCH_UP_TURNS`      | `1`                                 | 1 回の判定で進める最大ターン数                               |
+| `HAKONIWA_SITE_TITLE`              | `箱庭諸島２`                        | サイトタイトル                                               |
+| `HAKONIWA_ADMIN_NAME`              | `管理者の名前`                      | フッタの管理者名                                             |
+| `HAKONIWA_EMAIL`                   | `管理者@どこか.どこか.どこか`       | フッタの連絡先                                               |
+| `HAKONIWA_BBS_URL`                 | `http://サーバー/掲示板.cgi`        | フッタの掲示板リンク                                         |
+| `HAKONIWA_TOPPAGE_URL`             | `http://サーバー/ホームページ.html` | フッタのトップページリンク                                   |
 
-## テスト・lint
+## テストと静的検査
 
 ```sh
-vp test    # Vitest によるテスト一式
-vp check   # フォーマット + lint + 型チェック
-vp fmt     # フォーマット (自動修正)
+vp test    # Vitest
+vp check   # フォーマット、lint、型チェック
+vp fmt     # フォーマットの自動修正
 ```
 
-# これはなにか
+## ライセンス
 
-箱庭諸島2をベースに、今風のPerlで動くようにする版です。TypeScript (Node.js + Hono) への移植版も上記の通り用意しています。
+このリポジトリはオリジナルの「箱庭諸島２」の利用条件に従います。素晴らしいゲームを作られた原作者の方々に敬意を表します。
 
-# ライセンス
+- 字: 徳岡宏樹
+- 絵: 小川克人
+- 題字: 稲葉修吾
+- テストプレイ他協力: 井上友博、小澤武史、さかもと、ほえほえ、ありづか
 
-オリジナルの箱庭諸島2に準じます。
-素晴らしいゲームを制作された原作者の方々に敬意を表します。
+### スクリプトについて
 
->  箱庭諸島 ver2.3
-> 
->    字: 徳岡宏樹
->    絵: 小川克人
->  題字: 稲葉修吾
->  テストプレイ他協力: 井上友博、小澤武史、さかもと、ほえほえ、ありづか
->  箱庭諸島のページ: http://www.bekkoame.ne.jp/~tokuoka/hakoniwa.html
+オリジナルの readme (`hako-readme.txt` に同梱) では、改変版を配布する際の条件として次を定めています。
 
-## スクリプトについて
+- 無料で配布すること
+- ゲーム画面の最上部にある、スクリプト配布元 (http://www.bekkoame.ne.jp/~tokuoka/hakoniwa.html) へのリンクを消さないこと。それ以外の改造は自由
+- 改変版も同じ条件で再配布を許可すること
+- 配布ページに、オリジナルの配布元へのリンクを置くこと
 
-以下、オリジナルのreadme.txtより。
+この移植版でも画面最上部の配布元リンクは維持しています。なお原作者のサイトは現在アクセスできないため、最後の条件は実質的に満たせない状態です。
 
-> 箱庭諸島2のスクリプトを改変し、それを他人に譲渡、配布する場合には、
-> 以下の制約を課します。
-> 
-> ・無料配布であること。
-> ・ゲーム画面のトップに表示される、スクリプトの配布元へのリンクを
->   消すのを禁止すること。また、それ以外の改造は許可すること。
-> ・本条件と同等に、改造したものの配布を許可すること。
-> ・配布するページにおいて、オリジナルスクリプトの配布元として当サイトへ
->   のリンクを置くこと。
+### 画像について
 
-…といっても、オリジナルの作者である[徳岡宏樹さんのWebサイト](http://t.pos.to/hako/)は
-現時点でアクセスできない状態になってしまっているため、4つめの制約はあまり意味のないものになってしまっています。
+同梱の画像 (`packages/game/public/images`) は小川克人氏の著作物です。原作者サイトのアーカイブにある FAQ によれば、その後の許諾により「商用でない限り、箱庭諸島以外の用途でも配布・改変可」とされています。商用利用はできません。何か問題が起きても画像の原作者は関知しない、とのことです。
 
-## 画像ファイルについて
+## 参考にしたサイト
 
-以下、[徳岡宏樹さんのWebサイトサイトのアーカイブ](https://web.archive.org/web/20070113153728/http://t.pos.to/hako/)より。
-
-> [Q3] オリジナルに付属していた画像については、再配布や改変は可能ですか？
-> 
-> [A3] 商用利用を除いて、許可するものとします。
-> オリジナルスクリプトに付属していた文書では「箱庭諸島以外の用途に使用してはならない」と書いてありました。
-> しかし、その後原作者より「商用でない限り、箱庭諸島以外でも配布・改変可」という許可を得ています。
-> 従って、商用利用でなければ配布も改変も可能です。
-> もちろん何らかの問題が発生したとしても画像の原作者は関知しません。
-> 自己責任でお願いします。
-
-# 参考にさせていただいたWebサイト
-
-* 再配布
-    * [箱庭諸島の保管庫](http://www.hakoniwa.net/hako/)
-    * [箱庭なページ](http://hako.gob.jp/)
-    * [Neo-INO](http://neo-sub.sakura.ne.jp/ino/hako/download.html)
-* 解説
-    * [箱庭解体新書](http://qqmh3psd.web.fc2.com/sadoga/)
-* jcode.pl
-    * [ftp.iij.ad.jp](ftp://ftp.iij.ad.jp/pub/IIJ/dist/utashiro/perl/)
-
+- 再配布: [箱庭諸島の保管庫](http://www.hakoniwa.net/hako/)、[箱庭なページ](http://hako.gob.jp/)、[Neo-INO](http://neo-sub.sakura.ne.jp/ino/hako/download.html)
+- 解説: [箱庭解体新書](http://qqmh3psd.web.fc2.com/sadoga/)
+- 原作者サイトのアーカイブ: [Wayback Machine](https://web.archive.org/web/20070113153728/http://t.pos.to/hako/)

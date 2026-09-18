@@ -1,10 +1,4 @@
-archives
 *.swp
-archives.tgz
-local
-cgi/data
-hakojimalockflock
-
 node_modules
 **/dist
-packages/server-node/data
+data/

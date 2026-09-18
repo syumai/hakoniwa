@@ -1,23 +1,10 @@
 import { defineConfig } from "vite-plus";
 
-// 既存の Perl 資産と設計書 (tmp/) は編集対象外なので、lint / fmt どちらからも除外する。
-// 設計書 (tmp/09-tooling.md) は lint.ignorePatterns のみを挙げているが、
-// `vp fmt` / `vp check` は Markdown 等も含めてリポジトリ全体を走査するため、
-// fmt.ignorePatterns にも同じ一覧 (+ 残りの Perl 資産) を設定している (設計書との差異)。
+// 設計書 (tmp/) とオリジナルの readme、静的アセットは lint / fmt どちらからも除外する。
 const nonTypeScriptAssetPatterns = [
   "**/dist/**",
   "tmp/**",
-  "lib/**",
-  "cgi/**",
-  "t/**",
-  "scripts/**",
-  "README.md",
   "hako-readme.txt",
-  "memo.txt",
-  "cpanfile",
-  "cpanfile.snapshot",
-  "app.psgi",
-  ".perltidyrc",
   // Adapter が配信する静的アセット (画像/CSS/座標選択補助スクリプト)。
   // ブラウザにそのまま配信する素の JS であり、プロジェクトの ESM/TS Lint 対象ではない。
   "packages/*/public/**",
