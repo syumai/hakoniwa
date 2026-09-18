@@ -26,11 +26,17 @@ export function IslandPage({ vm, config, csrfToken, notice }: IslandPageProps) {
         <span class="island-name">「{vm.name}島」</span>へようこそ！！
       </p>
       <BackLink />
-      <IslandInfo detail={vm} money={vm.moneyDisplay} config={config} />
-      <IslandMap terrain={vm.terrain} mode="visitor" turn={vm.turn} config={config} />
+
+      <section class="card">
+        <h2>島の様子</h2>
+        <div class="table-scroll">
+          <IslandInfo detail={vm} money={vm.moneyDisplay} config={config} />
+        </div>
+        <IslandMap terrain={vm.terrain} mode="visitor" turn={vm.turn} config={config} />
+      </section>
 
       {config.useLbbs ? (
-        <>
+        <section class="card">
           <LbbsHead islandName={vm.name} />
           {csrfToken !== undefined ? (
             <LbbsInput islandId={vm.id} csrfToken={csrfToken} />
@@ -39,17 +45,20 @@ export function IslandPage({ vm, config, csrfToken, notice }: IslandPageProps) {
               記帳するには<a href="/login">ログイン</a>してください。
             </p>
           )}
-          <LbbsContents posts={vm.lbbs} />
-        </>
+          <div class="table-scroll">
+            <LbbsContents posts={vm.lbbs} />
+          </div>
+        </section>
       ) : (
         ""
       )}
 
-      <hr />
-      <p class="big">
-        <span class="island-name">{vm.name}島</span>の近況
-      </p>
-      <LogList logs={vm.logs} />
+      <section class="card">
+        <p class="big">
+          <span class="island-name">{vm.name}島</span>の近況
+        </p>
+        <LogList logs={vm.logs} />
+      </section>
     </div>
   );
 }

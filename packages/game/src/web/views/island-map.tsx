@@ -145,18 +145,29 @@ export function IslandMap({ terrain, mode, turn, config, commands }: IslandMapPr
 
   return (
     <div class="map">
-      <img src="/images/xbar.gif" width={400} height={16} />
+      <img src="/images/xbar.gif" class="xbar" width={400} height={16} />
       <br />
       {rows.map((y) => (
         <div class="map-row" key={y}>
-          {y % 2 === 0 ? <img src={`/images/space${y}.gif`} width={16} height={32} /> : ""}
+          {y % 2 === 0 ? (
+            <img src={`/images/space${y}.gif`} class="space" width={16} height={32} />
+          ) : (
+            ""
+          )}
           {cols.map((x) => {
             const hex = terrain.get(x, y);
             const { image, desc } = cellView(hex.kind, hex.value, mode, turn, config);
             const label = labels[y]?.[x] ?? "";
             const tooltip = `(${x},${y}) ${desc} ${label}`;
             const cell = (
-              <img src={`/images/${image}`} alt={tooltip} title={tooltip} width={32} height={32} />
+              <img
+                src={`/images/${image}`}
+                alt={tooltip}
+                title={tooltip}
+                class="cell"
+                width={32}
+                height={32}
+              />
             );
             return mode === "owner" ? (
               <a href="#" class="map-cell" data-x={x} data-y={y}>
@@ -166,7 +177,11 @@ export function IslandMap({ terrain, mode, turn, config, commands }: IslandMapPr
               cell
             );
           })}
-          {y % 2 === 1 ? <img src={`/images/space${y}.gif`} width={16} height={32} /> : ""}
+          {y % 2 === 1 ? (
+            <img src={`/images/space${y}.gif`} class="space" width={16} height={32} />
+          ) : (
+            ""
+          )}
           <br />
         </div>
       ))}

@@ -14,8 +14,17 @@ export function NewIslandPage({ vm, config }: { vm: NewIslandVM; config: GameCon
         <span class="island-name">「{vm.name}島」</span>と命名します。
       </p>
       <BackLink />
-      <IslandInfo detail={vm} money={buildMoneyDisplay(vm.money, config, true)} config={config} />
-      <IslandMap terrain={vm.terrain} mode="owner" turn={vm.turn} config={config} />
+      <section class="card">
+        <h2>島の状況</h2>
+        <div class="table-scroll">
+          <IslandInfo
+            detail={vm}
+            money={buildMoneyDisplay(vm.money, config, true)}
+            config={config}
+          />
+        </div>
+        <IslandMap terrain={vm.terrain} mode="owner" turn={vm.turn} config={config} />
+      </section>
     </div>
   );
 }

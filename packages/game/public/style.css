@@ -1,8 +1,12 @@
 /*
- * 箱庭諸島 画面スタイル。
+ * 箱庭諸島 画面スタイル。モバイルファースト (tmp/15-ng-words-and-mobile.md「スマートフォン対応 UI」)。
  * lib/Hako/Const.pm 「外見関係」(FONT COLOR / BGCOLOR) の設定を CSS クラスへ移植する。
  * 対応する Perl 側の変数名をコメントに残す。
  */
+
+* {
+  box-sizing: border-box;
+}
 
 html,
 body {
@@ -15,7 +19,10 @@ body {
   background-color: #eeffff;
   color: #000000;
   font-family: "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
-  padding: 8px;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 12px;
+  line-height: 1.5;
 }
 
 a {
@@ -24,18 +31,122 @@ a {
 
 hr {
   margin: 12px 0;
+  border: 0;
+  border-top: 1px solid #cccccc;
 }
 
-/* テーブルは border 付き。 */
+.distribution-link {
+  font-size: 0.85em;
+  margin: 4px 0;
+}
+
+.footer {
+  font-size: 0.9em;
+}
+
+/* ==================== ナビゲーション ==================== */
+
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  padding: 8px 0;
+}
+
+.nav-title {
+  font-size: 1.3em;
+  font-weight: bold;
+  color: #8888ff;
+  text-decoration: none;
+  margin-right: auto;
+}
+
+.nav-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+.nav-links form.nav-logout {
+  display: inline-flex;
+  margin: 0;
+}
+
+.nav-user {
+  font-weight: bold;
+}
+
+/* ==================== レイアウト / カード ==================== */
+
+.container {
+  padding: 0;
+}
+
+.card {
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 12px 16px 16px;
+  margin: 14px 0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+.card h2 {
+  margin-top: 0;
+  /* Perl 版 $HtagHeader_ = FONT COLOR="#4444ff" */
+  color: #4444ff;
+}
+
+/* サイトタイトル「箱庭諸島２」(Perl 版 $HtagTitle_ = FONT SIZE=7 COLOR="#8888ff")。 */
+.title {
+  font-size: 2em;
+  color: #8888ff;
+  margin: 12px 0 4px;
+}
+
+/* 大きい文字 (Perl 版 $HtagBig_)。 */
+.big {
+  font-size: 1.4em;
+}
+
+.notice {
+  margin: 8px 0;
+}
+
+.error {
+  color: #ff0000;
+}
+
+/* ==================== テーブル ==================== */
+
 table {
   border-collapse: collapse;
-  margin: 8px 0;
+  margin: 0;
+  width: 100%;
 }
 
 table th,
 table td {
   border: 1px solid #333333;
-  padding: 2px 6px;
+  padding: 4px 8px;
+}
+
+/* 横スクロール可能なテーブル (順位表、島情報、掲示板、管理画面の表)。 */
+.table-scroll {
+  overflow-x: auto;
+  margin: 8px 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-scroll table {
+  width: max-content;
+  min-width: 100%;
+}
+
+.table-scroll th,
+.table-scroll td {
+  white-space: nowrap;
 }
 
 /* 順位表における見出し (Perl 版 $HtagTH_ / $HbgTitleCell)。 */
@@ -104,88 +215,7 @@ th {
 
 .comment-cell {
   background-color: #ccffcc;
-}
-
-/* 開発計画: フォーム/地図/計画一覧セル (Perl 版 $HbgInputCell / $HbgMapCell / $HbgCommandCell)。 */
-td.input-cell,
-td.map-cell,
-td.command-cell {
-  background-color: #ccffcc;
-  vertical-align: top;
-}
-
-/* 大きい文字 (Perl 版 $HtagBig_)。 */
-.big {
-  font-size: 1.6em;
-}
-
-/* サイトタイトル「箱庭諸島２」(Perl 版 $HtagTitle_ = FONT SIZE=7 COLOR="#8888ff")。 */
-.title {
-  font-size: 2.5em;
-  color: #8888ff;
-}
-
-/* トップページの各セクション見出し (Perl 版 $HtagHeader_ = FONT COLOR="#4444ff")。 */
-.top-page h1 {
-  color: #4444ff;
-}
-
-.notice {
-  margin: 8px 0;
-}
-
-.error {
-  color: #ff0000;
-}
-
-/* 地図: 画像を隙間なく並べる。 */
-.map {
-  white-space: nowrap;
-  line-height: 0;
-}
-
-.map img {
-  vertical-align: top;
-  border: 0;
-}
-
-.map-row {
-  white-space: nowrap;
-  line-height: 0;
-}
-
-/* 地図上の 1 ヘックス (owner モードのみ <a> でラップされる)。 */
-a.map-cell {
-  display: inline-block;
-  line-height: 0;
-}
-
-a.map-cell img {
-  border: 0;
-}
-
-.command-line {
-  line-height: 1.4;
-}
-
-.command-number {
-  color: #800000;
-  font-weight: bold;
-  text-decoration: none;
-  margin-right: 4px;
-}
-
-.log-list,
-.history-list {
-  line-height: 1.4;
-}
-
-.log-turn {
-  font-weight: bold;
-}
-
-.log-secret {
-  font-weight: bold;
+  white-space: normal !important;
 }
 
 .backup-row {
@@ -195,6 +225,241 @@ a.map-cell img {
   margin: 8px 0;
 }
 
-.footer {
-  font-size: 0.9em;
+/* ==================== フォーム / ボタン ==================== */
+
+label {
+  display: block;
+}
+
+/* ラベルとフィールドの縦積み。 */
+.field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin: 10px 0;
+}
+
+.field > label {
+  font-weight: bold;
+}
+
+.field-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+/* 座標 (x, y) など、select を横並びの 2 列グリッドにする。 */
+.coord-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 6px 0;
+}
+
+input,
+select,
+button,
+textarea {
+  font-size: 16px;
+  font-family: inherit;
+}
+
+/* iOS のズーム防止 (16px) と、タップしやすい最小高さ 44px。 */
+input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+select,
+button,
+textarea {
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 1px solid #999999;
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  width: 20px;
+  height: 20px;
+  vertical-align: middle;
+}
+
+input[type="text"],
+input[type="email"],
+input[type="datetime-local"] {
+  width: 100%;
+  max-width: 100%;
+}
+
+/* ボタン (Perl 版の SUBMIT ボタンに相当)。 */
+.btn,
+input[type="submit"],
+input[type="button"],
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #f0f0f0;
+  color: #000000;
+  border: 1px solid #999999;
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 8px 14px;
+}
+
+.btn:hover,
+input[type="submit"]:hover,
+input[type="button"]:hover,
+button:hover {
+  background: #e0e0e0;
+}
+
+/* 主要操作のボタン。 */
+.btn-primary,
+input.btn-primary[type="submit"] {
+  background: #4444ff;
+  border-color: #4444ff;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.btn-primary:hover {
+  background: #3333dd;
+}
+
+form.inline-form {
+  margin: 8px 0;
+}
+
+/* ==================== 地図 ==================== */
+
+.map {
+  --cell: 32px;
+  white-space: nowrap;
+  line-height: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+}
+
+.map img {
+  vertical-align: top;
+  display: inline-block;
+  border: 0;
+}
+
+.map-row {
+  white-space: nowrap;
+  line-height: 0;
+  font-size: 0;
+}
+
+.map img.cell {
+  width: var(--cell);
+  height: var(--cell);
+}
+
+.map img.space {
+  width: calc(var(--cell) / 2);
+  height: var(--cell);
+}
+
+.map img.xbar {
+  width: calc(var(--cell) * 12.5);
+  height: calc(var(--cell) / 2);
+}
+
+@media (max-width: 480px) {
+  .map {
+    --cell: 26px;
+  }
+}
+
+/* 地図上の 1 ヘックス (owner モードのみ <a> でラップされる。owner.js が data-x/data-y を拾う)。 */
+a.map-cell {
+  display: inline-block;
+  line-height: 0;
+}
+
+a.map-cell img {
+  border: 0;
+}
+
+/* ==================== 開発画面 (計画フォーム / 地図 / 計画一覧) ==================== */
+
+.owner-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+/* 900px 未満: 縦積み。地図 → 計画フォーム → 計画一覧の順。 */
+.owner-map-col {
+  order: 1;
+}
+
+.owner-form-col {
+  order: 2;
+}
+
+.owner-commands-col {
+  order: 3;
+}
+
+@media (min-width: 900px) {
+  .owner-layout {
+    grid-template-columns: 260px auto 1fr;
+  }
+
+  .owner-form-col {
+    order: 1;
+  }
+
+  .owner-map-col {
+    order: 2;
+  }
+
+  .owner-commands-col {
+    order: 3;
+  }
+}
+
+.command-line {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  line-height: 1.4;
+  border-bottom: 1px solid #e0e0e0;
+  padding: 4px 0;
+}
+
+.command-number {
+  color: #800000;
+  font-weight: bold;
+  text-decoration: none;
+  min-width: 2em;
+}
+
+.log-list,
+.history-list {
+  line-height: 1.4;
+}
+
+.log-entry,
+.history-entry {
+  padding: 2px 0;
+}
+
+.log-turn {
+  font-weight: bold;
+}
+
+.log-secret {
+  font-weight: bold;
 }

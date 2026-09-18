@@ -13,46 +13,57 @@ export function LoginPage({ methods, devLogin }: LoginPageProps) {
     <div class="login-page">
       <p class="big">ログイン</p>
 
-      {methods.enabled.x ? (
-        <p>
-          <a href="/auth/x" class="login-x">
-            X (Twitter) でログイン
-          </a>
-        </p>
-      ) : (
-        ""
-      )}
-      {methods.enabled.discord ? (
-        <p>
-          <a href="/auth/discord" class="login-discord">
-            Discord でログイン
-          </a>
-        </p>
+      {methods.enabled.x || methods.enabled.discord ? (
+        <section class="card">
+          <h2>SNS アカウントでログイン</h2>
+          {methods.enabled.x ? (
+            <p>
+              <a href="/auth/x" class="login-x btn btn-primary">
+                X (Twitter) でログイン
+              </a>
+            </p>
+          ) : (
+            ""
+          )}
+          {methods.enabled.discord ? (
+            <p>
+              <a href="/auth/discord" class="login-discord btn btn-primary">
+                Discord でログイン
+              </a>
+            </p>
+          ) : (
+            ""
+          )}
+        </section>
       ) : (
         ""
       )}
 
       {methods.enabled.email ? (
-        <div class="login-email">
-          <p class="big">メールでログイン</p>
-          <form action="/auth/magic-link" method="post">
-            <input type="email" name="email" size={32} required />
-            <input type="submit" value="ログイン用リンクを送る" />
+        <section class="login-email card">
+          <h2>メールでログイン</h2>
+          <form action="/auth/magic-link" method="post" class="field-row">
+            <input type="email" name="email" size={32} required placeholder="you@example.com" />
+            <button type="submit" class="btn btn-primary">
+              ログイン用リンクを送る
+            </button>
           </form>
-        </div>
+        </section>
       ) : (
         ""
       )}
 
       {devLogin ? (
-        <div class="login-dev">
-          <p class="big">開発ログイン</p>
+        <section class="login-dev card">
+          <h2>開発ログイン</h2>
           <p>ローカル開発専用: 任意のメールアドレスでログインできます。</p>
-          <form action="/auth/dev" method="post">
-            <input type="email" name="email" size={32} required />
-            <input type="submit" value="開発ログイン" />
+          <form action="/auth/dev" method="post" class="field-row">
+            <input type="email" name="email" size={32} required placeholder="you@example.com" />
+            <button type="submit" class="btn">
+              開発ログイン
+            </button>
           </form>
-        </div>
+        </section>
       ) : (
         ""
       )}

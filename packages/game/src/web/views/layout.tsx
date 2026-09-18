@@ -15,37 +15,52 @@ export interface LayoutProps {
 
 const SCRIPT_SOURCE_URL = "http://www.bekkoame.ne.jp/~tokuoka/hakoniwa.html";
 
-/** ログイン状態のナビゲーション。Phase 7 (モバイル UI) で class 名 "nav*" を流用する想定。 */
-function Nav({ user, csrfToken }: { user: AuthUser | undefined; csrfToken: string | undefined }) {
-  if (user === undefined) {
-    return (
-      <nav class="nav">
-        <a href="/login" class="nav-login">
-          ログイン
-        </a>
-      </nav>
-    );
-  }
+/**
+ * ヘッダナビゲーション。タイトルへのリンクと、ログイン状態のリンク群を横並び・
+ * 折り返し可能に (Phase 7 モバイル UI)。class 名 "nav*" は Phase 6b からの引き継ぎ。
+ */
+function Nav({
+  config,
+  user,
+  csrfToken,
+}: {
+  config: GameConfig;
+  user: AuthUser | undefined;
+  csrfToken: string | undefined;
+}) {
   return (
     <nav class="nav">
-      <span class="nav-user">{user.name}さん</span>
-      <a href="/my-island" class="nav-my-island">
-        自分の島
+      <a href="/" class="nav-title">
+        {config.site.title}
       </a>
-      <a href="/account" class="nav-account">
-        アカウント設定
-      </a>
-      {user.isAdmin ? (
-        <a href="/admin" class="nav-admin">
-          管理
-        </a>
-      ) : (
-        ""
-      )}
-      <form action="/logout" method="post" class="nav-logout">
-        <input type="hidden" name="_csrf" value={csrfToken ?? ""} />
-        <input type="submit" value="ログアウト" />
-      </form>
+      <div class="nav-links">
+        {user === undefined ? (
+          <a href="/login" class="nav-login">
+            ログイン
+          </a>
+        ) : (
+          <>
+            <span class="nav-user">{user.name}さん</span>
+            <a href="/my-island" class="nav-my-island">
+              自分の島
+            </a>
+            <a href="/account" class="nav-account">
+              アカウント設定
+            </a>
+            {user.isAdmin ? (
+              <a href="/admin" class="nav-admin">
+                管理
+              </a>
+            ) : (
+              ""
+            )}
+            <form action="/logout" method="post" class="nav-logout">
+              <input type="hidden" name="_csrf" value={csrfToken ?? ""} />
+              <input type="submit" value="ログアウト" />
+            </form>
+          </>
+        )}
+      </div>
     </nav>
   );
 }
@@ -60,11 +75,11 @@ export function Layout({ config, user, csrfToken, children }: PropsWithChildren<
         <link rel="stylesheet" href="/style.css" />
       </head>
       <body>
-        <a href={SCRIPT_SOURCE_URL}>箱庭諸島スクリプト配布元</a>
-        <hr />
-        <Nav user={user} csrfToken={csrfToken} />
-        <hr />
-        <main>{children}</main>
+        <p class="distribution-link">
+          <a href={SCRIPT_SOURCE_URL}>箱庭諸島スクリプト配布元</a>
+        </p>
+        <Nav config={config} user={user} csrfToken={csrfToken} />
+        <main class="container">{children}</main>
         <hr />
         <p class="footer">
           管理者:{config.site.adminName}(

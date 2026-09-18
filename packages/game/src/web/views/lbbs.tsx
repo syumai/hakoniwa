@@ -6,10 +6,9 @@ import type { LbbsPost } from "../../core/types.ts";
 export function LbbsHead({ islandName }: { islandName: string }) {
   return (
     <div class="lbbs-head">
-      <hr />
-      <p class="big">
+      <h2>
         <span class="island-name">{islandName}島</span>観光者通信
-      </p>
+      </h2>
     </div>
   );
 }
@@ -17,10 +16,12 @@ export function LbbsHead({ islandName }: { islandName: string }) {
 /** 記帳フォーム。観光者・島主どちらも同じ POST /islands/:id/lbbs を使う (表示名は actor.name)。 */
 export function LbbsInput({ islandId, csrfToken }: { islandId: number; csrfToken: string }) {
   return (
-    <form action={`/islands/${islandId}/lbbs`} method="post">
+    <form action={`/islands/${islandId}/lbbs`} method="post" class="field-row">
       <input type="hidden" name="_csrf" value={csrfToken} />
-      <input type="text" size={80} name="message" />
-      <input type="submit" value="記帳する" />
+      <input type="text" size={80} name="message" placeholder="ひとこと記帳する" />
+      <button type="submit" class="btn btn-primary">
+        記帳する
+      </button>
     </form>
   );
 }

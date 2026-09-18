@@ -44,50 +44,54 @@ function AuthMethodsForm({
   return (
     <form action="/admin/auth-methods" method="post" class="auth-methods-form">
       <input type="hidden" name="_csrf" value={csrfToken} />
-      <table border={1}>
-        <tr>
-          <th>ログイン方法</th>
-          <th>設定状況</th>
-          <th>有効</th>
-        </tr>
-        <tr>
-          <td>X (Twitter)</td>
-          <td>{authMethods.configured.x ? "設定済み" : "未設定"}</td>
-          <td>
-            <input
-              type="checkbox"
-              name="x"
-              checked={authMethods.enabled.x}
-              disabled={!authMethods.configured.x}
-            />
-          </td>
-        </tr>
-        <tr>
-          <td>Discord</td>
-          <td>{authMethods.configured.discord ? "設定済み" : "未設定"}</td>
-          <td>
-            <input
-              type="checkbox"
-              name="discord"
-              checked={authMethods.enabled.discord}
-              disabled={!authMethods.configured.discord}
-            />
-          </td>
-        </tr>
-        <tr>
-          <td>メール{authMethods.mailerIsConsole ? "(開発用: ログ出力のみ)" : ""}</td>
-          <td>{authMethods.configured.email ? "設定済み" : "未設定"}</td>
-          <td>
-            <input
-              type="checkbox"
-              name="email"
-              checked={authMethods.enabled.email}
-              disabled={!authMethods.configured.email}
-            />
-          </td>
-        </tr>
-      </table>
-      <input type="submit" value="ログイン方法の設定を保存" />
+      <div class="table-scroll">
+        <table border={1}>
+          <tr>
+            <th>ログイン方法</th>
+            <th>設定状況</th>
+            <th>有効</th>
+          </tr>
+          <tr>
+            <td>X (Twitter)</td>
+            <td>{authMethods.configured.x ? "設定済み" : "未設定"}</td>
+            <td>
+              <input
+                type="checkbox"
+                name="x"
+                checked={authMethods.enabled.x}
+                disabled={!authMethods.configured.x}
+              />
+            </td>
+          </tr>
+          <tr>
+            <td>Discord</td>
+            <td>{authMethods.configured.discord ? "設定済み" : "未設定"}</td>
+            <td>
+              <input
+                type="checkbox"
+                name="discord"
+                checked={authMethods.enabled.discord}
+                disabled={!authMethods.configured.discord}
+              />
+            </td>
+          </tr>
+          <tr>
+            <td>メール{authMethods.mailerIsConsole ? "(開発用: ログ出力のみ)" : ""}</td>
+            <td>{authMethods.configured.email ? "設定済み" : "未設定"}</td>
+            <td>
+              <input
+                type="checkbox"
+                name="email"
+                checked={authMethods.enabled.email}
+                disabled={!authMethods.configured.email}
+              />
+            </td>
+          </tr>
+        </table>
+      </div>
+      <button type="submit" class="btn btn-primary">
+        ログイン方法の設定を保存
+      </button>
     </form>
   );
 }
@@ -104,7 +108,7 @@ function MaximizeForm({
     return <></>;
   }
   return (
-    <form action="/admin/maximize" method="post">
+    <form action="/admin/maximize" method="post" class="field-row">
       <input type="hidden" name="_csrf" value={csrfToken} />
       <select name="id">
         {islands.map((island) => (
@@ -113,7 +117,9 @@ function MaximizeForm({
           </option>
         ))}
       </select>
-      <input type="submit" value="資金・食料を最大にする" />
+      <button type="submit" class="btn">
+        資金・食料を最大にする
+      </button>
     </form>
   );
 }
@@ -132,9 +138,8 @@ export function AdminPage({ status, authMethods, islands, csrfToken, notice }: A
       <h1>箱島２ メンテナンスツール</h1>
       {notice !== undefined ? <p class="notice big">{notice}</p> : ""}
 
-      <hr />
       {status.initialized ? (
-        <div class="current-data">
+        <section class="current-data card">
           <h2>現役データ</h2>
           <p>
             <b>ターン{status.turn}</b>
@@ -145,58 +150,74 @@ export function AdminPage({ status, authMethods, islands, csrfToken, notice }: A
           <p>
             <b>最終更新時間(秒数表示)</b>:1970年1月1日から{status.lastTime}秒
           </p>
-          <form action="/admin/reset" method="post">
+          <form action="/admin/reset" method="post" class="inline-form">
             <input type="hidden" name="_csrf" value={csrfToken} />
-            <input type="submit" value="このデータを削除" />
+            <button type="submit" class="btn">
+              このデータを削除
+            </button>
           </form>
 
           <h3>最終更新時間の変更</h3>
-          <form action="/admin/last-time" method="post">
+          <form action="/admin/last-time" method="post" class="field-row">
             <input type="hidden" name="_csrf" value={csrfToken} />
             <input type="datetime-local" name="datetime" />
-            <input type="submit" value="変更" />
+            <button type="submit" class="btn">
+              変更
+            </button>
           </form>
-          <form action="/admin/last-time" method="post">
+          <form action="/admin/last-time" method="post" class="field-row">
             <input type="hidden" name="_csrf" value={csrfToken} />
             1970年1月1日から
             <input type="text" size={32} name="unix" />秒
-            <input type="submit" value="秒指定で変更" />
+            <button type="submit" class="btn">
+              秒指定で変更
+            </button>
           </form>
 
           <h3>ターン進行</h3>
-          <form action="/admin/turn" method="post">
+          <form action="/admin/turn" method="post" class="inline-form">
             <input type="hidden" name="_csrf" value={csrfToken} />
-            <input type="submit" value="ターンを進める" />
+            <button type="submit" class="btn btn-primary">
+              ターンを進める
+            </button>
           </form>
 
           <h3>資金・食料の最大化</h3>
           <MaximizeForm islands={islands} csrfToken={csrfToken} />
-        </div>
+        </section>
       ) : (
-        <div class="current-data">
+        <section class="current-data card">
           <h2>現役データ</h2>
-          <form action="/admin/init" method="post">
+          <form action="/admin/init" method="post" class="inline-form">
             <input type="hidden" name="_csrf" value={csrfToken} />
-            <input type="submit" value="新しいデータを作る" />
+            <button type="submit" class="btn btn-primary">
+              新しいデータを作る
+            </button>
           </form>
-        </div>
+        </section>
       )}
 
-      <hr />
-      <h2>ログイン方法</h2>
-      <AuthMethodsForm authMethods={authMethods} csrfToken={csrfToken} />
+      <section class="card">
+        <h2>ログイン方法</h2>
+        <AuthMethodsForm authMethods={authMethods} csrfToken={csrfToken} />
+      </section>
 
-      <hr />
-      <h2>バックアップ一覧</h2>
-      <form action="/admin/backups" method="post">
-        <input type="hidden" name="_csrf" value={csrfToken} />
-        ラベル(省略可)
-        <input type="text" name="label" size={32} />
-        <input type="submit" value="バックアップを作成" />
-      </form>
-      {status.backups.map((backup) => (
-        <BackupRow backup={backup} csrfToken={csrfToken} key={backup.label} />
-      ))}
+      <section class="card">
+        <h2>バックアップ一覧</h2>
+        <form action="/admin/backups" method="post" class="field-row">
+          <input type="hidden" name="_csrf" value={csrfToken} />
+          <label>
+            ラベル(省略可)
+            <input type="text" name="label" size={32} />
+          </label>
+          <button type="submit" class="btn">
+            バックアップを作成
+          </button>
+        </form>
+        {status.backups.map((backup) => (
+          <BackupRow backup={backup} csrfToken={csrfToken} key={backup.label} />
+        ))}
+      </section>
     </div>
   );
 }

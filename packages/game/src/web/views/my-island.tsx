@@ -42,80 +42,108 @@ function CommandForm({
   return (
     <form action="/my-island/commands" method="post">
       <input type="hidden" name="_csrf" value={csrfToken} />
-      <input type="submit" value="計画送信" />
-      <hr />
-      <b>計画番号</b>
-      <select name="number">
-        {range(config.commandMax).map((i) => (
-          <option value={i} key={i}>
-            {i + 1}
-          </option>
-        ))}
-      </select>
-      <br />
-      <hr />
-      <b>開発計画</b>
-      <br />
-      <select name="kind">
-        {commandList.map((spec) => (
-          <option value={spec.kind} key={spec.kind} selected={spec.kind === defaults.kind}>
-            {spec.name}({costLabel(spec.cost, config)})
-          </option>
-        ))}
-      </select>
-      <hr />
-      <b>座標(</b>
-      <select name="x">
-        {range(config.islandSize).map((i) => (
-          <option value={i} key={i} selected={i === defaults.pointX}>
-            {i}
-          </option>
-        ))}
-      </select>
-      、
-      <select name="y">
-        {range(config.islandSize).map((i) => (
-          <option value={i} key={i} selected={i === defaults.pointY}>
-            {i}
-          </option>
-        ))}
-      </select>
-      <b>)</b>
-      <hr />
-      <b>数量</b>
-      <select name="amount">
-        {range(100).map((i) => (
-          <option value={i} key={i}>
-            {i}
-          </option>
-        ))}
-      </select>
-      <hr />
-      <b>目標の島</b>
-      <br />
-      <select name="target">
-        {targets.map((island) => (
-          <option
-            value={island.id}
-            key={island.id}
-            selected={island.id === defaults.targetIslandId}
-          >
-            {island.name}島
-          </option>
-        ))}
-      </select>
-      <hr />
-      <b>動作</b>
-      <br />
-      <input type="radio" name="mode" value="insert" checked />
-      挿入
-      <input type="radio" name="mode" value="write" />
-      上書き
-      <br />
-      <input type="radio" name="mode" value="delete" />
-      削除
-      <hr />
-      <input type="submit" value="計画送信" />
+
+      <div class="field">
+        <label>
+          計画番号
+          <select name="number">
+            {range(config.commandMax).map((i) => (
+              <option value={i} key={i}>
+                {i + 1}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div class="field">
+        <label>
+          開発計画
+          <select name="kind">
+            {commandList.map((spec) => (
+              <option value={spec.kind} key={spec.kind} selected={spec.kind === defaults.kind}>
+                {spec.name}({costLabel(spec.cost, config)})
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div class="field">
+        <span>座標</span>
+        <div class="coord-fields">
+          <label>
+            x
+            <select name="x">
+              {range(config.islandSize).map((i) => (
+                <option value={i} key={i} selected={i === defaults.pointX}>
+                  {i}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            y
+            <select name="y">
+              {range(config.islandSize).map((i) => (
+                <option value={i} key={i} selected={i === defaults.pointY}>
+                  {i}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>
+          数量
+          <select name="amount">
+            {range(100).map((i) => (
+              <option value={i} key={i}>
+                {i}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div class="field">
+        <label>
+          目標の島
+          <select name="target">
+            {targets.map((island) => (
+              <option
+                value={island.id}
+                key={island.id}
+                selected={island.id === defaults.targetIslandId}
+              >
+                {island.name}島
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div class="field">
+        <span>動作</span>
+        <label>
+          <input type="radio" name="mode" value="insert" checked />
+          挿入
+        </label>
+        <label>
+          <input type="radio" name="mode" value="write" />
+          上書き
+        </label>
+        <label>
+          <input type="radio" name="mode" value="delete" />
+          削除
+        </label>
+      </div>
+
+      <button type="submit" class="btn btn-primary">
+        計画送信
+      </button>
     </form>
   );
 }
@@ -150,13 +178,19 @@ function NameChangeForm({
   return (
     <form action="/my-island/name" method="post">
       <input type="hidden" name="_csrf" value={csrfToken} />
-      (注意)名前の変更には{costChangeName}
-      {unit}かかります。
-      <br />
-      どんな名前に変えますか？
-      <br />
-      <input type="text" name="name" size={32} maxlength={32} />島
-      <input type="submit" value="変更する" />
+      <p>
+        (注意)名前の変更には{costChangeName}
+        {unit}かかります。
+      </p>
+      <div class="field">
+        <label>
+          どんな名前に変えますか？
+          <input type="text" name="name" size={32} maxlength={32} />島
+        </label>
+      </div>
+      <button type="submit" class="btn">
+        変更する
+      </button>
     </form>
   );
 }
@@ -180,18 +214,22 @@ export function MyIslandPage({ vm, config, targets, csrfToken, notice }: MyIslan
       <p class="big">
         <span class="island-name">{vm.name}島</span>開発計画
       </p>
-      <IslandInfo detail={vm} money={buildMoneyDisplay(vm.money, config, true)} config={config} />
-      <table class="owner-layout" border={1}>
-        <tr>
-          <td class="input-cell">
-            <CommandForm
-              config={config}
-              defaults={vm.defaults}
-              targets={targets}
-              csrfToken={csrfToken}
-            />
-          </td>
-          <td class="map-cell">
+
+      <section class="card">
+        <h2>島の状況</h2>
+        <div class="table-scroll">
+          <IslandInfo
+            detail={vm}
+            money={buildMoneyDisplay(vm.money, config, true)}
+            config={config}
+          />
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>開発計画</h2>
+        <div class="owner-layout">
+          <div class="owner-map-col">
             <IslandMap
               terrain={vm.terrain}
               mode="owner"
@@ -199,47 +237,62 @@ export function MyIslandPage({ vm, config, targets, csrfToken, notice }: MyIslan
               config={config}
               commands={vm.rawCommands}
             />
-          </td>
-          <td class="command-cell">
+          </div>
+          <div class="owner-form-col">
+            <CommandForm
+              config={config}
+              defaults={vm.defaults}
+              targets={targets}
+              csrfToken={csrfToken}
+            />
+          </div>
+          <div class="owner-commands-col">
             {vm.commands.map((command, index) => (
               <CommandLine index={index} command={command} key={index} />
             ))}
-          </td>
-        </tr>
-      </table>
-      <hr />
-      <p class="big">コメント更新</p>
-      <form action="/my-island/comment" method="post">
-        <input type="hidden" name="_csrf" value={csrfToken} />
-        コメント
-        <input type="text" name="message" size={80} />
-        <input type="submit" value="コメント更新" />
-      </form>
+          </div>
+        </div>
+      </section>
 
-      <hr />
-      <p class="big">名前の変更</p>
-      <NameChangeForm
-        costChangeName={config.costChangeName}
-        unit={config.units.money}
-        csrfToken={csrfToken}
-      />
+      <section class="card">
+        <h2>コメント更新</h2>
+        <form action="/my-island/comment" method="post" class="field-row">
+          <input type="hidden" name="_csrf" value={csrfToken} />
+          <input type="text" name="message" size={80} placeholder="コメント" />
+          <button type="submit" class="btn">
+            コメント更新
+          </button>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2>名前の変更</h2>
+        <NameChangeForm
+          costChangeName={config.costChangeName}
+          unit={config.units.money}
+          csrfToken={csrfToken}
+        />
+      </section>
 
       {config.useLbbs ? (
-        <>
+        <section class="card">
           <LbbsHead islandName={vm.name} />
           <LbbsInput islandId={vm.id} csrfToken={csrfToken} />
           <LbbsDeleteForm lbbsMax={config.lbbsMax} csrfToken={csrfToken} />
-          <LbbsContents posts={vm.lbbs} />
-        </>
+          <div class="table-scroll">
+            <LbbsContents posts={vm.lbbs} />
+          </div>
+        </section>
       ) : (
         ""
       )}
 
-      <hr />
-      <p class="big">
-        <span class="island-name">{vm.name}島</span>の近況
-      </p>
-      <LogList logs={vm.logs} />
+      <section class="card">
+        <p class="big">
+          <span class="island-name">{vm.name}島</span>の近況
+        </p>
+        <LogList logs={vm.logs} />
+      </section>
     </div>
   );
 }
