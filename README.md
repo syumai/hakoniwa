@@ -31,30 +31,47 @@ mise exec -- vp install
 
 ## 開発
 
+v2 (better-auth によるログイン) では、島の作成やログインにはユーザー認証が必須です。ローカル開発では
+「開発ログイン」(任意のメールアドレスでログインできる機能) を使うのが手軽です。
+
+```sh
+cp .env.example .env
+```
+
+`.env` を開き、少なくとも次の 2 つを設定してください。
+
+- `HAKONIWA_AUTH_SECRET`: `openssl rand -base64 32` などで生成した 32 バイト以上のランダム文字列
+- `HAKONIWA_DEV_LOGIN=true`: 開発ログインを有効化
+- `HAKONIWA_ADMIN_EMAILS=自分のメールアドレス`: 管理画面 (`/admin`) に入れるようにする (開発ログインでそのままログインすれば管理者になれる)
+
+mise 経由 (`mise exec -- ...` や `mise activate` 済みのシェル) であれば、リポジトリ直下の `.env` は自動的に読み込まれます。mise を使わない場合は、同じシェルで環境変数を指定してください。
+
+環境変数を変更したときは、開発サーバー (`vp run dev`) を再起動しないと反映されません。
+
 ```sh
 vp run dev
 ```
 
 開発サーバーが http://localhost:5173/ で起動します。初回はデータが未初期化なので、次のいずれかで作成してください。
 
-- ブラウザで `/admin` を開き、マスターパスワードを入力して「新しいデータを作る」を実行する
+- `/login` を開き、開発ログインのフォームに任意のメールアドレス (`HAKONIWA_ADMIN_EMAILS` に指定したもの) を入力してログインし、`/admin` で「新しいデータを作る」を実行する
 - CLI で初期化する: `vp run --filter ./packages/server-node cli -- db init`
 
-管理画面を使うには環境変数 `HAKONIWA_MASTER_PASSWORD` の設定が必要です。`.env.example` を `.env` にコピーし、パスワードを書き換えてください。
+v1 (パスワード認証) のデータベースファイルが残っている場合はスキーマに互換性が無いため、
+`vp run --filter ./packages/server-node cli -- db reset --yes` で一度削除してから
+初期化し直してください (`HAKONIWA_DB_PATH` を新しいパスにして作り直しても構いません)。
 
-```sh
-cp .env.example .env
-```
-
-mise 経由 (`mise exec -- ...` や `mise activate` 済みのシェル) であれば、リポジトリ直下の `.env` は自動的に読み込まれます。mise を使わない場合は、`HAKONIWA_MASTER_PASSWORD=xxxx vp run dev` のように同じシェルで環境変数を指定してください。
-
-環境変数を変更したときは、開発サーバー (`vp run dev`) を再起動しないと反映されません。
+X (Twitter) / Discord ログインを試したい場合は `HAKONIWA_X_CLIENT_ID`/`HAKONIWA_X_CLIENT_SECRET`
+や `HAKONIWA_DISCORD_CLIENT_ID`/`HAKONIWA_DISCORD_CLIENT_SECRET` を設定してください
+(OAuth アプリ側のコールバック URL は `${HAKONIWA_BASE_URL}/api/auth/callback/twitter`・
+`.../callback/discord`)。メールログインは `HAKONIWA_RESEND_API_KEY` を設定しない限り
+コンソールにリンクを出力するだけの開発用 Mailer で動きます。
 
 ## ビルドと起動
 
 ```sh
 vp run build
-HAKONIWA_MASTER_PASSWORD=xxxx node packages/server-node/dist/server.js
+HAKONIWA_AUTH_SECRET=xxxx HAKONIWA_DEV_LOGIN=true HAKONIWA_ADMIN_EMAILS=you@example.com node packages/server-node/dist/server.js
 ```
 
 `packages/server-node/dist/` にサーバー (`server.js`)、CLI (`cli.js`)、静的ファイルが生成されます。
@@ -77,24 +94,33 @@ node packages/server-node/dist/cli.js backup list|create [label]|restore <label>
 
 ## 環境変数
 
-| 環境変数                           | 既定値                              | 用途                                                         |
-| ---------------------------------- | ----------------------------------- | ------------------------------------------------------------ |
-| `PORT`                             | `3000`                              | サーバーの待受ポート                                         |
-| `HAKONIWA_DB_PATH`                 | `./data/hakoniwa.sqlite`            | SQLite データベースファイル                                  |
-| `HAKONIWA_BACKUP_DIR`              | `./data/backups`                    | バックアップの出力先                                         |
-| `HAKONIWA_TURN_CHECK_INTERVAL_SEC` | `60`                                | ターン進行判定のタイマー間隔 (秒)。`0` で無効                |
-| `HAKONIWA_MASTER_PASSWORD`         | (なし)                              | 管理画面のパスワード。全島のパスワードの代用にもなる         |
-| `HAKONIWA_SPECIAL_PASSWORD`        | (なし)                              | 設定変更フォームで使うと資金と食料が最大になる特殊パスワード |
-| `HAKONIWA_DEBUG`                   | `false`                             | `true` でトップに「ターンを進める」ボタンを表示              |
-| `HAKONIWA_ADMIN_ENABLED`           | `true`                              | 管理画面 (`/admin`) の有効 / 無効                            |
-| `HAKONIWA_USE_LBBS`                | `false`                             | 島ごとのローカル掲示板の有効 / 無効                          |
-| `HAKONIWA_UNIT_TIME_SEC`           | `21600`                             | 1 ターンの長さ (秒)                                          |
-| `HAKONIWA_MAX_CATCH_UP_TURNS`      | `1`                                 | 1 回の判定で進める最大ターン数                               |
-| `HAKONIWA_SITE_TITLE`              | `箱庭諸島２`                        | サイトタイトル                                               |
-| `HAKONIWA_ADMIN_NAME`              | `管理者の名前`                      | フッタの管理者名                                             |
-| `HAKONIWA_EMAIL`                   | `管理者@どこか.どこか.どこか`       | フッタの連絡先                                               |
-| `HAKONIWA_BBS_URL`                 | `http://サーバー/掲示板.cgi`        | フッタの掲示板リンク                                         |
-| `HAKONIWA_TOPPAGE_URL`             | `http://サーバー/ホームページ.html` | フッタのトップページリンク                                   |
+| 環境変数                                                        | 既定値                              | 用途                                                                           |
+| --------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------ |
+| `PORT`                                                          | `3000`                              | サーバーの待受ポート                                                           |
+| `HAKONIWA_DB_PATH`                                              | `./data/hakoniwa.sqlite`            | SQLite データベースファイル                                                    |
+| `HAKONIWA_BACKUP_DIR`                                           | `./data/backups`                    | バックアップの出力先                                                           |
+| `HAKONIWA_TURN_CHECK_INTERVAL_SEC`                              | `60`                                | ターン進行判定のタイマー間隔 (秒)。`0` で無効                                  |
+| `HAKONIWA_BASE_URL`                                             | `http://localhost:5173`             | better-auth の baseURL。OAuth コールバックと Origin 検査に使う                 |
+| `HAKONIWA_AUTH_SECRET`                                          | (なし、**必須**)                    | better-auth の secret と CSRF トークンの鍵。`openssl rand -base64 32` 等       |
+| `HAKONIWA_X_CLIENT_ID` / `HAKONIWA_X_CLIENT_SECRET`             | (なし)                              | 両方設定すると X (Twitter) ログインが有効になる                                |
+| `HAKONIWA_DISCORD_CLIENT_ID` / `HAKONIWA_DISCORD_CLIENT_SECRET` | (なし)                              | 両方設定すると Discord ログインが有効になる                                    |
+| `HAKONIWA_DEV_LOGIN`                                            | `false`                             | `true` で開発ログイン (任意のメールアドレスでログイン) を有効化                |
+| `HAKONIWA_ADMIN_EMAILS`                                         | (なし)                              | 管理者とみなすメールアドレス (カンマ区切り)                                    |
+| `HAKONIWA_RESEND_API_KEY`                                       | (なし)                              | メール送信 (Resend)。未設定ならコンソールにリンクを出力するだけの開発用 Mailer |
+| `HAKONIWA_MAIL_FROM`                                            | `hakoniwa@example.com`              | メールの送信元アドレス                                                         |
+| `HAKONIWA_NG_WORDS`                                             | (なし)                              | 追加の NG ワード (カンマ区切り)                                                |
+| `HAKONIWA_DEBUG`                                                | `false`                             | `true` でトップに「ターンを進める」ボタンを表示 (管理者ログイン必須)           |
+| `HAKONIWA_ADMIN_ENABLED`                                        | `true`                              | 管理画面 (`/admin`) の有効 / 無効                                              |
+| `HAKONIWA_USE_LBBS`                                             | `false`                             | 島ごとのローカル掲示板の有効 / 無効                                            |
+| `HAKONIWA_UNIT_TIME_SEC`                                        | `21600`                             | 1 ターンの長さ (秒)                                                            |
+| `HAKONIWA_MAX_CATCH_UP_TURNS`                                   | `1`                                 | 1 回の判定で進める最大ターン数                                                 |
+| `HAKONIWA_SITE_TITLE`                                           | `箱庭諸島２`                        | サイトタイトル                                                                 |
+| `HAKONIWA_ADMIN_NAME`                                           | `管理者の名前`                      | フッタの管理者名                                                               |
+| `HAKONIWA_EMAIL`                                                | `管理者@どこか.どこか.どこか`       | フッタの連絡先                                                                 |
+| `HAKONIWA_BBS_URL`                                              | `http://サーバー/掲示板.cgi`        | フッタの掲示板リンク                                                           |
+| `HAKONIWA_TOPPAGE_URL`                                          | `http://サーバー/ホームページ.html` | フッタのトップページリンク                                                     |
+
+v1 にあった `HAKONIWA_MASTER_PASSWORD` / `HAKONIWA_SPECIAL_PASSWORD` は v2 で廃止されました (パスワード認証を全廃し、better-auth によるログインに置き換えたため)。管理画面へは管理者メールでログインします。資金・食料の最大化は管理画面の操作 (`/admin` の「資金・食料の最大化」) として引き継いでいます。
 
 ## テストと静的検査
 

@@ -1,24 +1,24 @@
 // Perl 版 Map.pm tempPrintIslandHead + islandInfo + islandMap(0) + tempLbbs* + tempRecent(0) の移植。
-// tmp/06-web-routes-and-views.md の views 一覧には明記されていないが、
-// 観光画面 (GET /islands/:id) の合成に必要なため追加した (設計書との差異として報告)。
+// tmp/14-users-auth.md により掲示板の記帳はログイン必須になったため、未ログイン時はログインへの
+// 導線を表示する。
 import type { GameConfig } from "../../core/config.ts";
 import type { IslandPageVM } from "../../app/view-models.ts";
-import type { FormDefaults } from "../middleware/defaults-cookie.ts";
 import { IslandInfo } from "./island-info.tsx";
 import { IslandMap } from "./island-map.tsx";
-import { LbbsContents, LbbsHead, LbbsInputVisitor } from "./lbbs.tsx";
+import { LbbsContents, LbbsHead, LbbsInput } from "./lbbs.tsx";
 import { LogList } from "./logs.tsx";
 import { BackLink, Notice } from "./messages.tsx";
 
 export interface IslandPageProps {
   vm: IslandPageVM;
   config: GameConfig;
-  defaults: FormDefaults;
+  /** ログイン中のみ渡ってくる (未ログインなら記帳フォームの代わりにログイン導線を出す)。 */
+  csrfToken?: string | undefined;
   notice?: string;
 }
 
 /** 観光画面。Perl 版 printIslandMain。 */
-export function IslandPage({ vm, config, defaults, notice }: IslandPageProps) {
+export function IslandPage({ vm, config, csrfToken, notice }: IslandPageProps) {
   return (
     <div class="island-page">
       {notice !== undefined ? <Notice message={notice} /> : ""}
@@ -32,7 +32,13 @@ export function IslandPage({ vm, config, defaults, notice }: IslandPageProps) {
       {config.useLbbs ? (
         <>
           <LbbsHead islandName={vm.name} />
-          <LbbsInputVisitor islandId={vm.id} defaultName={defaults.lbbsName ?? ""} />
+          {csrfToken !== undefined ? (
+            <LbbsInput islandId={vm.id} csrfToken={csrfToken} />
+          ) : (
+            <p>
+              記帳するには<a href="/login">ログイン</a>してください。
+            </p>
+          )}
           <LbbsContents posts={vm.lbbs} />
         </>
       ) : (

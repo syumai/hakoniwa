@@ -34,6 +34,9 @@ const HELP_TEXT = `hakoniwa CLI
 コマンド:
   db init                新しいデータを作る
   db reset --yes         現役データを削除する (要 --yes)
+                          ※ v1 (パスワード認証) の DB は v2 (better-auth) のスキーマと
+                            互換性が無いため、v1 の DB ファイルを使い続けている場合は
+                            このコマンドで一度リセットしてから db init してください。
   db status              現役データの状態を表示する
   turn check             期限が来ていればターンを進める
   turn advance           期限に関係なく強制的に 1 ターン進める

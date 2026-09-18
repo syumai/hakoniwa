@@ -1,13 +1,14 @@
-// Perl 版 Map.pm tempOwner/tempCommand の移植。
+// Perl 版 Map.pm tempOwner/tempCommand の移植。tmp/14-users-auth.md によりパスワード欄を撤去し、
+// 名前変更フォーム (旧 POST /settings) をこの画面に統合した (GameService.changeName は
+// actor 自身の島にしか効かないため、URL/フォームに islandId を含める必要がなくなったため)。
 import type { GameConfig } from "../../core/config.ts";
 import { commandList } from "../../core/constants.ts";
 import type { FormattedCommand } from "../../core/commands/format.ts";
 import type { IslandSelectVM, OwnerPageVM } from "../../app/view-models.ts";
 import { buildMoneyDisplay } from "../../app/view-models.ts";
-import type { FormDefaults } from "../middleware/defaults-cookie.ts";
 import { IslandInfo } from "./island-info.tsx";
 import { IslandMap } from "./island-map.tsx";
-import { LbbsContents, LbbsHead, LbbsInputOwner } from "./lbbs.tsx";
+import { LbbsContents, LbbsDeleteForm, LbbsHead, LbbsInput } from "./lbbs.tsx";
 import { LogList } from "./logs.tsx";
 import { Notice } from "./messages.tsx";
 
@@ -28,25 +29,20 @@ function costLabel(cost: number, config: GameConfig): string {
 
 /** 計画入力フォーム。Perl 版 tempOwner のフォーム部分。 */
 function CommandForm({
-  islandId,
-  password,
   config,
   defaults,
   targets,
+  csrfToken,
 }: {
-  islandId: number;
-  password: string;
   config: GameConfig;
-  defaults: FormDefaults;
+  defaults: OwnerPageVM["defaults"];
   targets: readonly IslandSelectVM[];
+  csrfToken: string;
 }) {
   return (
-    <form action={`/islands/${islandId}/commands`} method="post">
+    <form action="/my-island/commands" method="post">
+      <input type="hidden" name="_csrf" value={csrfToken} />
       <input type="submit" value="計画送信" />
-      <hr />
-      <b>パスワード</b>
-      <br />
-      <input type="password" name="password" size={32} maxlength={32} value={password} />
       <hr />
       <b>計画番号</b>
       <select name="number">
@@ -141,22 +137,44 @@ function CommandLine({ index, command }: { index: number; command: FormattedComm
   );
 }
 
-export interface OwnerPageProps {
+/** 名前変更フォーム。旧 POST /settings をこの画面に統合したもの。 */
+function NameChangeForm({
+  costChangeName,
+  unit,
+  csrfToken,
+}: {
+  costChangeName: number;
+  unit: string;
+  csrfToken: string;
+}) {
+  return (
+    <form action="/my-island/name" method="post">
+      <input type="hidden" name="_csrf" value={csrfToken} />
+      (注意)名前の変更には{costChangeName}
+      {unit}かかります。
+      <br />
+      どんな名前に変えますか？
+      <br />
+      <input type="text" name="name" size={32} maxlength={32} />島
+      <input type="submit" value="変更する" />
+    </form>
+  );
+}
+
+export interface MyIslandPageProps {
   vm: OwnerPageVM;
   config: GameConfig;
-  defaults: FormDefaults;
-  /** 開発画面を開いたときに送られたパスワード。各フォームに持ち回る (Cookie には保存しない)。 */
-  password: string;
   /** 「目標の島」セレクト用の島一覧。 */
   targets: readonly IslandSelectVM[];
+  csrfToken: string;
   notice?: string;
 }
 
-/** 開発画面。Perl 版 tempOwner + tempLbbs* + tempRecent(1)。 */
-export function OwnerPage({ vm, config, defaults, password, targets, notice }: OwnerPageProps) {
+/** 開発画面。Perl 版 tempOwner + tempLbbs* + tempRecent(1)。旧 web/views/owner.tsx。 */
+export function MyIslandPage({ vm, config, targets, csrfToken, notice }: MyIslandPageProps) {
   return (
     <div class="owner-page">
-      {/* 座標選択の補助スクリプト (owner.tsx 内でのみ必要なため、この画面だけで読み込む)。 */}
+      {/* 座標選択の補助スクリプト (この画面だけで読み込む)。 */}
       <script src="/owner.js" defer></script>
       {notice !== undefined ? <Notice message={notice} /> : ""}
       <p class="big">
@@ -167,11 +185,10 @@ export function OwnerPage({ vm, config, defaults, password, targets, notice }: O
         <tr>
           <td class="input-cell">
             <CommandForm
-              islandId={vm.id}
-              password={password}
               config={config}
-              defaults={defaults}
+              defaults={vm.defaults}
               targets={targets}
+              csrfToken={csrfToken}
             />
           </td>
           <td class="map-cell">
@@ -192,24 +209,26 @@ export function OwnerPage({ vm, config, defaults, password, targets, notice }: O
       </table>
       <hr />
       <p class="big">コメント更新</p>
-      <form action={`/islands/${vm.id}/comment`} method="post">
+      <form action="/my-island/comment" method="post">
+        <input type="hidden" name="_csrf" value={csrfToken} />
         コメント
         <input type="text" name="message" size={80} />
-        <br />
-        パスワード
-        <input type="password" name="password" size={32} maxlength={32} value={password} />
         <input type="submit" value="コメント更新" />
       </form>
+
+      <hr />
+      <p class="big">名前の変更</p>
+      <NameChangeForm
+        costChangeName={config.costChangeName}
+        unit={config.units.money}
+        csrfToken={csrfToken}
+      />
 
       {config.useLbbs ? (
         <>
           <LbbsHead islandName={vm.name} />
-          <LbbsInputOwner
-            islandId={vm.id}
-            password={password}
-            defaultName={defaults.lbbsName ?? ""}
-            lbbsMax={config.lbbsMax}
-          />
+          <LbbsInput islandId={vm.id} csrfToken={csrfToken} />
+          <LbbsDeleteForm lbbsMax={config.lbbsMax} csrfToken={csrfToken} />
           <LbbsContents posts={vm.lbbs} />
         </>
       ) : (

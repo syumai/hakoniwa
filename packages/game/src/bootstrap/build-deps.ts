@@ -130,7 +130,7 @@ export function buildDeps(input: BuildDepsInput): BuiltDeps {
     mailerIsConsole: isMailerConsole(mailer),
   });
 
-  const webDeps: WebDeps = { gameService, turnService, adminService, config, clock };
+  const webDeps: WebDeps = { gameService, turnService, adminService, config, clock, auth, logger };
   const app = createApp(webDeps);
 
   return { repo, auth, mailer, authMethods, gameService, turnService, adminService, config, app };

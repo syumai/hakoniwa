@@ -53,11 +53,11 @@ export function errorMessage(kind: AppErrorKind): string {
     case "forbidden":
       return "この操作を行う権限がありません。";
     case "already_has_island":
-      return "すでに島を発見しています。1人1島までです。";
+      return "島はひとり1つまでです。";
     case "no_island":
       return "まだ島を発見していません。";
     case "ng_word":
-      return "その内容は使えません。";
+      return "その名前/内容は使えません。";
     default: {
       const exhaustive: never = kind;
       return exhaustive;
@@ -87,9 +87,12 @@ export function errorStatus(kind: AppErrorKind): 400 | 401 | 403 | 404 | 409 | 5
     case "login_required":
       return 401;
     case "forbidden":
-    case "already_has_island":
     case "no_island":
       return 403;
+    // 設計書との差異: tmp/14-users-auth.md には無いが、Phase 6b の指示により
+    // 「島はひとり1つまでです。」は 409 (island_full と同じ「もう作れない」系の意味) にした。
+    case "already_has_island":
+      return 409;
     default: {
       const exhaustive: never = kind;
       return exhaustive;

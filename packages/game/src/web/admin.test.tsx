@@ -1,20 +1,52 @@
 import { describe, expect, it } from "vitest";
-import { postForm, setupTestApp } from "./test-helpers.ts";
+import { loginAs, postForm, setupTestApp } from "./test-helpers.ts";
+import type { TestApp } from "./test-helpers.ts";
 
-// Phase 6a での差異: 管理画面のマスターパスワード認証を撤去した (14-users-auth.md)。
-// better-auth のセッション + isAdmin 判定への置き換えは Phase 6b (session-middleware,
-// routes/admin.tsx の書き直し) で行うため、それまではこのテスト群を丸ごと skip する。
-// 6b で `/admin/*` を実 DB + 実セッションで検証するテストに書き直すこと。
-describe.skip("管理画面 (/admin)", () => {
+const ADMIN_EMAIL = "admin@example.com";
+
+async function loginAdmin(testApp: TestApp) {
+  return loginAs(testApp, { id: "admin1", name: "かんりしゃ", email: ADMIN_EMAIL });
+}
+
+describe("管理画面 (/admin)", () => {
   it("adminEnabled=false なら GET /admin も 404", async () => {
     const { app } = setupTestApp({ adminEnabled: false });
     const res = await app.request("/admin");
     expect(res.status).toBe(404);
   });
 
-  it("GET /admin は未認証で 200 表示できる", async () => {
-    const { app } = setupTestApp({ masterPassword: "master1" });
-    const res = await app.request("/admin");
+  it("未ログインでの GET /admin は /login へ 302", async () => {
+    const { app } = setupTestApp();
+    const res = await app.request("/admin", { redirect: "manual" });
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/login");
+  });
+
+  it("管理者以外の GET /admin は 403", async () => {
+    const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL] });
+    const auth = await loginAs(testApp, { id: "u1", name: "いっぱん", email: "u1@example.com" });
+    const res = await testApp.app.request("/admin", { headers: { cookie: auth.cookie } });
+    expect(res.status).toBe(403);
+  });
+
+  it("管理者以外の POST /admin/reset は 403", async () => {
+    const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL] });
+    const auth = await loginAs(testApp, { id: "u1", name: "いっぱん", email: "u1@example.com" });
+    const res = await postForm(
+      testApp.app,
+      "/admin/reset",
+      { _csrf: auth.csrfToken },
+      {
+        cookie: auth.cookie,
+      },
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it("管理者は GET /admin が 200 でメンテナンスツールを表示する", async () => {
+    const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL] });
+    const admin = await loginAdmin(testApp);
+    const res = await testApp.app.request("/admin", { headers: { cookie: admin.cookie } });
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain("メンテナンスツール");
@@ -22,85 +54,163 @@ describe.skip("管理画面 (/admin)", () => {
   });
 
   it("未初期化なら「新しいデータを作る」を表示する", async () => {
-    const { app } = setupTestApp({ masterPassword: "master1", skipInit: true });
-    const res = await app.request("/admin");
+    const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL], skipInit: true });
+    const admin = await loginAdmin(testApp);
+    const res = await testApp.app.request("/admin", { headers: { cookie: admin.cookie } });
     const html = await res.text();
     expect(html).toContain("新しいデータを作る");
   });
 
-  it("POST /admin/init: 誤パスワードは 403", async () => {
-    const { app } = setupTestApp({ masterPassword: "master1", skipInit: true });
-    const res = await postForm(app, "/admin/init", { password: "wrong" });
+  it("_csrf なしの POST /admin/init は 403", async () => {
+    const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL], skipInit: true });
+    const admin = await loginAdmin(testApp);
+    const res = await postForm(testApp.app, "/admin/init", {}, { cookie: admin.cookie });
     expect(res.status).toBe(403);
-    expect(await res.text()).toContain("パスワードが違います");
   });
 
-  it("マスターパスワード未設定時: POST /admin/init は 403 で未設定メッセージを表示する", async () => {
-    const { app } = setupTestApp({ skipInit: true });
-    const res = await postForm(app, "/admin/init", { password: "anything" });
-    expect(res.status).toBe(403);
-    const html = await res.text();
-    expect(html).toContain("マスターパスワードが設定されていません");
-    expect(html).toContain("HAKONIWA_MASTER_PASSWORD");
-    expect(html).not.toContain("パスワードが違います");
-  });
-
-  it("マスターパスワード未設定時: GET /admin に注意文が常時表示される", async () => {
-    const { app } = setupTestApp();
-    const res = await app.request("/admin");
+  it("POST /admin/init: 管理者は初期化できる", async () => {
+    const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL], skipInit: true });
+    const admin = await loginAdmin(testApp);
+    const res = await postForm(
+      testApp.app,
+      "/admin/init",
+      { _csrf: admin.csrfToken },
+      {
+        cookie: admin.cookie,
+      },
+    );
     expect(res.status).toBe(200);
-    const html = await res.text();
-    expect(html).toContain("マスターパスワードが設定されていません");
-    expect(html).toContain("HAKONIWA_MASTER_PASSWORD");
-    // フォーム自体は表示されたままである
-    expect(html).toContain("ターンを進める");
-  });
-
-  it("POST /admin/init: 正しいパスワードで初期化できる", async () => {
-    const { app, repo } = setupTestApp({ masterPassword: "master1", skipInit: true });
-    const res = await postForm(app, "/admin/init", { password: "master1" });
-    expect(res.status).toBe(200);
-    expect(repo.isInitialized()).toBe(true);
-    expect(repo.getMeta().turn).toBe(1);
+    expect(testApp.repo.isInitialized()).toBe(true);
+    expect(testApp.repo.getMeta().turn).toBe(1);
   });
 
   it("POST /admin/turn: ターンを進められる", async () => {
-    const { app, repo } = setupTestApp({ masterPassword: "master1" });
-    const res = await postForm(app, "/admin/turn", { password: "master1" });
+    const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL] });
+    const admin = await loginAdmin(testApp);
+    const res = await postForm(
+      testApp.app,
+      "/admin/turn",
+      { _csrf: admin.csrfToken },
+      {
+        cookie: admin.cookie,
+      },
+    );
     expect(res.status).toBe(200);
-    expect(repo.getMeta().turn).toBe(2);
+    expect(testApp.repo.getMeta().turn).toBe(2);
   });
 
   it("POST /admin/reset: 現役データを削除できる", async () => {
-    const { app, repo } = setupTestApp({ masterPassword: "master1" });
-    const res = await postForm(app, "/admin/reset", { password: "master1" });
+    const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL] });
+    const admin = await loginAdmin(testApp);
+    const res = await postForm(
+      testApp.app,
+      "/admin/reset",
+      { _csrf: admin.csrfToken },
+      {
+        cookie: admin.cookie,
+      },
+    );
     expect(res.status).toBe(200);
-    expect(repo.isInitialized()).toBe(false);
+    expect(testApp.repo.isInitialized()).toBe(false);
   });
 
   it("POST /admin/last-time: unix 秒指定で変更できる", async () => {
-    const { app, repo } = setupTestApp({ masterPassword: "master1" });
-    const res = await postForm(app, "/admin/last-time", { password: "master1", unix: 12345 });
+    const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL] });
+    const admin = await loginAdmin(testApp);
+    const res = await postForm(
+      testApp.app,
+      "/admin/last-time",
+      { unix: 12345, _csrf: admin.csrfToken },
+      { cookie: admin.cookie },
+    );
     expect(res.status).toBe(200);
-    expect(repo.getMeta().lastTime).toBe(12345);
+    expect(testApp.repo.getMeta().lastTime).toBe(12345);
   });
 
   it("POST /admin/backups → restore で「復元しました」を表示する", async () => {
-    const { app } = setupTestApp({ masterPassword: "master1" });
-    const create = await postForm(app, "/admin/backups", { password: "master1", label: "b1" });
+    const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL] });
+    const admin = await loginAdmin(testApp);
+    const create = await postForm(
+      testApp.app,
+      "/admin/backups",
+      { label: "b1", _csrf: admin.csrfToken },
+      { cookie: admin.cookie },
+    );
     expect(create.status).toBe(200);
     expect(await create.text()).toContain("バックアップを作成しました");
 
-    const restore = await postForm(app, "/admin/backups/b1/restore", { password: "master1" });
+    const restore = await postForm(
+      testApp.app,
+      "/admin/backups/b1/restore",
+      { _csrf: admin.csrfToken },
+      { cookie: admin.cookie },
+    );
     expect(restore.status).toBe(200);
     expect(await restore.text()).toContain("復元しました。再読み込みしてください");
   });
 
   it("POST /admin/backups/:label/delete でバックアップを削除できる", async () => {
-    const { app } = setupTestApp({ masterPassword: "master1" });
-    await postForm(app, "/admin/backups", { password: "master1", label: "b1" });
-    const del = await postForm(app, "/admin/backups/b1/delete", { password: "master1" });
+    const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL] });
+    const admin = await loginAdmin(testApp);
+    await postForm(
+      testApp.app,
+      "/admin/backups",
+      { label: "b1", _csrf: admin.csrfToken },
+      {
+        cookie: admin.cookie,
+      },
+    );
+    const del = await postForm(
+      testApp.app,
+      "/admin/backups/b1/delete",
+      { _csrf: admin.csrfToken },
+      { cookie: admin.cookie },
+    );
     expect(del.status).toBe(200);
     expect(await del.text()).toContain("バックアップを削除しました");
+  });
+
+  it("POST /admin/auth-methods: ログイン方法のトグルを変更できる", async () => {
+    const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL] });
+    const admin = await loginAdmin(testApp);
+    expect(testApp.adminService.getAuthMethods().enabled.email).toBe(true);
+
+    const res = await postForm(
+      testApp.app,
+      "/admin/auth-methods",
+      { _csrf: admin.csrfToken },
+      {
+        cookie: admin.cookie,
+      },
+    );
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("ログイン方法の設定を変更しました");
+    expect(testApp.adminService.getAuthMethods().enabled.email).toBe(false);
+  });
+
+  it("POST /admin/maximize: 島の資金・食料を最大化できる", async () => {
+    const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL] });
+    const owner = await loginAs(testApp, { id: "u1", name: "しまぬし", email: "u1@example.com" });
+    await postForm(
+      testApp.app,
+      "/islands",
+      { name: "てすとじま", _csrf: owner.csrfToken },
+      {
+        cookie: owner.cookie,
+      },
+    );
+
+    const admin = await loginAdmin(testApp);
+    const res = await postForm(
+      testApp.app,
+      "/admin/maximize",
+      { id: 1, _csrf: admin.csrfToken },
+      { cookie: admin.cookie },
+    );
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("資金・食料を最大化しました");
+    const island = testApp.repo.findIsland(1);
+    expect(island?.money).toBe(9999);
+    expect(island?.food).toBe(9999);
   });
 });

@@ -1,22 +1,29 @@
-// tmp/08-turn-trigger-admin-cli.md 「デバッグ用 POST /turn」節。config.debug=false なら app.ts が
-// このルーターをマウントしないため 404 になる。
+// tmp/08-turn-trigger-admin-cli.md 「デバッグ用 POST /turn」節。v2 (14) では管理者セッションも必須。
+// config.debug=false なら app.tsx がこのルーターをマウントしないため 404 になる。
 import { Hono } from "hono";
+import { AppError } from "../../app/errors.ts";
 import type { WebDeps } from "../deps.ts";
-import type { DefaultsCookieEnv } from "../middleware/defaults-cookie.ts";
-import { Layout } from "../views/layout.tsx";
+import type { AppEnv } from "../env.ts";
+import { renderPage } from "./render.tsx";
 import { TopPage } from "../views/top.tsx";
 
-export function createDebugRoutes(deps: WebDeps): Hono<DefaultsCookieEnv> {
-  const app = new Hono<DefaultsCookieEnv>();
+export function createDebugRoutes(deps: WebDeps): Hono<AppEnv> {
+  const app = new Hono<AppEnv>();
 
   app.post("/turn", (c) => {
+    const user = c.get("user");
+    if (user === undefined) {
+      throw new AppError("login_required");
+    }
+    if (!user.isAdmin) {
+      throw new AppError("forbidden");
+    }
     deps.turnService.advanceTurn(deps.clock.now());
-    const vm = deps.gameService.getTopPage(undefined);
-    const defaults = c.get("defaults");
-    return c.html(
-      <Layout config={deps.config.game}>
-        <TopPage vm={vm} config={deps.config.game} defaults={defaults} />
-      </Layout>,
+    const vm = deps.gameService.getTopPage(user);
+    return renderPage(
+      c,
+      deps,
+      <TopPage vm={vm} config={deps.config.game} csrfToken={c.get("csrfToken")} />,
     );
   });
 

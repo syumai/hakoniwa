@@ -7,4 +7,11 @@ import { loadNodeConfig } from "./config.ts";
 const config = loadNodeConfig();
 const deps = composeNode(config);
 
+// tmp/14-users-auth.md 「開発ログインの保護」節: 開発サーバーでも有効化されていることが分かるように警告する。
+if (config.auth.devLogin) {
+  console.warn(
+    "hakoniwa: HAKONIWA_DEV_LOGIN=true です。開発ログイン (任意のメールアドレスでログインできる機能) が有効になっています。本番環境では無効にしてください。",
+  );
+}
+
 export default deps.app;

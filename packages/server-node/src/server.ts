@@ -39,6 +39,13 @@ function main(): void {
   const deps = composeNode(config);
   const publicDir = resolvePublicDir();
 
+  // tmp/14-users-auth.md 「開発ログインの保護」節: 本番で誤って有効化されないよう起動時に警告する。
+  if (config.auth.devLogin) {
+    console.warn(
+      "hakoniwa: HAKONIWA_DEV_LOGIN=true です。開発ログイン (任意のメールアドレスでログインできる機能) が有効になっています。本番環境では無効にしてください。",
+    );
+  }
+
   // Adapter 側で静的ルートを登録してから、ランタイム非依存の Hono app (`deps.app`) をマウントする。
   const root = new Hono();
   root.use("/images/*", serveStatic({ root: publicDir }));

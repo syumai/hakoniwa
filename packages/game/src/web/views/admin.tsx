@@ -1,13 +1,16 @@
 // Perl 版 Maintenance.pm (hako-mente.cgi) mainMode/dataPrint の移植。
-import type { AdminStatus } from "../../app/admin-service.ts";
+// tmp/14-users-auth.md によりパスワード欄を撤去し (`_csrf` で保護)、
+// ログイン方法のトグルと資金・食料最大化フォームを追加した。
+import type { AdminStatus, AuthMethodsVM } from "../../app/admin-service.ts";
 import type { BackupInfo } from "../../app/ports.ts";
+import type { IslandSelectVM } from "../../app/view-models.ts";
 
 /** unix 秒 → ローカル日時文字列。Perl 版 timeToString。 */
 function timeToString(unixSeconds: number): string {
   return new Date(unixSeconds * 1000).toLocaleString("ja-JP");
 }
 
-function BackupRow({ backup }: { backup: BackupInfo }) {
+function BackupRow({ backup, csrfToken }: { backup: BackupInfo; csrfToken: string }) {
   return (
     <div class="backup-row">
       <h3>バックアップ: {backup.label}</h3>
@@ -19,20 +22,111 @@ function BackupRow({ backup }: { backup: BackupInfo }) {
         (1970年1月1日から{backup.createdAt}秒)
       </p>
       <form action={`/admin/backups/${backup.label}/restore`} method="post">
-        <b>パスワード:</b>
-        <input type="password" name="password" size={32} maxlength={32} />
+        <input type="hidden" name="_csrf" value={csrfToken} />
         <input type="submit" value="このデータを現役に" />
       </form>
       <form action={`/admin/backups/${backup.label}/delete`} method="post">
-        <b>パスワード:</b>
-        <input type="password" name="password" size={32} maxlength={32} />
+        <input type="hidden" name="_csrf" value={csrfToken} />
         <input type="submit" value="このデータを削除" />
       </form>
     </div>
   );
 }
 
-export function AdminPage({ status, notice }: { status: AdminStatus; notice: string | undefined }) {
+/** ログイン方法 (X/Discord/メール) の ON/OFF トグル。tmp/14-users-auth.md 「ログイン方法の設定」節。 */
+function AuthMethodsForm({
+  authMethods,
+  csrfToken,
+}: {
+  authMethods: AuthMethodsVM;
+  csrfToken: string;
+}) {
+  return (
+    <form action="/admin/auth-methods" method="post" class="auth-methods-form">
+      <input type="hidden" name="_csrf" value={csrfToken} />
+      <table border={1}>
+        <tr>
+          <th>ログイン方法</th>
+          <th>設定状況</th>
+          <th>有効</th>
+        </tr>
+        <tr>
+          <td>X (Twitter)</td>
+          <td>{authMethods.configured.x ? "設定済み" : "未設定"}</td>
+          <td>
+            <input
+              type="checkbox"
+              name="x"
+              checked={authMethods.enabled.x}
+              disabled={!authMethods.configured.x}
+            />
+          </td>
+        </tr>
+        <tr>
+          <td>Discord</td>
+          <td>{authMethods.configured.discord ? "設定済み" : "未設定"}</td>
+          <td>
+            <input
+              type="checkbox"
+              name="discord"
+              checked={authMethods.enabled.discord}
+              disabled={!authMethods.configured.discord}
+            />
+          </td>
+        </tr>
+        <tr>
+          <td>メール{authMethods.mailerIsConsole ? "(開発用: ログ出力のみ)" : ""}</td>
+          <td>{authMethods.configured.email ? "設定済み" : "未設定"}</td>
+          <td>
+            <input
+              type="checkbox"
+              name="email"
+              checked={authMethods.enabled.email}
+              disabled={!authMethods.configured.email}
+            />
+          </td>
+        </tr>
+      </table>
+      <input type="submit" value="ログイン方法の設定を保存" />
+    </form>
+  );
+}
+
+/** 資金・食料の最大化。tmp/14-users-auth.md 「決定事項」6 (特殊パスワードの代わり)。 */
+function MaximizeForm({
+  islands,
+  csrfToken,
+}: {
+  islands: readonly IslandSelectVM[];
+  csrfToken: string;
+}) {
+  if (islands.length === 0) {
+    return <></>;
+  }
+  return (
+    <form action="/admin/maximize" method="post">
+      <input type="hidden" name="_csrf" value={csrfToken} />
+      <select name="id">
+        {islands.map((island) => (
+          <option value={island.id} key={island.id}>
+            {island.name}島
+          </option>
+        ))}
+      </select>
+      <input type="submit" value="資金・食料を最大にする" />
+    </form>
+  );
+}
+
+export interface AdminPageProps {
+  status: AdminStatus;
+  authMethods: AuthMethodsVM;
+  islands: readonly IslandSelectVM[];
+  csrfToken: string;
+  notice: string | undefined;
+}
+
+export function AdminPage({ status, authMethods, islands, csrfToken, notice }: AdminPageProps) {
   return (
     <div class="admin-page">
       <h1>箱島２ メンテナンスツール</h1>
@@ -52,54 +146,56 @@ export function AdminPage({ status, notice }: { status: AdminStatus; notice: str
             <b>最終更新時間(秒数表示)</b>:1970年1月1日から{status.lastTime}秒
           </p>
           <form action="/admin/reset" method="post">
-            <b>パスワード:</b>
-            <input type="password" name="password" size={32} maxlength={32} />
+            <input type="hidden" name="_csrf" value={csrfToken} />
             <input type="submit" value="このデータを削除" />
           </form>
 
           <h3>最終更新時間の変更</h3>
           <form action="/admin/last-time" method="post">
+            <input type="hidden" name="_csrf" value={csrfToken} />
             <input type="datetime-local" name="datetime" />
-            <b>パスワード:</b>
-            <input type="password" name="password" size={32} maxlength={32} />
             <input type="submit" value="変更" />
           </form>
           <form action="/admin/last-time" method="post">
+            <input type="hidden" name="_csrf" value={csrfToken} />
             1970年1月1日から
-            <input type="text" size={32} name="unix" />秒<b>パスワード:</b>
-            <input type="password" name="password" size={32} maxlength={32} />
+            <input type="text" size={32} name="unix" />秒
             <input type="submit" value="秒指定で変更" />
           </form>
 
           <h3>ターン進行</h3>
           <form action="/admin/turn" method="post">
-            <b>パスワード:</b>
-            <input type="password" name="password" size={32} maxlength={32} />
+            <input type="hidden" name="_csrf" value={csrfToken} />
             <input type="submit" value="ターンを進める" />
           </form>
+
+          <h3>資金・食料の最大化</h3>
+          <MaximizeForm islands={islands} csrfToken={csrfToken} />
         </div>
       ) : (
         <div class="current-data">
           <h2>現役データ</h2>
           <form action="/admin/init" method="post">
-            <b>パスワード:</b>
-            <input type="password" name="password" size={32} maxlength={32} />
+            <input type="hidden" name="_csrf" value={csrfToken} />
             <input type="submit" value="新しいデータを作る" />
           </form>
         </div>
       )}
 
       <hr />
+      <h2>ログイン方法</h2>
+      <AuthMethodsForm authMethods={authMethods} csrfToken={csrfToken} />
+
+      <hr />
       <h2>バックアップ一覧</h2>
       <form action="/admin/backups" method="post">
+        <input type="hidden" name="_csrf" value={csrfToken} />
         ラベル(省略可)
         <input type="text" name="label" size={32} />
-        <b>パスワード:</b>
-        <input type="password" name="password" size={32} maxlength={32} />
         <input type="submit" value="バックアップを作成" />
       </form>
       {status.backups.map((backup) => (
-        <BackupRow backup={backup} key={backup.label} />
+        <BackupRow backup={backup} csrfToken={csrfToken} key={backup.label} />
       ))}
     </div>
   );
