@@ -32,13 +32,13 @@
         "description": "管理者とみなすメールアドレス (カンマ区切り)。管理画面 (`/admin`) に入るために使います。X ログインはメールアドレスを返さないため、管理者にする予定のアカウントは Discord ログインかメールログインのアドレスを指定してください。"
       },
       "HAKONIWA_X_CLIENT_ID": {
-        "description": "X (Twitter) ログインを有効にする場合に指定します。[X Developer Portal](https://developer.x.com/) でアプリを作成し、コールバック URL に `<公開URL>/api/auth/callback/twitter` を登録してください。`HAKONIWA_X_CLIENT_SECRET` と両方揃えると有効になります。"
+        "description": "X (Twitter) ログインを有効にする場合に指定します。[X Developer Portal](https://developer.x.com/) でアプリを作成し、コールバック URL として `https://あなたのWorkerのURL/api/auth/callback/twitter` を登録してください。`HAKONIWA_X_CLIENT_SECRET` と両方揃えると有効になります。"
       },
       "HAKONIWA_X_CLIENT_SECRET": {
         "description": "X (Twitter) ログイン用のクライアントシークレット。`HAKONIWA_X_CLIENT_ID` を参照してください。"
       },
       "HAKONIWA_DISCORD_CLIENT_ID": {
-        "description": "Discord ログインを有効にする場合に指定します。[Discord Developer Portal](https://discord.com/developers/applications) でアプリを作成し、コールバック URL に `<公開URL>/api/auth/callback/discord` を登録してください。`HAKONIWA_DISCORD_CLIENT_SECRET` と両方揃えると有効になります。"
+        "description": "Discord ログインを有効にする場合に指定します。[Discord Developer Portal](https://discord.com/developers/applications) でアプリを作成し、コールバック URL として `https://あなたのWorkerのURL/api/auth/callback/discord` を登録してください。`HAKONIWA_DISCORD_CLIENT_SECRET` と両方揃えると有効になります。"
       },
       "HAKONIWA_DISCORD_CLIENT_SECRET": {
         "description": "Discord ログイン用のクライアントシークレット。`HAKONIWA_DISCORD_CLIENT_ID` を参照してください。"
