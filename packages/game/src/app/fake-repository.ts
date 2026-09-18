@@ -10,7 +10,9 @@ import type {
   IslandSummary,
   ListLogsQuery,
   Logger,
-  PasswordHasher,
+  Mailer,
+  SettingsRepository,
+  UserPrefs,
 } from "./ports.ts";
 import type { HistoryEntry, Island, LbbsPost, LogEntry } from "../core/types.ts";
 
@@ -28,6 +30,7 @@ function toSummary(island: Island): IslandSummary {
   return {
     id: island.id,
     name: island.name,
+    ownerUserId: island.ownerUserId,
     comment: island.comment,
     score: island.score,
     absent: island.absent,
@@ -55,6 +58,7 @@ export class FakeGameRepository implements GameRepository {
   #order: number[] = [];
   #logs: LogEntry[] = [];
   #history: HistoryEntry[] = [];
+  #userPrefs = new Map<string, UserPrefs>();
 
   transaction<T>(fn: () => T): T {
     return fn();
@@ -100,6 +104,16 @@ export class FakeGameRepository implements GameRepository {
     for (const id of this.#order) {
       const island = this.#mustGet(id);
       if (island.name === name) {
+        return toSummary(island);
+      }
+    }
+    return undefined;
+  }
+
+  findIslandByOwner(userId: string): IslandSummary | undefined {
+    for (const id of this.#order) {
+      const island = this.#mustGet(id);
+      if (island.ownerUserId === userId) {
         return toSummary(island);
       }
     }
@@ -192,23 +206,21 @@ export class FakeGameRepository implements GameRepository {
     this.#history = [];
   }
 
+  getUserPrefs(userId: string): UserPrefs | undefined {
+    const prefs = this.#userPrefs.get(userId);
+    return prefs === undefined ? undefined : { ...prefs };
+  }
+
+  setUserPrefs(userId: string, prefs: UserPrefs): void {
+    this.#userPrefs.set(userId, { ...prefs });
+  }
+
   #mustGet(id: number): Island {
     const island = this.#islands.get(id);
     if (island === undefined) {
       throw new Error(`FakeGameRepository: island not found: ${id}`);
     }
     return island;
-  }
-}
-
-/** 平文に `plain:` を付けるだけのテスト用ハッシャー。 */
-export class FakePasswordHasher implements PasswordHasher {
-  async hash(p: string): Promise<string> {
-    return `plain:${p}`;
-  }
-
-  async verify(p: string, h: string): Promise<boolean> {
-    return h === `plain:${p}`;
   }
 }
 
@@ -262,6 +274,38 @@ export class FakeBackupStore implements BackupStore {
     while (this.items.length > keep) {
       this.items.shift();
     }
+  }
+}
+
+/** テスト用のインメモリ設定リポジトリ。 */
+export class FakeSettingsRepository implements SettingsRepository {
+  #store = new Map<string, string>();
+
+  get(key: string): string | undefined {
+    return this.#store.get(key);
+  }
+
+  set(key: string, value: string): void {
+    this.#store.set(key, value);
+  }
+}
+
+/** 送信内容を記録するだけのテスト用メーラー。 */
+export class FakeMailer implements Mailer {
+  readonly sent: Array<{ to: string; subject: string; text: string }> = [];
+
+  async send(mail: { to: string; subject: string; text: string }): Promise<void> {
+    this.sent.push(mail);
+  }
+
+  /** 最後に送ったメール本文からマジックリンクの URL を取り出す (テスト用の簡易ヘルパ)。 */
+  lastUrl(): string | undefined {
+    const last = this.sent[this.sent.length - 1];
+    if (last === undefined) {
+      return undefined;
+    }
+    const match = /https?:\/\/\S+/.exec(last.text);
+    return match?.[0];
   }
 }
 

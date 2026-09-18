@@ -1,19 +1,19 @@
 // tmp/06-web-routes-and-views.md 「ユースケース呼び出し」の GameService の実装。
+// tmp/14-users-auth.md (better-auth への置き換え)、tmp/15-ng-words-and-mobile.md (NG ワード) 反映。
 // Perl 版 Map.pm (printIslandMain/ownerMain/commandMain/commentMain/localBbsMain) と
 // Turn.pm (newIslandMain/changeMain) の移植。
-import { safeEqual, verifyIslandPassword } from "./auth.ts";
-import type { VerifyIslandPasswordDeps } from "./auth.ts";
+import type { AuthUser } from "./auth.ts";
 import { AppError } from "./errors.ts";
+import { findNgWord } from "../core/ng-words.ts";
 import {
   MAX_COMMENT_LEN,
   MAX_LBBS_MESSAGE_LEN,
-  MAX_LBBS_NAME_LEN,
   MAX_NAME_LEN,
   isBadIslandName,
   sanitizeText,
 } from "./sanitize.ts";
-import type { GameRepository } from "./ports.ts";
-import type { PasswordHasher, Clock } from "./ports.ts";
+import type { GameRepository, IslandSummary, UserPrefs } from "./ports.ts";
+import type { Clock } from "./ports.ts";
 import { buildMoneyDisplay } from "./view-models.ts";
 import type {
   IslandDetailVM,
@@ -51,14 +51,11 @@ export interface CommandInput {
 
 export interface GameServiceDeps {
   repo: GameRepository;
-  hasher: PasswordHasher;
   clock: Clock;
   config: GameConfig;
-  /** 全島のパスワード代用。未設定なら無効。 */
-  masterPassword?: string;
-  /** changeSettings の旧パスワード欄専用。資金・食料を 9999 にする。未設定なら無効。 */
-  specialPassword?: string;
   rng: Rng;
+  /** HAKONIWA_NG_WORDS 由来の追加 NG ワード。未指定なら空配列。 */
+  ngWords?: string[];
 }
 
 function buildDetailVM(island: Island, rank: number, turn: number): IslandDetailVM {
@@ -84,7 +81,7 @@ function buildDetailVM(island: Island, rank: number, turn: number): IslandDetail
   };
 }
 
-/** Perl 版 Map.pm / Turn.pm の各 *Main のユースケース化。 */
+/** Perl 版 Map.pm / Turn.pm の各 *Main のユースケース化。v2 (better-auth ベースの認可) 版。 */
 export class GameService {
   readonly #deps: GameServiceDeps;
 
@@ -93,12 +90,32 @@ export class GameService {
   }
 
   // ----------------------------------------------------------------------
-  // 認証まわりの共通処理
+  // 認可まわりの共通処理 (tmp/14-users-auth.md 「認可ルール」節)
   // ----------------------------------------------------------------------
 
-  #authDeps(): VerifyIslandPasswordDeps {
-    const { hasher, masterPassword } = this.#deps;
-    return masterPassword === undefined ? { hasher } : { hasher, masterPassword };
+  #requireLogin(actor: AuthUser | undefined): AuthUser {
+    if (actor === undefined) {
+      throw new AppError("login_required");
+    }
+    return actor;
+  }
+
+  /** ログイン済みかつ自分の島の IslandSummary を返す。無ければ no_island。 */
+  #requireOwnIsland(actor: AuthUser | undefined): { user: AuthUser; summary: IslandSummary } {
+    const user = this.#requireLogin(actor);
+    const summary = this.#deps.repo.findIslandByOwner(user.id);
+    if (summary === undefined) {
+      throw new AppError("no_island");
+    }
+    return { user, summary };
+  }
+
+  #requireNgWordFree(text: string): void {
+    const ngWord = findNgWord(text, this.#deps.ngWords ?? []);
+    if (ngWord !== undefined) {
+      // 利用者にはどの語が引っかかったかを見せない (15「照合ルール」6)。
+      throw new AppError("ng_word");
+    }
   }
 
   #ensureInitialized(): void {
@@ -134,7 +151,7 @@ export class GameService {
     };
   }
 
-  #buildOwnerPageVM(id: number): OwnerPageVM {
+  #buildOwnerPageVM(id: number, userId: string): OwnerPageVM {
     const { repo, config } = this.#deps;
     const island = repo.findIsland(id);
     if (island === undefined) {
@@ -150,6 +167,7 @@ export class GameService {
     const commands = island.commands.map((command, index) =>
       formatCommand(command, index, config, resolveIslandName),
     );
+    const defaults: UserPrefs = repo.getUserPrefs(userId) ?? {};
     return {
       ...buildDetailVM(island, rank, meta.turn),
       money: island.money,
@@ -157,6 +175,7 @@ export class GameService {
       rawCommands: island.commands,
       lbbs: island.lbbs,
       logs,
+      defaults,
     };
   }
 
@@ -165,7 +184,7 @@ export class GameService {
   // ----------------------------------------------------------------------
 
   /** Perl 版 Top.pm topPageMain の移植。 */
-  getTopPage(): TopPageVM {
+  getTopPage(actor: AuthUser | undefined): TopPageVM {
     this.#ensureInitialized();
     const { repo, config } = this.#deps;
     const meta = repo.getMeta();
@@ -192,6 +211,7 @@ export class GameService {
     const sinceTurn = meta.turn - config.topLogTurns + 1;
     const logs = repo.listLogs({ sinceTurn });
     const history = repo.listHistory(config.historyMax);
+    const hasIsland = actor !== undefined && repo.findIslandByOwner(actor.id) !== undefined;
     return {
       turn: meta.turn,
       islands,
@@ -199,42 +219,39 @@ export class GameService {
       logs,
       history,
       debug: config.debug,
+      viewer: { ...(actor !== undefined ? { user: actor } : {}), hasIsland },
     };
   }
 
-  /** Perl 版 Map.pm printIslandMain の移植。 */
+  /** Perl 版 Map.pm printIslandMain の移植。誰でも見られる (14「認可ルール」節)。 */
   getIslandPage(id: number): IslandPageVM {
     this.#ensureInitialized();
     return this.#buildIslandPageVM(id);
   }
 
-  /** Perl 版 Map.pm ownerMain の移植。 */
-  async openOwnerPage(id: number, password: string): Promise<OwnerPageVM> {
+  /** Perl 版 Map.pm ownerMain の移植。actor 自身の島を開く (1 ユーザー 1 島)。 */
+  openOwnerPage(actor: AuthUser | undefined): OwnerPageVM {
     this.#ensureInitialized();
-    const island = this.#deps.repo.findIsland(id);
-    if (island === undefined) {
-      throw new AppError("island_not_found");
-    }
-    const ok = await verifyIslandPassword(island, password, this.#authDeps());
-    if (!ok) {
-      throw new AppError("wrong_password");
-    }
-    return this.#buildOwnerPageVM(id);
+    const { user, summary } = this.#requireOwnIsland(actor);
+    return this.#buildOwnerPageVM(summary.id, user.id);
   }
 
   // ----------------------------------------------------------------------
   // 新規作成
   // ----------------------------------------------------------------------
 
-  /** Perl 版 Turn.pm newIslandMain の移植。 */
-  async createIsland(name: string, password: string, confirm: string): Promise<NewIslandVM> {
+  /** Perl 版 Turn.pm newIslandMain の移植。ログイン必須、1 ユーザー 1 島。 */
+  createIsland(actor: AuthUser | undefined, name: string): NewIslandVM {
     this.#ensureInitialized();
+    const user = this.#requireLogin(actor);
     const { repo, config } = this.#deps;
     const cleanName = sanitizeText(name, MAX_NAME_LEN);
 
-    // 事前検証 (すべて同期)。Perl 版 newIslandMain と同じ順序:
-    // 上限 → 名前空 → 禁止文字/無人 → 重複 → パスワード空 → 確認不一致。
+    // 事前検証: 1 島制約 → 上限 → 名前空 → 禁止文字/無人 → NG ワード → 重複。
     const validate = (): void => {
+      if (repo.findIslandByOwner(user.id) !== undefined) {
+        throw new AppError("already_has_island");
+      }
       if (repo.listIslandSummaries().length >= config.maxIslands) {
         throw new AppError("island_full");
       }
@@ -244,30 +261,22 @@ export class GameService {
       if (isBadIslandName(cleanName)) {
         throw new AppError("bad_name");
       }
+      this.#requireNgWordFree(cleanName);
       if (repo.findIslandByName(cleanName) !== undefined) {
         throw new AppError("name_taken");
       }
-      if (password === "") {
-        throw new AppError("no_password");
-      }
-      if (confirm !== password) {
-        throw new AppError("password_mismatch");
-      }
     };
-    // 事前チェック。ハッシュ化 (非同期) が無駄にならないよう先に一度確認する。
     validate();
 
-    const passwordHash = await this.#deps.hasher.hash(password);
-
     return repo.transaction(() => {
-      // await を挟んだので、repo の状態が変わっていないか改めて検証する (TOCTOU 対策)。
+      // トランザクション内で改めて検証する (TOCTOU 対策)。
       validate();
 
       const meta = repo.getMeta();
       const island = makeNewIsland(config, this.#deps.rng, {
         id: meta.nextIslandId,
         name: cleanName,
-        passwordHash,
+        ownerUserId: user.id,
       });
       estimate(island);
 
@@ -316,23 +325,16 @@ export class GameService {
     }
   }
 
-  /** Perl 版 Map.pm commandMain の移植。 */
-  async registerCommand(
-    id: number,
-    password: string,
+  /** Perl 版 Map.pm commandMain の移植。actor 自身の島に対してのみ実行できる。 */
+  registerCommand(
+    actor: AuthUser | undefined,
     input: CommandInput,
-  ): Promise<OwnerPageVM & { notice: string }> {
+  ): OwnerPageVM & { notice: string } {
     this.#ensureInitialized();
-    const { repo, config } = this.#deps;
-    const island0 = repo.findIsland(id);
-    if (island0 === undefined) {
-      throw new AppError("island_not_found");
-    }
-    const ok = await verifyIslandPassword(island0, password, this.#authDeps());
-    if (!ok) {
-      throw new AppError("wrong_password");
-    }
+    const { user, summary } = this.#requireOwnIsland(actor);
+    const id = summary.id;
     this.#validateCommandInput(input);
+    const { repo, config } = this.#deps;
 
     return repo.transaction(() => {
       const island = repo.findIsland(id);
@@ -366,13 +368,19 @@ export class GameService {
       }
 
       repo.updateIsland(island);
+      repo.setUserPrefs(user.id, {
+        targetIslandId: input.target,
+        pointX: input.x,
+        pointY: input.y,
+        kind: input.kind,
+      });
       // Perl 版 commandMain は delete モードと AutoDelete (全消し) を tempCommandDelete、
       // それ以外 (insert/write/AutoPrepare/AutoPrepare2) を tempCommandAdd で表示する。
       const notice =
         input.mode === "delete" || kind === CommandKind.AutoDelete
           ? "コマンドを削除しました。"
           : "コマンドを登録しました。";
-      return { ...this.#buildOwnerPageVM(id), notice };
+      return { ...this.#buildOwnerPageVM(id, user.id), notice };
     });
   }
 
@@ -380,121 +388,65 @@ export class GameService {
   // コメント
   // ----------------------------------------------------------------------
 
-  /** Perl 版 Map.pm commentMain の移植。 */
-  async updateComment(
-    id: number,
-    password: string,
-    message: string,
-  ): Promise<OwnerPageVM & { notice: string }> {
+  /** Perl 版 Map.pm commentMain の移植。actor 自身の島に対してのみ実行できる。 */
+  updateComment(actor: AuthUser | undefined, message: string): OwnerPageVM & { notice: string } {
     this.#ensureInitialized();
+    const { user, summary } = this.#requireOwnIsland(actor);
     const { repo } = this.#deps;
-    const island0 = repo.findIsland(id);
-    if (island0 === undefined) {
-      throw new AppError("island_not_found");
-    }
-    const ok = await verifyIslandPassword(island0, password, this.#authDeps());
-    if (!ok) {
-      throw new AppError("wrong_password");
-    }
     const comment = sanitizeText(message, MAX_COMMENT_LEN);
+    this.#requireNgWordFree(comment);
 
     return repo.transaction(() => {
-      const island = repo.findIsland(id);
+      const island = repo.findIsland(summary.id);
       if (island === undefined) {
         throw new AppError("island_not_found");
       }
       island.comment = comment;
       repo.updateIsland(island);
-      return { ...this.#buildOwnerPageVM(id), notice: "コメントを更新しました。" };
+      return { ...this.#buildOwnerPageVM(summary.id, user.id), notice: "コメントを更新しました。" };
     });
   }
 
   // ----------------------------------------------------------------------
-  // 名前・パスワード変更
+  // 名前変更 (旧 changeSettings。パスワードは廃止)
   // ----------------------------------------------------------------------
 
-  /** Perl 版 Turn.pm changeMain の移植。 */
-  async changeSettings(
-    id: number,
-    oldPassword: string,
-    name?: string,
-    password?: string,
-    confirm?: string,
-  ): Promise<void> {
+  /** Perl 版 Turn.pm changeMain の移植。actor 自身の島に対してのみ実行できる。 */
+  changeName(actor: AuthUser | undefined, name: string): OwnerPageVM & { notice: string } {
     this.#ensureInitialized();
-    const { repo, config, specialPassword } = this.#deps;
-    const island0 = repo.findIsland(id);
-    if (island0 === undefined) {
-      throw new AppError("island_not_found");
+    const { user, summary } = this.#requireOwnIsland(actor);
+    const { repo, config } = this.#deps;
+    const cleanName = sanitizeText(name, MAX_NAME_LEN);
+
+    if (cleanName === "") {
+      throw new AppError("no_name");
     }
-
-    const isSpecial =
-      specialPassword !== undefined &&
-      specialPassword !== "" &&
-      safeEqual(oldPassword, specialPassword);
-
-    if (!isSpecial) {
-      const ok = await verifyIslandPassword(island0, oldPassword, this.#authDeps());
-      if (!ok) {
-        throw new AppError("wrong_password");
-      }
+    if (isBadIslandName(cleanName)) {
+      throw new AppError("bad_name");
     }
+    this.#requireNgWordFree(cleanName);
 
-    // 確認用パスワード (名前・パスワードどちらの変更でも必ずチェックする。Perl 版と同じ順序)。
-    if ((confirm ?? "") !== (password ?? "")) {
-      throw new AppError("password_mismatch");
-    }
-
-    const cleanName = name !== undefined ? sanitizeText(name, MAX_NAME_LEN) : "";
-    const newPasswordHash =
-      password !== undefined && password !== ""
-        ? await this.#deps.hasher.hash(password)
-        : undefined;
-
-    repo.transaction(() => {
-      const island = repo.findIsland(id);
+    return repo.transaction(() => {
+      const island = repo.findIsland(summary.id);
       if (island === undefined) {
         throw new AppError("island_not_found");
       }
-
-      let changed = false;
-
-      if (isSpecial) {
-        island.money = 9999;
-        island.food = 9999;
+      if (repo.findIslandByName(cleanName) !== undefined && cleanName !== island.name) {
+        throw new AppError("name_taken");
       }
-
-      if (cleanName !== "") {
-        if (isBadIslandName(cleanName)) {
-          throw new AppError("bad_name");
-        }
-        if (repo.findIslandByName(cleanName) !== undefined) {
-          throw new AppError("name_taken");
-        }
-        if (island.money < config.costChangeName) {
-          throw new AppError("no_money");
-        }
-        if (!isSpecial) {
-          island.money -= config.costChangeName;
-        }
-        const log = new LogCollector(repo.getMeta().turn);
-        messages.logChangeName(log, island.name, cleanName);
-        const { history } = log.flush();
-        repo.appendHistory(history);
-        island.name = cleanName;
-        changed = true;
+      if (island.money < config.costChangeName) {
+        throw new AppError("no_money");
       }
+      island.money -= config.costChangeName;
 
-      if (newPasswordHash !== undefined) {
-        island.passwordHash = newPasswordHash;
-        changed = true;
-      }
-
-      if (!changed && !isSpecial) {
-        throw new AppError("nothing_to_change");
-      }
-
+      const log = new LogCollector(repo.getMeta().turn);
+      messages.logChangeName(log, island.name, cleanName);
+      const { history } = log.flush();
+      repo.appendHistory(history);
+      island.name = cleanName;
       repo.updateIsland(island);
+
+      return { ...this.#buildOwnerPageVM(summary.id, user.id), notice: "名前を変更しました。" };
     });
   }
 
@@ -512,99 +464,63 @@ export class GameService {
     repo.replaceLbbs(id, posts);
   }
 
-  /** Perl 版 Map.pm localBbsMain (観光者モード) の移植。 */
-  postLbbsAsVisitor(id: number, name: string, message: string): IslandPageVM & { notice: string } {
-    this.#ensureInitialized();
-    const { repo, config } = this.#deps;
-    if (!config.useLbbs) {
-      throw new AppError("lbbs_disabled");
-    }
-    const island = repo.findIsland(id);
-    if (island === undefined) {
-      throw new AppError("island_not_found");
-    }
-    const cleanName = sanitizeText(name, MAX_LBBS_NAME_LEN);
-    const cleanMessage = sanitizeText(message, MAX_LBBS_MESSAGE_LEN);
-    // B5: 名前またはメッセージが空なら lbbs_empty (Perl 版はメッセージの空判定が抜けていたバグを修正)。
-    if (cleanName === "" || cleanMessage === "") {
-      throw new AppError("lbbs_empty");
-    }
-
-    return repo.transaction(() => {
-      const meta = repo.getMeta();
-      this.#pushLbbsPost(id, {
-        author: "visitor",
-        name: cleanName,
-        message: cleanMessage,
-        turn: meta.turn,
-      });
-      return { ...this.#buildIslandPageVM(id), notice: "記帳を行いました。" };
-    });
-  }
-
-  /** Perl 版 Map.pm localBbsMain (島主モード) の移植。 */
-  async postLbbsAsOwner(
-    id: number,
-    password: string,
-    name: string,
+  /**
+   * Perl 版 Map.pm localBbsMain の移植。記帳はログイン必須 (14「認可ルール」節)。
+   * actor 自身の島なら 'owner' として、他人の島なら 'visitor' として記帳する。
+   * 表示名は actor.name (フォームで名前を受け取らない)。
+   */
+  postLbbs(
+    actor: AuthUser | undefined,
+    islandId: number,
     message: string,
-  ): Promise<OwnerPageVM & { notice: string }> {
+  ): (OwnerPageVM | IslandPageVM) & { notice: string } {
     this.#ensureInitialized();
     const { repo, config } = this.#deps;
     if (!config.useLbbs) {
       throw new AppError("lbbs_disabled");
     }
-    const island0 = repo.findIsland(id);
+    const user = this.#requireLogin(actor);
+    const island0 = repo.findIsland(islandId);
     if (island0 === undefined) {
       throw new AppError("island_not_found");
     }
-    const cleanName = sanitizeText(name, MAX_LBBS_NAME_LEN);
     const cleanMessage = sanitizeText(message, MAX_LBBS_MESSAGE_LEN);
-    if (cleanName === "" || cleanMessage === "") {
+    if (cleanMessage === "") {
       throw new AppError("lbbs_empty");
     }
-    const ok = await verifyIslandPassword(island0, password, this.#authDeps());
-    if (!ok) {
-      throw new AppError("wrong_password");
-    }
+    this.#requireNgWordFree(cleanMessage);
+    const isOwner = island0.ownerUserId === user.id;
 
     return repo.transaction(() => {
       const meta = repo.getMeta();
-      this.#pushLbbsPost(id, {
-        author: "owner",
-        name: cleanName,
+      this.#pushLbbsPost(islandId, {
+        author: isOwner ? "owner" : "visitor",
+        userId: user.id,
+        name: user.name,
         message: cleanMessage,
         turn: meta.turn,
       });
-      return { ...this.#buildOwnerPageVM(id), notice: "記帳を行いました。" };
+      const notice = "記帳を行いました。";
+      return isOwner
+        ? { ...this.#buildOwnerPageVM(islandId, user.id), notice }
+        : { ...this.#buildIslandPageVM(islandId), notice };
     });
   }
 
-  /** Perl 版 Map.pm localBbsMain (削除モード) の移植。 */
-  async deleteLbbs(
-    id: number,
-    password: string,
-    number: number,
-  ): Promise<OwnerPageVM & { notice: string }> {
+  /** Perl 版 Map.pm localBbsMain (削除モード) の移植。actor 自身の島の記帳のみ削除できる。 */
+  deleteLbbs(actor: AuthUser | undefined, number: number): OwnerPageVM & { notice: string } {
     this.#ensureInitialized();
     const { repo, config } = this.#deps;
     if (!config.useLbbs) {
       throw new AppError("lbbs_disabled");
     }
-    const island0 = repo.findIsland(id);
-    if (island0 === undefined) {
-      throw new AppError("island_not_found");
-    }
-    const ok = await verifyIslandPassword(island0, password, this.#authDeps());
-    if (!ok) {
-      throw new AppError("wrong_password");
-    }
+    const { user, summary } = this.#requireOwnIsland(actor);
     if (!Number.isInteger(number) || number < 0 || number >= config.lbbsMax) {
       throw new AppError("invalid_input");
     }
 
     return repo.transaction(() => {
-      const island = repo.findIsland(id);
+      const island = repo.findIsland(summary.id);
       if (island === undefined) {
         throw new AppError("island_not_found");
       }
@@ -612,8 +528,8 @@ export class GameService {
       if (number < posts.length) {
         posts.splice(number, 1);
       }
-      repo.replaceLbbs(id, posts);
-      return { ...this.#buildOwnerPageVM(id), notice: "記帳内容を削除しました。" };
+      repo.replaceLbbs(summary.id, posts);
+      return { ...this.#buildOwnerPageVM(summary.id, user.id), notice: "記帳内容を削除しました。" };
     });
   }
 }

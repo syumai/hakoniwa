@@ -6,6 +6,7 @@
     "lib": ["ES2023", "DOM"],
     "strict": true,
     "noUncheckedIndexedAccess": true,
+    "resolveJsonModule": true,
     "exactOptionalPropertyTypes": true,
     "verbatimModuleSyntax": true,
     "allowImportingTsExtensions": true,

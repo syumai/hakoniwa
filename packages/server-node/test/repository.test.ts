@@ -16,7 +16,7 @@ function makeIsland(id: number, name: string): Island {
   const island = makeNewIsland(defaultConfig, createSeededRng(id), {
     id,
     name,
-    passwordHash: "hash",
+    ownerUserId: `owner-${id}`,
   });
   estimate(island);
   return island;
@@ -86,14 +86,16 @@ describe("SqliteGameRepository", () => {
     if (loaded === undefined) throw new Error("unreachable");
     loaded.comment = "更新済み";
     loaded.money = 12345;
-    loaded.lbbs = [{ author: "owner", name: "島主", message: "こんにちは", turn: 1 }];
+    loaded.lbbs = [
+      { author: "owner", userId: "owner-1", name: "島主", message: "こんにちは", turn: 1 },
+    ];
     repo.updateIsland(loaded);
 
     const reloaded = repo.findIsland(1);
     expect(reloaded?.comment).toBe("更新済み");
     expect(reloaded?.money).toBe(12345);
     expect(reloaded?.lbbs).toEqual([
-      { author: "owner", name: "島主", message: "こんにちは", turn: 1 },
+      { author: "owner", userId: "owner-1", name: "島主", message: "こんにちは", turn: 1 },
     ]);
   });
 
@@ -119,7 +121,9 @@ describe("SqliteGameRepository", () => {
     const island2 = makeIsland(2, "島2");
     repo.insertIsland(island1, 0);
     repo.insertIsland(island2, 1);
-    repo.replaceLbbs(1, [{ author: "visitor", name: "旅人", message: "やあ", turn: 1 }]);
+    repo.replaceLbbs(1, [
+      { author: "visitor", userId: "visitor-1", name: "旅人", message: "やあ", turn: 1 },
+    ]);
 
     // island2 が 1 位、island1 は死滅として除外。
     island2.money = 999;
@@ -151,7 +155,9 @@ describe("SqliteGameRepository", () => {
   it("deleteIsland は lbbs_posts も削除する", () => {
     repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 2 });
     repo.insertIsland(makeIsland(1, "島1"), 0);
-    repo.replaceLbbs(1, [{ author: "owner", name: "島主", message: "hi", turn: 1 }]);
+    repo.replaceLbbs(1, [
+      { author: "owner", userId: "owner-1", name: "島主", message: "hi", turn: 1 },
+    ]);
     repo.deleteIsland(1);
     expect(repo.findIsland(1)).toBeUndefined();
     const lbbsCount = driver.get<{ n: number }>(

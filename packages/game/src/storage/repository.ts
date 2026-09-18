@@ -1,6 +1,12 @@
 // tmp/04-database.md 「リポジトリインターフェース」の実 SQLite 実装。
 // 意味論は packages/game/src/app/fake-repository.ts (テスト用インメモリ実装) と揃える。
-import type { GameMeta, GameRepository, IslandSummary, ListLogsQuery } from "../app/ports.ts";
+import type {
+  GameMeta,
+  GameRepository,
+  IslandSummary,
+  ListLogsQuery,
+  UserPrefs,
+} from "../app/ports.ts";
 import type { HistoryEntry, Island, LbbsPost, LogEntry } from "../core/types.ts";
 import type { SqlDriver, SqlParam } from "./driver.ts";
 import { IslandMapper } from "./mapper.ts";
@@ -27,7 +33,7 @@ interface HistoryRow {
 }
 
 const ISLAND_UPDATE_COLUMNS_SQL = `
-  name = ?, password_hash = ?, comment = ?, score = ?, absent = ?, money = ?, food = ?,
+  name = ?, owner_user_id = ?, comment = ?, score = ?, absent = ?, money = ?, food = ?,
   pop = ?, area = ?, farm = ?, factory = ?, mountain = ?,
   prize_flags = ?, prize_monsters = ?, prize_turns = ?, terrain = ?, commands = ?
 `;
@@ -36,7 +42,7 @@ const ISLAND_UPDATE_COLUMNS_SQL = `
 function columnValuesToParams(v: ReturnType<IslandMapper["islandToColumnValues"]>): SqlParam[] {
   return [
     v.name,
-    v.passwordHash,
+    v.ownerUserId,
     v.comment,
     v.score,
     v.absent,
@@ -129,6 +135,14 @@ export class SqliteGameRepository implements GameRepository {
     return row === undefined ? undefined : this.#mapper.rowToSummary(row);
   }
 
+  findIslandByOwner(userId: string): IslandSummary | undefined {
+    const row = this.#driver.get<IslandRow>(
+      "SELECT * FROM islands WHERE owner_user_id = ?",
+      userId,
+    );
+    return row === undefined ? undefined : this.#mapper.rowToSummary(row);
+  }
+
   #toIsland(row: IslandRow): Island {
     const lbbsRows = this.#lbbsRows(row.id);
     return this.#mapper.rowToIsland(row, lbbsRows);
@@ -151,14 +165,14 @@ export class SqliteGameRepository implements GameRepository {
     const createdTurn = this.#currentTurn();
     this.#driver.run(
       `INSERT INTO islands (
-         id, rank, name, password_hash, comment, score, absent, money, food,
+         id, rank, name, owner_user_id, comment, score, absent, money, food,
          pop, area, farm, factory, mountain,
          prize_flags, prize_monsters, prize_turns, terrain, commands, created_turn
        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       v.id,
       rank,
       v.name,
-      v.passwordHash,
+      v.ownerUserId,
       v.comment,
       v.score,
       v.absent,
@@ -226,10 +240,12 @@ export class SqliteGameRepository implements GameRepository {
     this.#driver.run("DELETE FROM lbbs_posts WHERE island_id = ?", islandId);
     posts.forEach((post, position) => {
       this.#driver.run(
-        "INSERT INTO lbbs_posts (island_id, position, author, name, message, turn) VALUES (?, ?, ?, ?, ?, ?)",
+        `INSERT INTO lbbs_posts (island_id, position, author, user_id, name, message, turn)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
         islandId,
         position,
         post.author,
+        post.userId,
         post.name,
         post.message,
         post.turn,
@@ -326,6 +342,26 @@ export class SqliteGameRepository implements GameRepository {
        DELETE FROM history;
        DELETE FROM game;
        DELETE FROM backups;`,
+    );
+  }
+
+  getUserPrefs(userId: string): UserPrefs | undefined {
+    const row = this.#driver.get<{ prefs: string }>(
+      "SELECT prefs FROM user_prefs WHERE user_id = ?",
+      userId,
+    );
+    if (row === undefined) {
+      return undefined;
+    }
+    return JSON.parse(row.prefs) as UserPrefs;
+  }
+
+  setUserPrefs(userId: string, prefs: UserPrefs): void {
+    this.#driver.run(
+      `INSERT INTO user_prefs (user_id, prefs) VALUES (?, ?)
+       ON CONFLICT (user_id) DO UPDATE SET prefs = excluded.prefs`,
+      userId,
+      JSON.stringify(prefs),
     );
   }
 }

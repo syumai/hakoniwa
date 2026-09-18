@@ -1,46 +1,49 @@
-// tmp/07-auth-and-security.md の移植。
-import type { Island } from "../core/types.ts";
-import type { PasswordHasher } from "./ports.ts";
+// tmp/14-users-auth.md 「サーバーサイドでの呼び出し」節の AuthUser と、管理者判定。
+// better-auth のセッションから得たユーザー情報を、GameService/AdminService が扱う
+// AuthUser に変換する。better-auth 自体への依存はここには持ち込まない
+// (web/bootstrap 層が better-auth の型から必要なフィールドを取り出して渡す)。
 
-/**
- * 定数時間文字列比較 (自前の XOR 累積比較)。
- * 長さが異なっても最後まで比較を続け、早期リターンで長さの違いが漏れないようにする。
- */
-export function safeEqual(a: string, b: string): boolean {
-  const length = Math.max(a.length, b.length);
-  let diff = a.length === b.length ? 0 : 1;
-  for (let i = 0; i < length; i++) {
-    const ca = i < a.length ? a.charCodeAt(i) : 0;
-    const cb = i < b.length ? b.charCodeAt(i) : 0;
-    diff |= ca ^ cb;
-  }
-  return diff === 0;
-}
-
-export interface VerifyIslandPasswordDeps {
-  hasher: PasswordHasher;
-  /** 全島のパスワード代用。未設定または空文字なら無効。 */
-  masterPassword?: string;
+/** GameService/AdminService が受け取る、ログイン中ユーザーの情報。 */
+export interface AuthUser {
+  /** better-auth の user.id (文字列)。 */
+  id: string;
+  /** 表示名。掲示板の記帳者名等に使う。 */
+  name: string;
+  /** プレースホルダ (`*.placeholder.invalid`) の場合がある。 */
+  email: string;
+  image?: string;
+  /** email が adminEmails に含まれ、かつプレースホルダでないとき true。 */
+  isAdmin: boolean;
 }
 
 /**
- * 島のパスワードを検証する。空文字は常に false。
- * masterPassword が設定されていれば定数時間比較で先に照合し、一致すれば true。
+ * email が管理者メール一覧に含まれるか判定する。
+ * - 大文字小文字を無視して比較する。
+ * - `.invalid` で終わるプレースホルダメール (X 等、メールを返さないプロバイダ用) は常に false。
  */
-export async function verifyIslandPassword(
-  island: Pick<Island, "passwordHash">,
-  input: string,
-  deps: VerifyIslandPasswordDeps,
-): Promise<boolean> {
-  if (input === "") {
+export function isAdminEmail(email: string, adminEmails: readonly string[]): boolean {
+  const lower = email.toLowerCase();
+  if (lower.endsWith(".invalid")) {
     return false;
   }
-  if (
-    deps.masterPassword !== undefined &&
-    deps.masterPassword !== "" &&
-    safeEqual(input, deps.masterPassword)
-  ) {
-    return true;
-  }
-  return deps.hasher.verify(input, island.passwordHash);
+  return adminEmails.some((candidate) => candidate.toLowerCase() === lower);
+}
+
+/** better-auth のセッションユーザー相当の最小形。 */
+export interface SessionUserLike {
+  id: string;
+  name: string;
+  email: string;
+  image?: string | null | undefined;
+}
+
+/** better-auth のセッションユーザーから AuthUser を組み立てる。 */
+export function toAuthUser(user: SessionUserLike, adminEmails: readonly string[]): AuthUser {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    ...(user.image !== null && user.image !== undefined ? { image: user.image } : {}),
+    isAdmin: isAdminEmail(user.email, adminEmails),
+  };
 }

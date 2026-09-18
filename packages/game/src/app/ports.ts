@@ -1,6 +1,6 @@
 // Perl 版 hakojima.dat / island.N / hakojima.logN / hakojima.his へのアクセスを抽象化する。
-// tmp/04-database.md の「リポジトリインターフェース」節の移植。
-// 実装 (SqliteGameRepository 等) は Phase 3b (storage 層) で行う。
+// tmp/04-database.md の「リポジトリインターフェース」節、tmp/14-users-auth.md の移植。
+// 実装 (SqliteGameRepository 等) は storage 層が持つ。
 import type { HistoryEntry, Island, LbbsPost, LogEntry, Prize } from "../core/types.ts";
 
 /** Perl 版 hakojima.dat 先頭 4 行 (島の数は listIslandSummaries().length で代替)。 */
@@ -14,6 +14,8 @@ export interface GameMeta {
 export interface IslandSummary {
   id: number;
   name: string;
+  /** 島主の better-auth user.id。 */
+  ownerUserId: string;
   comment: string;
   score: number;
   absent: number;
@@ -37,8 +39,19 @@ export interface ListLogsQuery {
 }
 
 /**
+ * 計画登録フォームの初期値。tmp/14-users-auth.md「データモデル」の `user_prefs` 節。
+ * v1 の `hako_defaults` Cookie の置き換え。ログイン中ユーザーごとに 1 件保持する。
+ */
+export interface UserPrefs {
+  targetIslandId?: number;
+  pointX?: number;
+  pointY?: number;
+  kind?: number;
+}
+
+/**
  * ゲームデータへの読み書きを抽象化するリポジトリ。
- * `transaction` 内では await しない (同期セクション。02-architecture.md 「同時実行とロック」参照)。
+ * `transaction` 内では await しない (02-architecture.md 「同時実行とロック」参照)。
  */
 export interface GameRepository {
   /** 同期トランザクション。fn 内では await しない。 */
@@ -56,6 +69,8 @@ export interface GameRepository {
   loadAllIslands(): Island[];
   findIsland(id: number): Island | undefined;
   findIslandByName(name: string): IslandSummary | undefined;
+  /** 1 ユーザー 1 島の制約の確認・自分の島の特定に使う。 */
+  findIslandByOwner(userId: string): IslandSummary | undefined;
 
   insertIsland(island: Island, rank: number): void;
   /** rank 以外の全フィールドを更新する。 */
@@ -78,8 +93,12 @@ export interface GameRepository {
 
   /** 空 DB に game 行を作る (既存データがあれば上書き)。 */
   initialize(meta: GameMeta): void;
-  /** 全テーブルの行を削除する (管理用)。 */
+  /** 全テーブルの行を削除する (管理用)。better-auth の 4 表・user_prefs は対象外。 */
   reset(): void;
+
+  /** 計画登録フォームの初期値。未保存なら undefined。 */
+  getUserPrefs(userId: string): UserPrefs | undefined;
+  setUserPrefs(userId: string, prefs: UserPrefs): void;
 }
 
 export interface BackupInfo {
@@ -102,13 +121,25 @@ export interface Clock {
   now(): number;
 }
 
-export interface PasswordHasher {
-  hash(p: string): Promise<string>;
-  verify(p: string, h: string): Promise<boolean>;
-}
-
 export interface Logger {
   info(msg: string): void;
   warn(msg: string): void;
   error(msg: string, err?: unknown): void;
+}
+
+/**
+ * メール送信の抽象化。tmp/14-users-auth.md 「メール送信」節。
+ * better-auth の magicLink / emailVerification (changeEmail の確認リンク) から呼ばれる。
+ */
+export interface Mailer {
+  send(mail: { to: string; subject: string; text: string }): Promise<void>;
+}
+
+/**
+ * 単純な key-value 設定の保存。tmp/14-users-auth.md 「ログイン方法の設定 (settings 表)」節。
+ * ゲームデータ (GameRepository) とは寿命・意味論が異なるため別ポートにする。
+ */
+export interface SettingsRepository {
+  get(key: string): string | undefined;
+  set(key: string, value: string): void;
 }

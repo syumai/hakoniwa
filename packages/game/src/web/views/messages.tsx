@@ -26,8 +26,6 @@ export function Notice({ message }: { message: string }) {
 /** AppError.kind → 画面文言。tmp/06-web-routes-and-views.md の表 + Perl 版 temp* の文言。 */
 export function errorMessage(kind: AppErrorKind): string {
   switch (kind) {
-    case "wrong_password":
-      return "パスワードが違います。";
     case "island_not_found":
       return "問題発生、とりあえず戻ってください。";
     case "island_full":
@@ -38,24 +36,28 @@ export function errorMessage(kind: AppErrorKind): string {
       return "',?()<>$'とか入ってたり、「無人島」とかいった変な名前はやめましょうよ〜";
     case "name_taken":
       return "その島ならすでに発見されています。";
-    case "no_password":
-      return "パスワードが必要です。";
     case "no_money":
       return "資金不足のため変更できません";
-    case "nothing_to_change":
-      return "名前、パスワードともに空欄です";
     case "lbbs_empty":
       return "名前または内容の欄が空欄です。";
     case "not_initialized":
       return "データファイルが開けません。";
     case "lbbs_disabled":
       return "問題発生、とりあえず戻ってください。";
-    // 設計書との差異: password_mismatch/invalid_input は 06 の表にない (追加した AppError.kind)。
-    // password_mismatch は Perl 版でも tempWrongPassword を流用しているため同じ文言にする。
-    case "password_mismatch":
-      return "パスワードが違います。";
     case "invalid_input":
       return "入力内容が不正です。";
+    // 設計書との差異: login_required/forbidden/already_has_island/no_island/ng_word は
+    // 06 の表にない (14/15 の認可ルール・NG ワード対応で追加した AppError.kind)。
+    case "login_required":
+      return "ログインが必要です。";
+    case "forbidden":
+      return "この操作を行う権限がありません。";
+    case "already_has_island":
+      return "すでに島を発見しています。1人1島までです。";
+    case "no_island":
+      return "まだ島を発見していません。";
+    case "ng_word":
+      return "その内容は使えません。";
     default: {
       const exhaustive: never = kind;
       return exhaustive;
@@ -64,10 +66,8 @@ export function errorMessage(kind: AppErrorKind): string {
 }
 
 /** AppError.kind → HTTP ステータス。tmp/06-web-routes-and-views.md の表 + 追加分。 */
-export function errorStatus(kind: AppErrorKind): 400 | 403 | 404 | 409 | 503 {
+export function errorStatus(kind: AppErrorKind): 400 | 401 | 403 | 404 | 409 | 503 {
   switch (kind) {
-    case "wrong_password":
-      return 403;
     case "island_not_found":
       return 404;
     case "island_full":
@@ -75,17 +75,21 @@ export function errorStatus(kind: AppErrorKind): 400 | 403 | 404 | 409 | 503 {
     case "no_name":
     case "bad_name":
     case "name_taken":
-    case "no_password":
     case "no_money":
-    case "nothing_to_change":
     case "lbbs_empty":
-    case "password_mismatch":
     case "invalid_input":
+    case "ng_word":
       return 400;
     case "not_initialized":
       return 503;
     case "lbbs_disabled":
       return 404;
+    case "login_required":
+      return 401;
+    case "forbidden":
+    case "already_has_island":
+    case "no_island":
+      return 403;
     default: {
       const exhaustive: never = kind;
       return exhaustive;

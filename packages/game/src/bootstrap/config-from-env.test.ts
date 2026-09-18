@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import { defaultConfig } from "../core/config.ts";
 import { loadConfigFromEnv } from "./config-from-env.ts";
 
+const AUTH_SECRET = "a".repeat(32);
+
 describe("loadConfigFromEnv", () => {
-  it("環境変数が無ければ defaultConfig 相当になる", () => {
-    const config = loadConfigFromEnv({});
+  it("環境変数が無くても HAKONIWA_AUTH_SECRET さえあれば defaultConfig 相当になる", () => {
+    const config = loadConfigFromEnv({ HAKONIWA_AUTH_SECRET: AUTH_SECRET });
     expect(config.game.debug).toBe(defaultConfig.debug);
     expect(config.game.useLbbs).toBe(defaultConfig.useLbbs);
     expect(config.game.unitTimeSec).toBe(defaultConfig.unitTimeSec);
@@ -12,12 +14,24 @@ describe("loadConfigFromEnv", () => {
     expect(config.game.site).toEqual(defaultConfig.site);
     expect(config.adminEnabled).toBe(true);
     expect(config.debug).toBe(false);
-    expect(config.masterPassword).toBeUndefined();
-    expect(config.specialPassword).toBeUndefined();
+    expect(config.ngWords).toEqual([]);
+    expect(config.mail).toEqual({ mailFrom: "hakoniwa@example.com" });
+    expect(config.auth).toEqual({
+      baseUrl: "http://localhost:5173",
+      secret: AUTH_SECRET,
+      devLogin: false,
+      adminEmails: [],
+    });
+  });
+
+  it("HAKONIWA_AUTH_SECRET が無ければ Error (生成方法を含むメッセージ)", () => {
+    expect(() => loadConfigFromEnv({})).toThrow(/HAKONIWA_AUTH_SECRET/);
+    expect(() => loadConfigFromEnv({})).toThrow(/openssl rand -base64 32/);
   });
 
   it("真偽値・数値・文字列の環境変数を反映する", () => {
     const config = loadConfigFromEnv({
+      HAKONIWA_AUTH_SECRET: AUTH_SECRET,
       HAKONIWA_DEBUG: "true",
       HAKONIWA_ADMIN_ENABLED: "false",
       HAKONIWA_USE_LBBS: "true",
@@ -28,8 +42,10 @@ describe("loadConfigFromEnv", () => {
       HAKONIWA_EMAIL: "a@example.com",
       HAKONIWA_BBS_URL: "http://example.com/bbs",
       HAKONIWA_TOPPAGE_URL: "http://example.com/",
-      HAKONIWA_MASTER_PASSWORD: "master",
-      HAKONIWA_SPECIAL_PASSWORD: "special",
+      HAKONIWA_BASE_URL: "https://hakoniwa.example.com",
+      HAKONIWA_DEV_LOGIN: "true",
+      HAKONIWA_ADMIN_EMAILS: "a@example.com, b@example.com",
+      HAKONIWA_NG_WORDS: "だめなことば, もうひとつ",
     });
     expect(config.game.debug).toBe(true);
     expect(config.debug).toBe(true);
@@ -44,34 +60,60 @@ describe("loadConfigFromEnv", () => {
       bbsUrl: "http://example.com/bbs",
       topPageUrl: "http://example.com/",
     });
-    expect(config.masterPassword).toBe("master");
-    expect(config.specialPassword).toBe("special");
+    expect(config.auth.baseUrl).toBe("https://hakoniwa.example.com");
+    expect(config.auth.devLogin).toBe(true);
+    expect(config.auth.adminEmails).toEqual(["a@example.com", "b@example.com"]);
+    expect(config.ngWords).toEqual(["だめなことば", "もうひとつ"]);
   });
 
-  it("空文字のパスワード環境変数は未設定 (無効) として扱う", () => {
+  it("X/Discord のクライアント ID・シークレットが両方揃えば有効になる", () => {
     const config = loadConfigFromEnv({
-      HAKONIWA_MASTER_PASSWORD: "",
-      HAKONIWA_SPECIAL_PASSWORD: "",
+      HAKONIWA_AUTH_SECRET: AUTH_SECRET,
+      HAKONIWA_X_CLIENT_ID: "x-id",
+      HAKONIWA_X_CLIENT_SECRET: "x-secret",
+      HAKONIWA_DISCORD_CLIENT_ID: "discord-id",
+      HAKONIWA_DISCORD_CLIENT_SECRET: "discord-secret",
     });
-    expect(config.masterPassword).toBeUndefined();
-    expect(config.specialPassword).toBeUndefined();
+    expect(config.auth.x).toEqual({ clientId: "x-id", clientSecret: "x-secret" });
+    expect(config.auth.discord).toEqual({ clientId: "discord-id", clientSecret: "discord-secret" });
+  });
+
+  it("HAKONIWA_RESEND_API_KEY / HAKONIWA_MAIL_FROM を反映する", () => {
+    const config = loadConfigFromEnv({
+      HAKONIWA_AUTH_SECRET: AUTH_SECRET,
+      HAKONIWA_RESEND_API_KEY: "re_test",
+      HAKONIWA_MAIL_FROM: "info@example.com",
+    });
+    expect(config.mail).toEqual({ resendApiKey: "re_test", mailFrom: "info@example.com" });
+  });
+
+  it("クライアント ID とシークレットの片方だけでは Error", () => {
+    expect(() =>
+      loadConfigFromEnv({ HAKONIWA_AUTH_SECRET: AUTH_SECRET, HAKONIWA_X_CLIENT_ID: "x-id" }),
+    ).toThrow(/HAKONIWA_X/);
   });
 
   it("不正な真偽値は Error を投げる", () => {
-    expect(() => loadConfigFromEnv({ HAKONIWA_DEBUG: "yes" })).toThrow(/HAKONIWA_DEBUG/);
+    expect(() =>
+      loadConfigFromEnv({ HAKONIWA_AUTH_SECRET: AUTH_SECRET, HAKONIWA_DEBUG: "yes" }),
+    ).toThrow(/HAKONIWA_DEBUG/);
   });
 
   it("不正な数値は Error を投げる", () => {
-    expect(() => loadConfigFromEnv({ HAKONIWA_UNIT_TIME_SEC: "abc" })).toThrow(
-      /HAKONIWA_UNIT_TIME_SEC/,
-    );
-    expect(() => loadConfigFromEnv({ HAKONIWA_UNIT_TIME_SEC: "1.5" })).toThrow(
-      /HAKONIWA_UNIT_TIME_SEC/,
-    );
+    expect(() =>
+      loadConfigFromEnv({ HAKONIWA_AUTH_SECRET: AUTH_SECRET, HAKONIWA_UNIT_TIME_SEC: "abc" }),
+    ).toThrow(/HAKONIWA_UNIT_TIME_SEC/);
+    expect(() =>
+      loadConfigFromEnv({ HAKONIWA_AUTH_SECRET: AUTH_SECRET, HAKONIWA_UNIT_TIME_SEC: "1.5" }),
+    ).toThrow(/HAKONIWA_UNIT_TIME_SEC/);
   });
 
   it("0 以下の unitTimeSec / maxCatchUpTurns は Error を投げる", () => {
-    expect(() => loadConfigFromEnv({ HAKONIWA_UNIT_TIME_SEC: "0" })).toThrow();
-    expect(() => loadConfigFromEnv({ HAKONIWA_MAX_CATCH_UP_TURNS: "-1" })).toThrow();
+    expect(() =>
+      loadConfigFromEnv({ HAKONIWA_AUTH_SECRET: AUTH_SECRET, HAKONIWA_UNIT_TIME_SEC: "0" }),
+    ).toThrow();
+    expect(() =>
+      loadConfigFromEnv({ HAKONIWA_AUTH_SECRET: AUTH_SECRET, HAKONIWA_MAX_CATCH_UP_TURNS: "-1" }),
+    ).toThrow();
   });
 });

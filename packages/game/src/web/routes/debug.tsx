@@ -11,7 +11,7 @@ export function createDebugRoutes(deps: WebDeps): Hono<DefaultsCookieEnv> {
 
   app.post("/turn", (c) => {
     deps.turnService.advanceTurn(deps.clock.now());
-    const vm = deps.gameService.getTopPage();
+    const vm = deps.gameService.getTopPage(undefined);
     const defaults = c.get("defaults");
     return c.html(
       <Layout config={deps.config.game}>

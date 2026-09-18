@@ -49,6 +49,8 @@ export type LbbsAuthor = "visitor" | "owner";
 /** ローカル掲示板の投稿 1 件。 */
 export interface LbbsPost {
   author: LbbsAuthor;
+  /** 投稿者の better-auth user.id。 */
+  userId: string;
   name: string;
   message: string;
   turn: number;
@@ -58,7 +60,8 @@ export interface LbbsPost {
 export interface Island {
   id: number;
   name: string;
-  passwordHash: string;
+  /** 島主の better-auth user.id (1 ユーザー 1 島。UNIQUE)。 */
+  ownerUserId: string;
   comment: string;
   score: number;
   absent: number;

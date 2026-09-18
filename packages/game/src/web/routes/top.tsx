@@ -9,7 +9,7 @@ export function createTopRoutes(deps: WebDeps): Hono<DefaultsCookieEnv> {
   const app = new Hono<DefaultsCookieEnv>();
 
   app.get("/", (c) => {
-    const vm = deps.gameService.getTopPage();
+    const vm = deps.gameService.getTopPage(undefined);
     const defaults = c.get("defaults");
     return c.html(
       <Layout config={deps.config.game}>

@@ -1,6 +1,9 @@
 // tmp/06-web-routes-and-views.md ルート表:
 // POST /islands/:id/lbbs, POST /islands/:id/lbbs/owner, POST /islands/:id/lbbs/delete
 // useLbbs=false の場合はこのルーター自体を app.ts でマウントしないため 404 になる。
+// 設計書との差異 (Phase 6b までの最小対応): 14 により掲示板の記帳はログイン必須になり、
+// GameService.postLbbs(actor, islandId, message) / deleteLbbs(actor, number) に統合された。
+// セッションミドルウェア (Phase 6b) が無い現時点では actor は常に undefined を渡す。
 import { Hono } from "hono";
 import { parseIdParam, parseStringBody } from "../forms/common.ts";
 import {
@@ -9,7 +12,6 @@ import {
   parseLbbsVisitorForm,
 } from "../forms/island-forms.ts";
 import type { WebDeps } from "../deps.ts";
-import { updateDefaults } from "../middleware/defaults-cookie.ts";
 import type { DefaultsCookieEnv } from "../middleware/defaults-cookie.ts";
 import { listIslandSelectOptions } from "./helpers.ts";
 import { Layout } from "../views/layout.tsx";
@@ -52,12 +54,11 @@ export function createLbbsRoutes(deps: WebDeps): Hono<DefaultsCookieEnv> {
     const id = parseIdParam(c);
     const body = await parseStringBody(c);
     const form = parseLbbsVisitorForm(body);
-    const result = deps.gameService.postLbbsAsVisitor(id, form.name, form.message);
-    updateDefaults(c, { lbbsName: form.name });
+    const result = deps.gameService.postLbbs(undefined, id, form.message);
     return c.html(
       <Layout config={deps.config.game}>
         <IslandPage
-          vm={result}
+          vm={result as Parameters<typeof IslandPage>[0]["vm"]}
           config={deps.config.game}
           defaults={c.get("defaults")}
           notice={result.notice}
@@ -70,18 +71,12 @@ export function createLbbsRoutes(deps: WebDeps): Hono<DefaultsCookieEnv> {
     const id = parseIdParam(c);
     const body = await parseStringBody(c);
     const form = parseLbbsOwnerForm(body);
-    const result = await deps.gameService.postLbbsAsOwner(
-      id,
-      form.password,
-      form.name,
-      form.message,
-    );
-    updateDefaults(c, { lbbsName: form.name });
+    const result = deps.gameService.postLbbs(undefined, id, form.message);
     const targets = listIslandSelectOptions(deps.gameService);
     return c.html(
       <Layout config={deps.config.game}>
         <OwnerPage
-          vm={result}
+          vm={result as Parameters<typeof OwnerPage>[0]["vm"]}
           config={deps.config.game}
           defaults={c.get("defaults")}
           password={form.password}
@@ -93,10 +88,10 @@ export function createLbbsRoutes(deps: WebDeps): Hono<DefaultsCookieEnv> {
   });
 
   app.post("/islands/:id{[0-9]+}/lbbs/delete", async (c) => {
-    const id = parseIdParam(c);
+    parseIdParam(c);
     const body = await parseStringBody(c);
     const form = parseLbbsDeleteForm(body);
-    const result = await deps.gameService.deleteLbbs(id, form.password, form.number);
+    const result = deps.gameService.deleteLbbs(undefined, form.number);
     const targets = listIslandSelectOptions(deps.gameService);
     return c.html(
       <Layout config={deps.config.game}>

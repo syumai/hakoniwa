@@ -2,13 +2,13 @@ import { describe, expect, it } from "vitest";
 import { defaultConfig } from "../core/config.ts";
 import { estimate, makeNewIsland } from "../core/island.ts";
 import { createSeededRng } from "../core/rng.ts";
-import { FakeGameRepository, FakePasswordHasher } from "./fake-repository.ts";
+import { FakeGameRepository } from "./fake-repository.ts";
 
 function makeIsland(id: number, name: string) {
   const island = makeNewIsland(defaultConfig, createSeededRng(id), {
     id,
     name,
-    passwordHash: "hash",
+    ownerUserId: `owner-${id}`,
   });
   estimate(island);
   return island;
@@ -134,14 +134,5 @@ describe("FakeGameRepository", () => {
 
     expect(repo.isInitialized()).toBe(false);
     expect(repo.listIslandSummaries()).toEqual([]);
-  });
-});
-
-describe("FakePasswordHasher", () => {
-  it("hash してから verify すると true になる", async () => {
-    const hasher = new FakePasswordHasher();
-    const hash = await hasher.hash("himitsu");
-    expect(await hasher.verify("himitsu", hash)).toBe(true);
-    expect(await hasher.verify("chigau", hash)).toBe(false);
   });
 });

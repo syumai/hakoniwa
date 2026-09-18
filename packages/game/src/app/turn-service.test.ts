@@ -16,7 +16,7 @@ function makeIsland(
   id: number,
   opts: { alive?: boolean } = {},
 ): Island {
-  const island = makeNewIsland(config, rng, { id, name: `島${id}`, passwordHash: "hash" });
+  const island = makeNewIsland(config, rng, { id, name: `島${id}`, ownerUserId: `owner-${id}` });
   if (opts.alive === false) {
     island.terrain = createTerrain(config.islandSize);
   }

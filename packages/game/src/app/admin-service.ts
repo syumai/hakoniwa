@@ -1,5 +1,6 @@
-// tmp/08-turn-trigger-admin-cli.md 「管理機能」節の移植。
-// Perl 版 Maintenance.pm (hako-mente.cgi) の各モードのユースケース化。
+// tmp/08-turn-trigger-admin-cli.md 「管理機能」節、tmp/14-users-auth.md
+// 「ログイン方法の設定」節の移植。Perl 版 Maintenance.pm (hako-mente.cgi) の各モードのユースケース化。
+import type { AuthMethodsFlags, AuthMethodPolicy } from "./auth-methods.ts";
 import type { BackupInfo, BackupStore, Clock, GameRepository } from "./ports.ts";
 import type { TurnService } from "./turn-service.ts";
 import type { GameConfig } from "../core/config.ts";
@@ -11,12 +12,22 @@ export interface AdminStatus {
   backups: BackupInfo[];
 }
 
+/** 管理画面のログイン方法設定 UI 向け VM。 */
+export interface AuthMethodsVM {
+  configured: AuthMethodsFlags;
+  enabled: AuthMethodsFlags;
+  /** true なら email は ConsoleMailer (開発用) で、本番設定 (Resend) はまだされていない。 */
+  mailerIsConsole: boolean;
+}
+
 export interface AdminServiceDeps {
   repo: GameRepository;
   clock: Clock;
   config: GameConfig;
   backupStore: BackupStore;
   turnService: TurnService;
+  authMethods: AuthMethodPolicy;
+  mailerIsConsole: boolean;
 }
 
 /**
@@ -90,5 +101,37 @@ export class AdminService {
   /** 手動でのターン進行。TurnService に委譲する。 */
   advanceTurn(now: number): void {
     this.#deps.turnService.advanceTurn(now);
+  }
+
+  /**
+   * 資金・食料を最大化する。tmp/14-users-auth.md「決定事項」6: 特殊パスワードの代わりに
+   * 管理画面の操作として残したもの。
+   */
+  maximizeIsland(id: number): void {
+    const { repo } = this.#deps;
+    repo.transaction(() => {
+      const island = repo.findIsland(id);
+      if (island === undefined) {
+        throw new Error(`AdminService.maximizeIsland: island not found: ${id}`);
+      }
+      island.money = 9999;
+      island.food = 9999;
+      repo.updateIsland(island);
+    });
+  }
+
+  /** ログイン方法 (X/Discord/メール) の設定済み・有効状態。管理画面のトグル表示用。 */
+  getAuthMethods(): AuthMethodsVM {
+    const { authMethods, mailerIsConsole } = this.#deps;
+    return {
+      configured: authMethods.configured(),
+      enabled: authMethods.enabled(),
+      mailerIsConsole,
+    };
+  }
+
+  /** 管理画面からのログイン方法 ON/OFF 切り替え。 */
+  setAuthMethods(methods: AuthMethodsFlags): void {
+    this.#deps.authMethods.setEnabled(methods);
   }
 }

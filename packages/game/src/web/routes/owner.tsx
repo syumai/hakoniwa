@@ -1,15 +1,13 @@
 // tmp/06-web-routes-and-views.md ルート表:
 // POST /islands/:id/owner, POST /islands/:id/commands, POST /islands/:id/comment
-// 設計書との差異: トップページの「自分の島へ」フォームは select で islandId を指定するため、
-// パスにIDを含まない POST /owner (body で islandId を受け取る) を追加した。
+// 設計書との差異 (Phase 6b までの最小対応): 14 (better-auth) により GameService の各メソッドは
+// パスワードではなく actor (AuthUser | undefined) を受け取るようになった。セッションミドルウェア
+// (Phase 6b) が無い現時点では actor は常に undefined を渡し、login_required で必ず失敗する。
+// id パラメータ・password フォーム値は v1 の名残でルート自体が Phase 6b で書き換えられるため、
+// 型を通すための最小限の対応に留める。
 import { Hono } from "hono";
 import { parseIdParam, parseStringBody } from "../forms/common.ts";
-import {
-  parseCommandForm,
-  parseCommentForm,
-  parseOwnerForm,
-  parseOwnerFormWithId,
-} from "../forms/island-forms.ts";
+import { parseCommandForm, parseCommentForm, parseOwnerForm } from "../forms/island-forms.ts";
 import type { WebDeps } from "../deps.ts";
 import { updateDefaults } from "../middleware/defaults-cookie.ts";
 import type { DefaultsCookieEnv } from "../middleware/defaults-cookie.ts";
@@ -24,7 +22,7 @@ export function createOwnerRoutes(deps: WebDeps): Hono<DefaultsCookieEnv> {
     const id = parseIdParam(c);
     const body = await parseStringBody(c);
     const form = parseOwnerForm(body);
-    const vm = await deps.gameService.openOwnerPage(id, form.password);
+    const vm = deps.gameService.openOwnerPage(undefined);
     updateDefaults(c, { ownIslandId: id });
     const targets = listIslandSelectOptions(deps.gameService);
     return c.html(
@@ -40,12 +38,11 @@ export function createOwnerRoutes(deps: WebDeps): Hono<DefaultsCookieEnv> {
     );
   });
 
-  // 追加ルート: トップページの「自分の島へ」フォーム用 (islandId を body で受け取る)。
+  // 追加ルート: トップページの「自分の島へ」フォーム用。
   app.post("/owner", async (c) => {
     const body = await parseStringBody(c);
-    const form = parseOwnerFormWithId(body);
-    const vm = await deps.gameService.openOwnerPage(form.islandId, form.password);
-    updateDefaults(c, { ownIslandId: form.islandId });
+    const form = parseOwnerForm(body);
+    const vm = deps.gameService.openOwnerPage(undefined);
     const targets = listIslandSelectOptions(deps.gameService);
     return c.html(
       <Layout config={deps.config.game}>
@@ -61,10 +58,10 @@ export function createOwnerRoutes(deps: WebDeps): Hono<DefaultsCookieEnv> {
   });
 
   app.post("/islands/:id{[0-9]+}/commands", async (c) => {
-    const id = parseIdParam(c);
+    parseIdParam(c);
     const body = await parseStringBody(c);
     const form = parseCommandForm(body);
-    const result = await deps.gameService.registerCommand(id, form.password, form.input);
+    const result = deps.gameService.registerCommand(undefined, form.input);
     updateDefaults(c, {
       pointX: form.input.x,
       pointY: form.input.y,
@@ -87,10 +84,10 @@ export function createOwnerRoutes(deps: WebDeps): Hono<DefaultsCookieEnv> {
   });
 
   app.post("/islands/:id{[0-9]+}/comment", async (c) => {
-    const id = parseIdParam(c);
+    parseIdParam(c);
     const body = await parseStringBody(c);
     const form = parseCommentForm(body);
-    const result = await deps.gameService.updateComment(id, form.password, form.message);
+    const result = deps.gameService.updateComment(undefined, form.message);
     const targets = listIslandSelectOptions(deps.gameService);
     return c.html(
       <Layout config={deps.config.game}>

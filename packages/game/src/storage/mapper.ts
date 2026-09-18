@@ -10,7 +10,7 @@ export interface IslandRow {
   id: number;
   rank: number;
   name: string;
-  password_hash: string;
+  owner_user_id: string;
   comment: string;
   score: number;
   absent: number;
@@ -34,6 +34,7 @@ export interface LbbsRow {
   island_id: number;
   position: number;
   author: string;
+  user_id: string;
   name: string;
   message: string;
   turn: number;
@@ -43,7 +44,7 @@ export interface LbbsRow {
 interface IslandColumnValues {
   id: number;
   name: string;
-  passwordHash: string;
+  ownerUserId: string;
   comment: string;
   score: number;
   absent: number;
@@ -116,7 +117,7 @@ function rowToLbbsPost(row: LbbsRow): LbbsPost {
     throw new Error(`mapper: invalid lbbs author: ${row.author}`);
   }
   const author: LbbsAuthor = row.author;
-  return { author, name: row.name, message: row.message, turn: row.turn };
+  return { author, userId: row.user_id, name: row.name, message: row.message, turn: row.turn };
 }
 
 /** islandSize / commandMax を注入して行 ⇔ ドメインオブジェクトを変換する。 */
@@ -141,6 +142,7 @@ export class IslandMapper {
     return {
       id: row.id,
       name: row.name,
+      ownerUserId: row.owner_user_id,
       comment: row.comment,
       score: row.score,
       absent: row.absent,
@@ -159,7 +161,7 @@ export class IslandMapper {
     return {
       id: row.id,
       name: row.name,
-      passwordHash: row.password_hash,
+      ownerUserId: row.owner_user_id,
       comment: row.comment,
       score: row.score,
       absent: row.absent,
@@ -187,7 +189,7 @@ export class IslandMapper {
     return {
       id: island.id,
       name: island.name,
-      passwordHash: island.passwordHash,
+      ownerUserId: island.ownerUserId,
       comment: island.comment,
       score: island.score,
       absent: island.absent,

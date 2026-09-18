@@ -20,7 +20,7 @@ export function makeTestIsland(
   const base = makeNewIsland(config, createSeededRng(1), {
     id: overrides.id ?? 1,
     name: overrides.name ?? "テスト島",
-    passwordHash: "hash",
+    ownerUserId: overrides.ownerUserId ?? "test-owner",
   });
   base.terrain = createTerrain(config.islandSize);
   return { ...base, ...overrides };

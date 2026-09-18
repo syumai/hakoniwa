@@ -31,6 +31,8 @@ describe("cli", () => {
     env = {
       HAKONIWA_DB_PATH: join(dir, "hakoniwa.sqlite"),
       HAKONIWA_BACKUP_DIR: join(dir, "backups"),
+      // v2 (better-auth) で必須になった環境変数 (14-users-auth.md)。
+      HAKONIWA_AUTH_SECRET: "a".repeat(32),
     };
   });
 

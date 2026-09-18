@@ -51,8 +51,8 @@ describe("runTurn: 固定seedでの50ターン進行スナップショット (�
     // 50ターン分の成長・災害イベントが観測できるようにする (中心付近は必ず陸地)。
     const config = { ...defaultConfig, giveupTurns: 1_000_000 };
     const rng = createSeededRng(42);
-    const islandA = makeNewIsland(config, rng, { id: 1, name: "アルファ", passwordHash: "h" });
-    const islandB = makeNewIsland(config, rng, { id: 2, name: "ベータ", passwordHash: "h" });
+    const islandA = makeNewIsland(config, rng, { id: 1, name: "アルファ", ownerUserId: "owner-a" });
+    const islandB = makeNewIsland(config, rng, { id: 2, name: "ベータ", ownerUserId: "owner-b" });
     islandA.terrain.setKind(5, 5, LandKind.Farm, 10);
     islandB.terrain.setKind(5, 5, LandKind.Farm, 10);
     islandA.absent = 0;

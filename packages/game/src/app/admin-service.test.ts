@@ -1,8 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { defaultConfig } from "../core/config.ts";
 import { createSeededRng } from "../core/rng.ts";
+import { makeTestIsland } from "../core/test-helpers.ts";
 import { AdminService } from "./admin-service.ts";
-import { FakeBackupStore, FakeClock, FakeGameRepository, FakeLogger } from "./fake-repository.ts";
+import { AuthMethodPolicy } from "./auth-methods.ts";
+import {
+  FakeBackupStore,
+  FakeClock,
+  FakeGameRepository,
+  FakeLogger,
+  FakeSettingsRepository,
+} from "./fake-repository.ts";
 import { TurnService } from "./turn-service.ts";
 
 function setup() {
@@ -16,8 +24,21 @@ function setup() {
     backupStore,
     logger: new FakeLogger(),
   });
-  const admin = new AdminService({ repo, clock, config: defaultConfig, backupStore, turnService });
-  return { repo, backupStore, clock, turnService, admin };
+  const settings = new FakeSettingsRepository();
+  const authMethods = new AuthMethodPolicy({
+    configured: { x: true, discord: true, email: true },
+    settings,
+  });
+  const admin = new AdminService({
+    repo,
+    clock,
+    config: defaultConfig,
+    backupStore,
+    turnService,
+    authMethods,
+    mailerIsConsole: true,
+  });
+  return { repo, backupStore, clock, turnService, admin, authMethods };
 }
 
 describe("AdminService.initialize", () => {
@@ -120,5 +141,43 @@ describe("AdminService.advanceTurn", () => {
     admin.advanceTurn(0);
 
     expect(repo.getMeta().turn).toBe(2);
+  });
+});
+
+describe("AdminService.maximizeIsland", () => {
+  it("資金と食料を9999にする", () => {
+    const { repo, admin } = setup();
+    admin.initialize(0);
+    const island = makeTestIsland({ id: 1, money: 10, food: 10 });
+    repo.insertIsland(island, 0);
+
+    admin.maximizeIsland(1);
+
+    const updated = repo.findIsland(1);
+    expect(updated?.money).toBe(9999);
+    expect(updated?.food).toBe(9999);
+  });
+
+  it("存在しない島は Error", () => {
+    const { admin } = setup();
+    admin.initialize(0);
+    expect(() => admin.maximizeIsland(999)).toThrow();
+  });
+});
+
+describe("AdminService.getAuthMethods / setAuthMethods", () => {
+  it("既定はすべて有効、mailerIsConsole を含む", () => {
+    const { admin } = setup();
+    expect(admin.getAuthMethods()).toEqual({
+      configured: { x: true, discord: true, email: true },
+      enabled: { x: true, discord: true, email: true },
+      mailerIsConsole: true,
+    });
+  });
+
+  it("setAuthMethods で切り替えると getAuthMethods に反映される", () => {
+    const { admin } = setup();
+    admin.setAuthMethods({ x: false, discord: true, email: true });
+    expect(admin.getAuthMethods().enabled).toEqual({ x: false, discord: true, email: true });
   });
 });

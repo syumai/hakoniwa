@@ -7,5 +7,7 @@ import type { IslandSelectVM } from "../../app/view-models.ts";
  * GameService に専用メソッドがないため、getTopPage().islands (id/name のみ使用) から作る。
  */
 export function listIslandSelectOptions(gameService: GameService): IslandSelectVM[] {
-  return gameService.getTopPage().islands.map((island) => ({ id: island.id, name: island.name }));
+  return gameService
+    .getTopPage(undefined)
+    .islands.map((island) => ({ id: island.id, name: island.name }));
 }

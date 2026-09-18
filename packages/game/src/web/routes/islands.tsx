@@ -21,7 +21,9 @@ export function createIslandsRoutes(deps: WebDeps): Hono<DefaultsCookieEnv> {
   app.post("/islands", async (c) => {
     const body = await parseStringBody(c);
     const form = parseNewIslandForm(body);
-    const vm = await deps.gameService.createIsland(form.name, form.password, form.passwordConfirm);
+    // 設計書との差異 (Phase 6b までの最小対応): actor は Phase 6b でセッションミドルウェアが
+    // c.get('user') から渡す。現時点では login_required で必ず失敗する。
+    const vm = deps.gameService.createIsland(undefined, form.name);
     return c.html(
       <Layout config={deps.config.game}>
         <NewIslandPage vm={vm} config={deps.config.game} />
@@ -41,16 +43,12 @@ export function createIslandsRoutes(deps: WebDeps): Hono<DefaultsCookieEnv> {
   });
 
   app.post("/islands/:id{[0-9]+}/settings", async (c) => {
-    const id = parseIdParam(c);
+    // id は v1 の名残 (URL に islandId を含めていた)。v2 の changeName は actor 自身の島にしか
+    // 効かないため、id 自体はもう使わない (Phase 6b でこのルート自体を置き換える)。
+    parseIdParam(c);
     const body = await parseStringBody(c);
     const form = parseSettingsForm(body);
-    await deps.gameService.changeSettings(
-      id,
-      form.oldPassword,
-      form.name,
-      form.password,
-      form.passwordConfirm,
-    );
+    deps.gameService.changeName(undefined, form.name ?? "");
     return c.html(
       <Layout config={deps.config.game}>
         <ChangeDonePage />
@@ -58,17 +56,11 @@ export function createIslandsRoutes(deps: WebDeps): Hono<DefaultsCookieEnv> {
     );
   });
 
-  // 追加ルート: トップページの「島の名前とパスワードの変更」フォーム用 (islandId を body で受け取る)。
+  // 追加ルート: トップページの「島の名前の変更」フォーム用 (islandId を body で受け取る)。
   app.post("/settings", async (c) => {
     const body = await parseStringBody(c);
     const form = parseSettingsFormWithId(body);
-    await deps.gameService.changeSettings(
-      form.islandId,
-      form.oldPassword,
-      form.name,
-      form.password,
-      form.passwordConfirm,
-    );
+    deps.gameService.changeName(undefined, form.name ?? "");
     return c.html(
       <Layout config={deps.config.game}>
         <ChangeDonePage />

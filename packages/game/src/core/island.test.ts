@@ -67,12 +67,12 @@ describe("makeNewIsland", () => {
     const island = makeNewIsland(defaultConfig, rng, {
       id: 5,
       name: "テスト島",
-      passwordHash: "hash",
+      ownerUserId: "owner-1",
     });
 
     expect(island.id).toBe(5);
     expect(island.name).toBe("テスト島");
-    expect(island.passwordHash).toBe("hash");
+    expect(island.ownerUserId).toBe("owner-1");
     expect(island.comment).toBe("(未登録)");
     expect(island.score).toBe(0);
     expect(island.absent).toBe(defaultConfig.giveupTurns - 3);
@@ -95,7 +95,7 @@ describe("makeNewIsland", () => {
     const island = makeNewIsland(defaultConfig, createSeededRng(1), {
       id: 1,
       name: "島",
-      passwordHash: "h",
+      ownerUserId: "owner-1",
     });
     island.commands[0]!.x = 5;
     expect(island.commands[1]!.x).toBe(0);
@@ -118,7 +118,7 @@ describe("estimate", () => {
     const island = makeNewIsland(defaultConfig, createSeededRng(1), {
       id: 1,
       name: "島",
-      passwordHash: "h",
+      ownerUserId: "owner-1",
     });
     island.terrain = terrain;
     estimate(island);
@@ -136,7 +136,7 @@ describe("estimate", () => {
     const island = makeNewIsland(defaultConfig, createSeededRng(1), {
       id: 1,
       name: "島",
-      passwordHash: "h",
+      ownerUserId: "owner-1",
     });
     island.terrain = terrain;
     estimate(island);

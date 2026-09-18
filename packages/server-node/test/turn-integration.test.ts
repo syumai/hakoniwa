@@ -7,9 +7,13 @@ import {
   FakeClock,
   migrate,
 } from "@hakoniwa/game";
-import type { AppConfig } from "@hakoniwa/game";
+import type { AppConfig, AuthUser } from "@hakoniwa/game";
 import { beforeEach, describe, expect, it } from "vitest";
 import { NodeSqliteDriver } from "../src/driver.ts";
+
+function user(id: string): AuthUser {
+  return { id, name: `user-${id}`, email: `${id}@example.com`, isAdmin: false };
+}
 
 function setup(overrides: Partial<typeof defaultConfig> = {}) {
   const driver = new NodeSqliteDriver(":memory:");
@@ -18,6 +22,14 @@ function setup(overrides: Partial<typeof defaultConfig> = {}) {
   const backupStore = new FakeBackupStore();
   const config: AppConfig = {
     game: { ...defaultConfig, ...overrides, maxCatchUpTurns: 10 },
+    auth: {
+      baseUrl: "http://localhost:5173",
+      secret: "test-secret",
+      devLogin: false,
+      adminEmails: [],
+    },
+    mail: { mailFrom: "hakoniwa@example.com" },
+    ngWords: [],
     adminEnabled: true,
     debug: false,
   };
@@ -39,11 +51,11 @@ describe("turn-integration (実 DB)", () => {
     ctx = setup();
   });
 
-  it("createIsland で 2 島作成 → advanceTurn 数回で turn が進み、島が読み戻せる", async () => {
+  it("createIsland で 2 島作成 → advanceTurn 数回で turn が進み、島が読み戻せる", () => {
     const { gameService, turnService, driver } = ctx;
 
-    const created1 = await gameService.createIsland("島1", "pass1", "pass1");
-    const created2 = await gameService.createIsland("島2", "pass2", "pass2");
+    const created1 = gameService.createIsland(user("u1"), "島1");
+    const created2 = gameService.createIsland(user("u2"), "島2");
     expect(created1.id).toBe(1);
     expect(created2.id).toBe(2);
 
@@ -57,7 +69,7 @@ describe("turn-integration (実 DB)", () => {
     const after = driver.get<{ turn: number }>("SELECT turn FROM game WHERE id = 1");
     expect(after?.turn).toBe(4);
 
-    const top = gameService.getTopPage();
+    const top = gameService.getTopPage(undefined);
     expect(top.turn).toBe(4);
     expect(top.islands.map((i) => i.name).sort()).toEqual(["島1", "島2"]);
   });
@@ -75,13 +87,13 @@ describe("turn-integration (実 DB)", () => {
     expect(meta?.turn).toBe(4);
   });
 
-  it("発見時の history はターン処理をまたいでも読み出せる (repo 経由の永続化確認)", async () => {
+  it("発見時の history はターン処理をまたいでも読み出せる (repo 経由の永続化確認)", () => {
     const { gameService, turnService, clock } = ctx;
-    await gameService.createIsland("島1", "pass1", "pass1");
+    gameService.createIsland(user("u1"), "島1");
 
     turnService.advanceTurn(clock.now());
 
-    const top = gameService.getTopPage();
+    const top = gameService.getTopPage(undefined);
     // 発見ログが history に記録され、ターン処理後も残っている。
     expect(top.history.some((h) => h.html.includes("島1"))).toBe(true);
   });

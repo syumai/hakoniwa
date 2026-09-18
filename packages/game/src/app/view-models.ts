@@ -1,6 +1,8 @@
 // 画面向け DTO。HTML は含めない (描画は Phase 3b の web/views が行う)。
 // tmp/06-web-routes-and-views.md 「画面」節、Perl 版 Top.pm / Map.pm の各 temp* 関数が
 // 表示していた情報を構造化したもの。
+import type { AuthUser } from "./auth.ts";
+import type { UserPrefs } from "./ports.ts";
 import type { GameConfig } from "../core/config.ts";
 import type { FormattedCommand } from "../core/commands/format.ts";
 import type { FlagPrizeView, KilledMonstersView } from "../core/prize.ts";
@@ -67,6 +69,12 @@ export interface IslandRowVM {
   comment: string;
 }
 
+/** ログイン状態と自分の島の有無。14「ルート」節の GET / 表示の出し分けに使う。 */
+export interface ViewerVM {
+  user?: AuthUser;
+  hasIsland: boolean;
+}
+
 /** トップ画面全体。 */
 export interface TopPageVM {
   turn: number;
@@ -76,6 +84,7 @@ export interface TopPageVM {
   logs: LogEntry[];
   history: HistoryEntry[];
   debug: boolean;
+  viewer: ViewerVM;
 }
 
 /** 観光/開発/新規発見画面で共通の島情報。Perl 版 islandInfo + islandMap の情報部分。 */
@@ -118,6 +127,8 @@ export interface OwnerPageVM extends IslandDetailVM {
   lbbs: LbbsPost[];
   /** mode 1 (本人の機密ログを含む)。 */
   logs: LogEntry[];
+  /** 計画登録フォームの初期値 (user_prefs)。未保存なら空オブジェクト。 */
+  defaults: UserPrefs;
 }
 
 /** 新規発見画面。Perl 版 newIslandMain (tempNewIslandHead + islandInfo + islandMap(owner))。 */

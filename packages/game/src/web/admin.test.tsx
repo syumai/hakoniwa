@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { postForm, setupTestApp } from "./test-helpers.ts";
 
-describe("管理画面 (/admin)", () => {
+// Phase 6a での差異: 管理画面のマスターパスワード認証を撤去した (14-users-auth.md)。
+// better-auth のセッション + isAdmin 判定への置き換えは Phase 6b (session-middleware,
+// routes/admin.tsx の書き直し) で行うため、それまではこのテスト群を丸ごと skip する。
+// 6b で `/admin/*` を実 DB + 実セッションで検証するテストに書き直すこと。
+describe.skip("管理画面 (/admin)", () => {
   it("adminEnabled=false なら GET /admin も 404", async () => {
     const { app } = setupTestApp({ adminEnabled: false });
     const res = await app.request("/admin");

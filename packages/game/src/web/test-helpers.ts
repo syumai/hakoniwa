@@ -1,11 +1,12 @@
 // web 層テスト用の共通セットアップ。*.test.tsx ではないので vitest には拾われない。
 import { AdminService } from "../app/admin-service.ts";
+import { AuthMethodPolicy } from "../app/auth-methods.ts";
 import {
   FakeBackupStore,
   FakeClock,
   FakeGameRepository,
   FakeLogger,
-  FakePasswordHasher,
+  FakeSettingsRepository,
 } from "../app/fake-repository.ts";
 import { GameService } from "../app/game-service.ts";
 import { TurnService } from "../app/turn-service.ts";
@@ -21,6 +22,10 @@ export const INITIAL_CLOCK = 1_000_000;
 export interface SetupOptions {
   debug?: boolean;
   adminEnabled?: boolean;
+  /**
+   * v1 の名残 (マスターパスワード認証)。v2 では better-auth に置き換わったため未使用。
+   * 既存テストの呼び出し形を壊さないために受け付けるだけで、AppConfig には反映しない。
+   */
   masterPassword?: string;
   specialPassword?: string;
   gameOverrides?: Partial<GameConfig>;
@@ -44,7 +49,6 @@ export function setupTestApp(options: SetupOptions = {}): TestApp {
     repo.initialize({ turn: 1, lastTime: INITIAL_CLOCK, nextIslandId: 1 });
   }
   const clock = new FakeClock(INITIAL_CLOCK);
-  const hasher = new FakePasswordHasher();
   const rng = createSeededRng(42);
   const backupStore = new FakeBackupStore();
   const logger = new FakeLogger();
@@ -54,24 +58,34 @@ export function setupTestApp(options: SetupOptions = {}): TestApp {
 
   const config: AppConfig = {
     game,
+    auth: {
+      baseUrl: "http://localhost:5173",
+      secret: "test-secret",
+      devLogin: false,
+      adminEmails: [],
+    },
+    mail: { mailFrom: "hakoniwa@example.com" },
+    ngWords: [],
     adminEnabled: options.adminEnabled ?? true,
     debug,
-    ...(options.masterPassword !== undefined ? { masterPassword: options.masterPassword } : {}),
-    ...(options.specialPassword !== undefined ? { specialPassword: options.specialPassword } : {}),
   };
 
-  const gameService = new GameService({
-    repo,
-    hasher,
-    clock,
-    config: game,
-    rng,
-    ...(config.masterPassword !== undefined ? { masterPassword: config.masterPassword } : {}),
-    ...(config.specialPassword !== undefined ? { specialPassword: config.specialPassword } : {}),
-  });
+  const gameService = new GameService({ repo, clock, config: game, rng, ngWords: config.ngWords });
 
   const turnService = new TurnService({ repo, config: game, rng, backupStore, logger });
-  const adminService = new AdminService({ repo, clock, config: game, backupStore, turnService });
+  const authMethods = new AuthMethodPolicy({
+    configured: { x: false, discord: false, email: true },
+    settings: new FakeSettingsRepository(),
+  });
+  const adminService = new AdminService({
+    repo,
+    clock,
+    config: game,
+    backupStore,
+    turnService,
+    authMethods,
+    mailerIsConsole: true,
+  });
 
   const deps: WebDeps = { gameService, turnService, adminService, config, clock };
   const app = createApp(deps);

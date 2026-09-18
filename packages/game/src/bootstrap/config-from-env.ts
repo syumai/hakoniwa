@@ -1,14 +1,37 @@
-// tmp/08-turn-trigger-admin-cli.md 「設定の読み込み (Node)」節の移植。
-// Node 固有 (PORT、DB パス等) はここに含めない。それらは packages/server-node/src/config.ts が持つ。
+// tmp/08-turn-trigger-admin-cli.md 「設定の読み込み (Node)」節 + tmp/14-users-auth.md
+// 「環境変数」節の移植。Node 固有 (PORT、DB パス等) はここに含めない。それらは
+// packages/server-node/src/config.ts が持つ。
 import { defaultConfig } from "../core/config.ts";
 import type { GameConfig } from "../core/config.ts";
 
+export interface OAuthClientConfig {
+  clientId: string;
+  clientSecret: string;
+}
+
+export interface AuthConfig {
+  baseUrl: string;
+  /** better-auth の secret と CSRF トークンの HMAC 鍵。 */
+  secret: string;
+  x?: OAuthClientConfig;
+  discord?: OAuthClientConfig;
+  devLogin: boolean;
+  /** 管理者メール一覧 (小文字化はしない。isAdminEmail 側で比較時に小文字化する)。 */
+  adminEmails: string[];
+}
+
+export interface MailConfig {
+  /** 未設定なら ConsoleMailer (開発用) を使う。設定されていれば ResendMailer を使う。 */
+  resendApiKey?: string;
+  mailFrom: string;
+}
+
 export interface AppConfig {
   game: GameConfig;
-  /** 全島のパスワード代用。未設定なら無効。 */
-  masterPassword?: string;
-  /** changeSettings の旧パスワード欄専用。未設定なら無効。 */
-  specialPassword?: string;
+  auth: AuthConfig;
+  mail: MailConfig;
+  /** HAKONIWA_NG_WORDS (カンマ区切り) 由来の追加 NG ワード。 */
+  ngWords: string[];
   adminEnabled: boolean;
   debug: boolean;
 }
@@ -48,6 +71,72 @@ function nonEmpty(raw: string | undefined): string | undefined {
   return raw === undefined || raw === "" ? undefined : raw;
 }
 
+function parseCsvList(raw: string | undefined): string[] {
+  if (raw === undefined || raw.trim() === "") {
+    return [];
+  }
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s !== "");
+}
+
+function parseOAuthClientConfig(
+  name: string,
+  clientId: string | undefined,
+  clientSecret: string | undefined,
+): OAuthClientConfig | undefined {
+  const id = nonEmpty(clientId);
+  const secret = nonEmpty(clientSecret);
+  if (id === undefined && secret === undefined) {
+    return undefined;
+  }
+  if (id === undefined || secret === undefined) {
+    throw new Error(
+      `loadConfigFromEnv: ${name}_CLIENT_ID and ${name}_CLIENT_SECRET must both be set`,
+    );
+  }
+  return { clientId: id, clientSecret: secret };
+}
+
+function loadMailConfig(env: Record<string, string | undefined>): MailConfig {
+  const resendApiKey = nonEmpty(env.HAKONIWA_RESEND_API_KEY);
+  const mailFrom = env.HAKONIWA_MAIL_FROM ?? "hakoniwa@example.com";
+  return { ...(resendApiKey !== undefined ? { resendApiKey } : {}), mailFrom };
+}
+
+function loadAuthConfig(env: Record<string, string | undefined>): AuthConfig {
+  const baseUrl = env.HAKONIWA_BASE_URL ?? "http://localhost:5173";
+  const secret = nonEmpty(env.HAKONIWA_AUTH_SECRET);
+  if (secret === undefined) {
+    throw new Error(
+      "loadConfigFromEnv: HAKONIWA_AUTH_SECRET is required. " +
+        "generate one with: openssl rand -base64 32",
+    );
+  }
+  const x = parseOAuthClientConfig(
+    "HAKONIWA_X",
+    env.HAKONIWA_X_CLIENT_ID,
+    env.HAKONIWA_X_CLIENT_SECRET,
+  );
+  const discord = parseOAuthClientConfig(
+    "HAKONIWA_DISCORD",
+    env.HAKONIWA_DISCORD_CLIENT_ID,
+    env.HAKONIWA_DISCORD_CLIENT_SECRET,
+  );
+  const devLogin = parseBool("HAKONIWA_DEV_LOGIN", env.HAKONIWA_DEV_LOGIN, false);
+  const adminEmails = parseCsvList(env.HAKONIWA_ADMIN_EMAILS);
+
+  return {
+    baseUrl,
+    secret,
+    ...(x !== undefined ? { x } : {}),
+    ...(discord !== undefined ? { discord } : {}),
+    devLogin,
+    adminEmails,
+  };
+}
+
 /** 環境変数から `AppConfig` を組み立てる。不正な値 (真偽値/数値としてパースできない) は Error を throw する。 */
 export function loadConfigFromEnv(env: Record<string, string | undefined>): AppConfig {
   const debug = parseBool("HAKONIWA_DEBUG", env.HAKONIWA_DEBUG, defaultConfig.debug);
@@ -85,14 +174,12 @@ export function loadConfigFromEnv(env: Record<string, string | undefined>): AppC
     },
   };
 
-  const masterPassword = nonEmpty(env.HAKONIWA_MASTER_PASSWORD);
-  const specialPassword = nonEmpty(env.HAKONIWA_SPECIAL_PASSWORD);
-
   return {
     game,
+    auth: loadAuthConfig(env),
+    mail: loadMailConfig(env),
+    ngWords: parseCsvList(env.HAKONIWA_NG_WORDS),
     adminEnabled,
     debug,
-    ...(masterPassword !== undefined ? { masterPassword } : {}),
-    ...(specialPassword !== undefined ? { specialPassword } : {}),
   };
 }

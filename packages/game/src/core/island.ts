@@ -105,7 +105,7 @@ export function makeNewLand(size: number, rng: Rng): Terrain {
 export interface NewIslandInit {
   id: number;
   name: string;
-  passwordHash: string;
+  ownerUserId: string;
 }
 
 /**
@@ -123,7 +123,7 @@ export function makeNewIsland(config: GameConfig, rng: Rng, init: NewIslandInit)
   return {
     id: init.id,
     name: init.name,
-    passwordHash: init.passwordHash,
+    ownerUserId: init.ownerUserId,
     comment: "(未登録)",
     score: 0,
     // B12: 放置すると giveupTurns - 3 ターン後に自動放棄される (Perl 準拠)。

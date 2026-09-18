@@ -64,6 +64,8 @@ export {
 export type { NewIslandInit } from "./core/island.ts";
 export { makeNewLand, makeNewIsland, estimate } from "./core/island.ts";
 
+export { IGNORED_LIST_ENTRIES, findNgWord } from "./core/ng-words.ts";
+
 export type { AutoPrepareKind } from "./core/commands/queue.ts";
 export {
   slideFront,
@@ -121,15 +123,20 @@ export type {
   BackupInfo,
   BackupStore,
   Clock,
-  PasswordHasher,
   Logger,
+  Mailer,
+  SettingsRepository,
+  UserPrefs,
 } from "./app/ports.ts";
 
 export type { AppErrorKind } from "./app/errors.ts";
 export { AppError } from "./app/errors.ts";
 
-export type { VerifyIslandPasswordDeps } from "./app/auth.ts";
-export { safeEqual, verifyIslandPassword } from "./app/auth.ts";
+export type { AuthUser, SessionUserLike } from "./app/auth.ts";
+export { isAdminEmail, toAuthUser } from "./app/auth.ts";
+
+export type { AuthMethodKind, AuthMethodsFlags, AuthMethodPolicyDeps } from "./app/auth-methods.ts";
+export { AuthMethodPolicy } from "./app/auth-methods.ts";
 
 export {
   MAX_NAME_LEN,
@@ -146,6 +153,7 @@ export type {
   MoneyDisplay,
   PrizeVM,
   IslandRowVM,
+  ViewerVM,
   TopPageVM,
   IslandDetailVM,
   IslandPageVM,
@@ -161,15 +169,16 @@ export { GameService } from "./app/game-service.ts";
 export type { TurnServiceDeps } from "./app/turn-service.ts";
 export { TurnService } from "./app/turn-service.ts";
 
-export type { AdminStatus, AdminServiceDeps } from "./app/admin-service.ts";
+export type { AdminStatus, AdminServiceDeps, AuthMethodsVM } from "./app/admin-service.ts";
 export { AdminService } from "./app/admin-service.ts";
 
 export {
   FakeGameRepository,
-  FakePasswordHasher,
   FakeClock,
   FakeBackupStore,
   FakeLogger,
+  FakeSettingsRepository,
+  FakeMailer,
 } from "./app/fake-repository.ts";
 
 // ----------------------------------------------------------------------
@@ -177,20 +186,34 @@ export {
 // ----------------------------------------------------------------------
 
 export type { SqlDriver, SqlParam } from "./storage/driver.ts";
-export { schemaSql } from "./storage/schema.ts";
+export { SCHEMA_VERSION, schemaSql } from "./storage/schema.ts";
 export { migrate } from "./storage/migrate.ts";
 export type { SqliteGameRepositoryConfig } from "./storage/repository.ts";
 export { SqliteGameRepository } from "./storage/repository.ts";
+export { betterAuthSqliteAdapter } from "./storage/better-auth-adapter.ts";
+export { SqliteSettingsRepository } from "./storage/settings-repository.ts";
 
 // ----------------------------------------------------------------------
-// bootstrap 層 (Phase 3b)。env → 設定、パスワードハッシュ、Adapter 共通の組立。
+// bootstrap 層 (Phase 3b/6a)。env → 設定、better-auth の組立、Adapter 共通の組立。
 // ----------------------------------------------------------------------
 
-export { Pbkdf2PasswordHasher } from "./bootstrap/pbkdf2-hasher.ts";
-export type { AppConfig } from "./bootstrap/config-from-env.ts";
+export type {
+  AppConfig,
+  AuthConfig,
+  MailConfig,
+  OAuthClientConfig,
+} from "./bootstrap/config-from-env.ts";
 export { loadConfigFromEnv } from "./bootstrap/config-from-env.ts";
 export type { BuildDepsInput, BuiltDeps } from "./bootstrap/build-deps.ts";
 export { buildDeps } from "./bootstrap/build-deps.ts";
+export type { CreateAuthInput } from "./bootstrap/auth.ts";
+export { createAuth } from "./bootstrap/auth.ts";
+export { devLoginPlugin } from "./bootstrap/dev-login-plugin.ts";
+export { createCsrfToken, verifyCsrfToken } from "./bootstrap/csrf.ts";
+export type { AuthMethodOfInput } from "./bootstrap/auth-method-of.ts";
+export { authMethodOf } from "./bootstrap/auth-method-of.ts";
+export type { ResendMailerConfig } from "./bootstrap/mailer.ts";
+export { ConsoleMailer, ResendMailer } from "./bootstrap/mailer.ts";
 
 // ----------------------------------------------------------------------
 // web 層 (Phase 4a)。ランタイム非依存の Hono app。静的配信は Adapter の責務。
