@@ -16,7 +16,14 @@ function user(id: string, name = `user-${id}`): AuthUser {
 function setup(overrides: Partial<GameServiceDeps> = {}, options: { skipInit?: boolean } = {}) {
   const repo = overrides.repo ?? new FakeGameRepository();
   if (!options.skipInit && !repo.isInitialized()) {
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 1, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 1,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
   }
   const deps: GameServiceDeps = {
     repo,

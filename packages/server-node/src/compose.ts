@@ -26,7 +26,7 @@ export function composeNode(config: NodeConfig): ComposedNode {
     mkdirSync(dirname(config.dbPath), { recursive: true });
   }
   const driver = new NodeSqliteDriver(config.dbPath);
-  migrate(driver);
+  migrate(driver, { defaultUnitTimeSec: config.game.unitTimeSec });
   const backupStore = new FileBackupStore(config.dbPath, config.backupDir, driver);
   const clock = createSystemClock();
 

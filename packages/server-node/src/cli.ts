@@ -4,7 +4,7 @@
 // `node dist/cli.js <command>` または root で `vp run --filter ./packages/server-node cli -- <command>`。
 import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
-import { formatDateTime } from "@hakoniwa/game";
+import { formatDateTime, formatDuration } from "@hakoniwa/game";
 import type { SeasonState } from "@hakoniwa/game";
 import { composeNode } from "./compose.ts";
 import type { ComposedNode } from "./compose.ts";
@@ -37,15 +37,17 @@ const HELP_TEXT = `hakoniwa CLI
   db init                新しいデータを作る
     --start-at <ISO8601>    開始日時 (省略時: HAKONIWA_START_AT、それも無ければ現在時刻を切り下げ)
     --final-turn <N>        最終ターン数 (省略時: HAKONIWA_FINAL_TURN、それも無ければ無期限)
+    --unit-time <sec>       1 ターンの長さ (秒。省略時: HAKONIWA_UNIT_TIME_SEC)
   db reset --yes         現役データを削除する (要 --yes)
                           ※ v1 (パスワード認証) の DB は v2 (better-auth) のスキーマと
                             互換性が無いため、v1 の DB ファイルを使い続けている場合は
                             このコマンドで一度リセットしてから db init してください。
-  db status              現役データの状態を表示する (開始時刻・最終ターン・状態を含む)
+  db status              現役データの状態を表示する (開始時刻・最終ターン・1 ターンの長さ・状態を含む)
   turn check             期限が来ていればターンを進める (終了後は 0)
   turn advance           期限に関係なく強制的に 1 ターン進める (終了後は何もしない)
   time set <unix|ISO8601> 最終更新時間を変更する
   game set-final-turn <N|none> 最終ターン数を変更する (none で無期限に戻す)
+  game set-unit-time <sec> 1 ターンの長さ(秒)を変更する (次のターン境界から効く)
   backup list            バックアップ一覧を表示する
   backup create [label]  バックアップを作成する (label 省略可)
   backup restore <label> バックアップを現役データへ復元する
@@ -96,7 +98,7 @@ function formatTimestamp(unixSeconds: number): string {
 
 async function runDb(
   positionals: string[],
-  values: { yes?: boolean; "start-at"?: string; "final-turn"?: string },
+  values: { yes?: boolean; "start-at"?: string; "final-turn"?: string; "unit-time"?: string },
   node: ComposedNode,
   io: CliIO,
 ): Promise<void> {
@@ -111,9 +113,15 @@ async function runDb(
         finalTurnRaw !== undefined
           ? parsePositiveIntArg(finalTurnRaw, "--final-turn")
           : node.config.finalTurn;
+      const unitTimeSecRaw = values["unit-time"];
+      const unitTimeSec =
+        unitTimeSecRaw !== undefined
+          ? parsePositiveIntArg(unitTimeSecRaw, "--unit-time")
+          : undefined;
       node.adminService.initialize(Math.floor(Date.now() / 1000), {
         ...(startAt !== undefined ? { startAt } : {}),
         ...(finalTurn !== undefined ? { finalTurn } : {}),
+        ...(unitTimeSec !== undefined ? { unitTimeSec } : {}),
       });
       io.stdout("新しいデータを作成しました。");
       return;
@@ -142,6 +150,7 @@ async function runDb(
           const { timezone } = node.config;
           io.stdout(`開始時刻: ${formatDateTime(status.season.startAt, timezone)} (${timezone})`);
           io.stdout(`最終ターン: ${status.season.finalTurn ?? "無期限"}`);
+          io.stdout(`1 ターンの長さ: ${formatDuration(status.season.unitTimeSec)}`);
           io.stdout(`状態(シーズン): ${SEASON_STATE_LABELS[status.season.state]}`);
         }
       }
@@ -206,6 +215,15 @@ async function runGame(positionals: string[], node: ComposedNode, io: CliIO): Pr
       );
       return;
     }
+    case "set-unit-time": {
+      const raw = requirePositional(positionals, 1, "game set-unit-time の値 (秒)");
+      const unitTimeSec = parsePositiveIntArg(raw, "game set-unit-time");
+      node.adminService.setUnitTimeSec(unitTimeSec);
+      io.stdout(
+        `1 ターンの長さを ${formatDuration(unitTimeSec)} (${unitTimeSec}秒) に設定しました。`,
+      );
+      return;
+    }
     default:
       throw new UsageError(`game: 未知のサブコマンドです: ${sub}`);
   }
@@ -264,6 +282,7 @@ export async function runCli(
     yes?: boolean;
     "start-at"?: string;
     "final-turn"?: string;
+    "unit-time"?: string;
   };
   let positionals: string[];
   try {
@@ -274,6 +293,7 @@ export async function runCli(
         yes: { type: "boolean" },
         "start-at": { type: "string" },
         "final-turn": { type: "string" },
+        "unit-time": { type: "string" },
       },
       allowPositionals: true,
     });

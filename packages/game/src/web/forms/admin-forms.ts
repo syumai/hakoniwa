@@ -48,15 +48,20 @@ export function parseAdminLastTimeForm(
   throw new AppError("invalid_input", "either datetime or unix is required");
 }
 
-/** 「新しいデータを作る」フォーム。開始日時 (省略可) と最終ターン数 (省略可) を受け取る。 */
+/**
+ * 「新しいデータを作る」フォーム。開始日時 (省略可)、最終ターン数 (省略可)、
+ * 1 ターンの長さ (秒、省略可。tmp/16-season.md「ターンの長さも DB に持つ」節) を受け取る。
+ */
 export interface AdminInitForm {
   startAt?: number;
   finalTurn?: number | null;
+  unitTimeSec?: number;
 }
 
 export function parseAdminInitForm(body: Record<string, string>, timezone: string): AdminInitForm {
   const startAtRaw = field(body, "start-at");
   const finalTurnRaw = field(body, "final-turn");
+  const unitTimeSecRaw = field(body, "unit-time");
   const form: AdminInitForm = {};
 
   if (startAtRaw !== "") {
@@ -72,6 +77,12 @@ export function parseAdminInitForm(body: Record<string, string>, timezone: strin
     }
     form.finalTurn = Number(finalTurnRaw);
   }
+  if (unitTimeSecRaw !== "") {
+    if (!/^\d+$/.test(unitTimeSecRaw) || Number(unitTimeSecRaw) <= 0) {
+      throw new AppError("invalid_input", "unit-time must be a positive integer");
+    }
+    form.unitTimeSec = Number(unitTimeSecRaw);
+  }
   return form;
 }
 
@@ -83,6 +94,18 @@ export function parseFinalTurnForm(body: Record<string, string>): number | null 
   }
   if (!/^\d+$/.test(raw) || Number(raw) <= 0) {
     throw new AppError("invalid_input", "final-turn must be a positive integer");
+  }
+  return Number(raw);
+}
+
+/**
+ * 「ゲーム設定」の 1 ターンの長さ (秒) 変更フォーム。tmp/16-season.md「ターンの長さも DB に
+ * 持つ (追加要件)」節。空欄・0 以下は invalid_input。
+ */
+export function parseUnitTimeForm(body: Record<string, string>): number {
+  const raw = field(body, "unit-time");
+  if (raw === "" || !/^\d+$/.test(raw) || Number(raw) <= 0) {
+    throw new AppError("invalid_input", "unit-time must be a positive integer");
   }
   return Number(raw);
 }

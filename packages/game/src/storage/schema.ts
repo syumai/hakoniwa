@@ -11,8 +11,9 @@
 /**
  * このファイルが適用するスキーマのバージョン。v1 (パスワード認証) からの自動移行は提供しない。
  * v3: tmp/16-season.md。`game.final_turn` (最終ターン、NULL 可) を追加した。
+ * v4: tmp/16-season.md「ターンの長さも DB に持つ (追加要件)」節。`game.unit_time_sec` を追加した。
  */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export const schemaSql = `
 CREATE TABLE schema_version (
@@ -21,14 +22,15 @@ CREATE TABLE schema_version (
 
 -- Perl: hakojima.dat 先頭 4 行。常に 1 行
 -- v3: final_turn (最終ターン。NULL なら無期限)、start_at (ターン1が始まる unix 秒) を追加。
--- tmp/16-season.md。
+-- v4: unit_time_sec (1 ターンの長さ、秒) を追加。tmp/16-season.md。
 CREATE TABLE game (
   id              INTEGER PRIMARY KEY CHECK (id = 1),
   turn            INTEGER NOT NULL,
   last_time       INTEGER NOT NULL,
   next_island_id  INTEGER NOT NULL,
   final_turn      INTEGER,
-  start_at        INTEGER NOT NULL
+  start_at        INTEGER NOT NULL,
+  unit_time_sec   INTEGER NOT NULL
 ) STRICT;
 
 -- Perl: hakojima.dat の島ブロック + island.N

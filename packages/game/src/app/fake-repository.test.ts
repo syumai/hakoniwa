@@ -22,7 +22,14 @@ describe("FakeGameRepository", () => {
 
   it("insertIsland は rank の位置に挿入し、listIslandSummaries は rank 順", () => {
     const repo = new FakeGameRepository();
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 3, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 3,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     repo.insertIsland(makeIsland(1, "島1"), 0);
     repo.insertIsland(makeIsland(2, "島2"), 1);
 
@@ -32,7 +39,14 @@ describe("FakeGameRepository", () => {
 
   it("findIsland はクローンを返す (呼び出し側の変更が反映されない)", () => {
     const repo = new FakeGameRepository();
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 2, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 2,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     repo.insertIsland(makeIsland(1, "島1"), 0);
 
     const island = repo.findIsland(1);
@@ -45,7 +59,14 @@ describe("FakeGameRepository", () => {
 
   it("updateIsland で変更が反映される", () => {
     const repo = new FakeGameRepository();
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 2, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 2,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     repo.insertIsland(makeIsland(1, "島1"), 0);
 
     const island = repo.findIsland(1);
@@ -58,7 +79,14 @@ describe("FakeGameRepository", () => {
 
   it("replaceAllIslands は渡された順に rank を振り直し、含まれない島を削除する", () => {
     const repo = new FakeGameRepository();
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 3, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 3,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     const island1 = makeIsland(1, "島1");
     const island2 = makeIsland(2, "島2");
     repo.insertIsland(island1, 0);
@@ -74,20 +102,48 @@ describe("FakeGameRepository", () => {
 
   it("tryBumpTurn は expectedTurn が一致する時のみ成功する", () => {
     const repo = new FakeGameRepository();
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 1, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 1,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
 
     expect(
-      repo.tryBumpTurn(2, { turn: 3, lastTime: 100, nextIslandId: 1, finalTurn: null, startAt: 0 }),
+      repo.tryBumpTurn(2, {
+        turn: 3,
+        lastTime: 100,
+        nextIslandId: 1,
+        finalTurn: null,
+        startAt: 0,
+        unitTimeSec: defaultConfig.unitTimeSec,
+      }),
     ).toBe(false);
     expect(
-      repo.tryBumpTurn(1, { turn: 2, lastTime: 100, nextIslandId: 1, finalTurn: null, startAt: 0 }),
+      repo.tryBumpTurn(1, {
+        turn: 2,
+        lastTime: 100,
+        nextIslandId: 1,
+        finalTurn: null,
+        startAt: 0,
+        unitTimeSec: defaultConfig.unitTimeSec,
+      }),
     ).toBe(true);
     expect(repo.getMeta().turn).toBe(2);
   });
 
   it("listLogs は sinceTurn / islandId / includeSecretFor で絞り込む", () => {
     const repo = new FakeGameRepository();
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 1, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 1,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     repo.appendLogs([
       { turn: 1, secret: false, islandId: 1, targetId: 0, html: "通常1", seq: 0 },
       { turn: 1, secret: true, islandId: 1, targetId: 0, html: "機密1", seq: 1 },
@@ -104,7 +160,14 @@ describe("FakeGameRepository", () => {
 
   it("deleteLogsBefore は指定 turn 未満を削除する", () => {
     const repo = new FakeGameRepository();
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 1, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 1,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     repo.appendLogs([
       { turn: 1, secret: false, islandId: 0, targetId: 0, html: "a", seq: 0 },
       { turn: 3, secret: false, islandId: 0, targetId: 0, html: "b", seq: 0 },
@@ -117,7 +180,14 @@ describe("FakeGameRepository", () => {
 
   it("trimHistory は新しい順に keep 件を残す", () => {
     const repo = new FakeGameRepository();
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 1, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 1,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     repo.appendHistory([
       { turn: 1, html: "a" },
       { turn: 2, html: "b" },
@@ -131,7 +201,14 @@ describe("FakeGameRepository", () => {
 
   it("reset は全データを削除する", () => {
     const repo = new FakeGameRepository();
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 2, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 2,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     repo.insertIsland(makeIsland(1, "島1"), 0);
 
     repo.reset();

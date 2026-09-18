@@ -10,6 +10,7 @@ function meta(overrides: Partial<GameMeta> = {}): GameMeta {
     nextIslandId: 1,
     finalTurn: null,
     startAt: 1000,
+    unitTimeSec: 21600,
     ...overrides,
   };
 }
@@ -46,7 +47,7 @@ describe("buildSeasonVM", () => {
   const unitTimeSec = 21600;
 
   it("開始前: state='before'、nextTurnAt は null", () => {
-    const vm = buildSeasonVM(meta({ turn: 1, startAt: 1000, finalTurn: null }), 500, unitTimeSec);
+    const vm = buildSeasonVM(meta({ turn: 1, startAt: 1000, finalTurn: null, unitTimeSec }), 500);
     expect(vm).toEqual({
       turn: 1,
       finalTurn: null,
@@ -54,14 +55,14 @@ describe("buildSeasonVM", () => {
       startAt: 1000,
       finishedAtTurn: null,
       nextTurnAt: null,
+      unitTimeSec,
     });
   });
 
   it("進行中: state='running'、nextTurnAt は lastTime + unitTimeSec", () => {
     const vm = buildSeasonVM(
-      meta({ turn: 3, lastTime: 5000, startAt: 1000, finalTurn: 10 }),
+      meta({ turn: 3, lastTime: 5000, startAt: 1000, finalTurn: 10, unitTimeSec }),
       5000,
-      unitTimeSec,
     );
     expect(vm).toEqual({
       turn: 3,
@@ -70,11 +71,21 @@ describe("buildSeasonVM", () => {
       startAt: 1000,
       finishedAtTurn: null,
       nextTurnAt: 5000 + unitTimeSec,
+      unitTimeSec,
     });
   });
 
+  it("進行中: nextTurnAt は config ではなく meta.unitTimeSec を使う", () => {
+    const vm = buildSeasonVM(
+      meta({ turn: 3, lastTime: 5000, startAt: 1000, finalTurn: 10, unitTimeSec: 60 }),
+      5000,
+    );
+    expect(vm.nextTurnAt).toBe(5060);
+    expect(vm.unitTimeSec).toBe(60);
+  });
+
   it("終了後: state='finished'、finishedAtTurn は finalTurn、nextTurnAt は null", () => {
-    const vm = buildSeasonVM(meta({ turn: 11, startAt: 1000, finalTurn: 10 }), 999999, unitTimeSec);
+    const vm = buildSeasonVM(meta({ turn: 11, startAt: 1000, finalTurn: 10, unitTimeSec }), 999999);
     expect(vm).toEqual({
       turn: 11,
       finalTurn: 10,
@@ -82,6 +93,7 @@ describe("buildSeasonVM", () => {
       startAt: 1000,
       finishedAtTurn: 10,
       nextTurnAt: null,
+      unitTimeSec,
     });
   });
 });

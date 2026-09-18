@@ -4,11 +4,23 @@
 import type { SqlDriver } from "./driver.ts";
 import { SCHEMA_VERSION, schemaSql } from "./schema.ts";
 
+/** `migrate` の追加オプション。tmp/16-season.md「ターンの長さも DB に持つ (追加要件)」節。 */
+export interface MigrateOptions {
+  /**
+   * v3 → v4 のステップで既存行の `unit_time_sec` をバックフィルする値。
+   * 省略時は 21600 (6 時間。`defaultConfig.unitTimeSec` と同じ)。Adapter は
+   * `config.unitTimeSec` (`HAKONIWA_UNIT_TIME_SEC`) を渡す。
+   */
+  defaultUnitTimeSec?: number;
+}
+
 /**
  * version N → N+1 のマイグレーションステップ。1 トランザクションで適用され、
  * 適用後に `schema_version` が自動的に N+1 へ更新される (ステップ内で更新する必要はない)。
  */
-const MIGRATION_STEPS: Record<number, (driver: SqlDriver) => void> = {
+type MigrationStep = (driver: SqlDriver, opts: Required<MigrateOptions>) => void;
+
+const MIGRATION_STEPS: Record<number, MigrationStep> = {
   // v2 → v3: tmp/16-season.md。最終ターンと開始時刻の列を追加する (`db reset` を要求しない)。
   // start_at は既存データに historical な値が無いため、既存の last_time で近似する
   // (これまでのゲームは season 機能が無く、常に turn=1 で始まっているとは限らないため厳密な
@@ -17,6 +29,14 @@ const MIGRATION_STEPS: Record<number, (driver: SqlDriver) => void> = {
     driver.exec("ALTER TABLE game ADD COLUMN final_turn INTEGER");
     driver.exec("ALTER TABLE game ADD COLUMN start_at INTEGER NOT NULL DEFAULT 0");
     driver.exec("UPDATE game SET start_at = last_time");
+  },
+  // v3 → v4: tmp/16-season.md「ターンの長さも DB に持つ (追加要件)」節。
+  // SQLite の ADD COLUMN は NOT NULL 列に DEFAULT が必須で、かつプレースホルダを使えないため、
+  // 検証済みの整数をリテラルとして文字列連結で埋め込む。
+  3: (driver, opts) => {
+    driver.exec(
+      `ALTER TABLE game ADD COLUMN unit_time_sec INTEGER NOT NULL DEFAULT ${opts.defaultUnitTimeSec}`,
+    );
   },
 };
 
@@ -31,7 +51,14 @@ const MIGRATION_STEPS: Record<number, (driver: SqlDriver) => void> = {
  *
  * DO では constructor の `blockConcurrencyWhile` 内で呼ぶことを想定 (12-workers-adapter.md)。
  */
-export function migrate(driver: SqlDriver): void {
+export function migrate(driver: SqlDriver, opts: MigrateOptions = {}): void {
+  const defaultUnitTimeSec = opts.defaultUnitTimeSec ?? 21600;
+  if (!Number.isSafeInteger(defaultUnitTimeSec) || defaultUnitTimeSec <= 0) {
+    throw new Error(
+      `migrate: defaultUnitTimeSec must be a positive integer (got: ${defaultUnitTimeSec})`,
+    );
+  }
+  const stepOpts: Required<MigrateOptions> = { defaultUnitTimeSec };
   const existing = driver.get<{ name: string }>(
     "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'schema_version'",
   );
@@ -65,7 +92,7 @@ export function migrate(driver: SqlDriver): void {
     }
     const next = version + 1;
     driver.transaction(() => {
-      step(driver);
+      step(driver, stepOpts);
       driver.run("UPDATE schema_version SET version = ?", next);
     });
     version = next;

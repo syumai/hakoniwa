@@ -37,7 +37,14 @@ describe("FileBackupStore", () => {
   });
 
   it("create → list → データ変更 → restore で元に戻る", async () => {
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 1, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 1,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
 
     await store.create("turn-1", 1);
     expect(existsSync(join(backupDir, "turn-1.sqlite"))).toBe(true);
@@ -46,7 +53,14 @@ describe("FileBackupStore", () => {
     expect(list1).toEqual([{ label: "turn-1", turn: 1, createdAt: expect.any(Number) }]);
 
     // バックアップ後にデータを変更する。
-    repo.saveMeta({ turn: 5, lastTime: 999, nextIslandId: 1, finalTurn: null, startAt: 0 });
+    repo.saveMeta({
+      turn: 5,
+      lastTime: 999,
+      nextIslandId: 1,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     expect(repo.getMeta().turn).toBe(5);
 
     await store.restore("turn-1");
@@ -57,7 +71,14 @@ describe("FileBackupStore", () => {
   });
 
   it("delete でバックアップを削除できる", async () => {
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 1, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 1,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     await store.create("to-delete", 1);
     expect((await store.list()).map((b) => b.label)).toEqual(["to-delete"]);
 
@@ -67,7 +88,14 @@ describe("FileBackupStore", () => {
   });
 
   it("rotate は createdAt 降順で keep 件だけ残す", async () => {
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 1, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 1,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     await store.create("turn-1", 1);
     await store.create("turn-2", 2);
     await store.create("turn-3", 3);
@@ -83,7 +111,14 @@ describe("FileBackupStore", () => {
   });
 
   it("不正なラベルは create/restore/delete いずれも Error を投げる", async () => {
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 1, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 1,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     await expect(store.create("../evil", 1)).rejects.toThrow();
     await expect(store.restore("../evil")).rejects.toThrow();
     await expect(store.delete("../evil")).rejects.toThrow();

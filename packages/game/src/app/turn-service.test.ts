@@ -34,7 +34,14 @@ class NeverAdvanceRepo extends FakeGameRepository {
 describe("TurnService.advanceTurnIfDue", () => {
   it("期限前なら 0 を返し、meta は変わらない", () => {
     const repo = new FakeGameRepository();
-    repo.initialize({ turn: 1, lastTime: 1000, nextIslandId: 2, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 1000,
+      nextIslandId: 2,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     repo.insertIsland(makeIsland(defaultConfig, createSeededRng(1), 1), 0);
     const turnService = new TurnService({
       repo,
@@ -52,7 +59,14 @@ describe("TurnService.advanceTurnIfDue", () => {
 
   it("期限後なら 1 ターン進め、meta が更新される", () => {
     const repo = new FakeGameRepository();
-    repo.initialize({ turn: 1, lastTime: 1000, nextIslandId: 2, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 1000,
+      nextIslandId: 2,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     repo.insertIsland(makeIsland(defaultConfig, createSeededRng(1), 1), 0);
     const turnService = new TurnService({
       repo,
@@ -72,7 +86,14 @@ describe("TurnService.advanceTurnIfDue", () => {
   it("maxCatchUpTurns を上限にまとめて進める", () => {
     const config = { ...defaultConfig, maxCatchUpTurns: 2 };
     const repo = new FakeGameRepository();
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 2, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 2,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     repo.insertIsland(makeIsland(config, createSeededRng(1), 1), 0);
     const turnService = new TurnService({
       repo,
@@ -91,7 +112,14 @@ describe("TurnService.advanceTurnIfDue", () => {
 
   it("tryBumpTurn に失敗したら 0 を返し、状態を変えない (楽観ロック)", () => {
     const repo = new NeverAdvanceRepo();
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 2, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 2,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     repo.insertIsland(makeIsland(defaultConfig, createSeededRng(1), 1), 0);
     const turnService = new TurnService({
       repo,
@@ -110,7 +138,14 @@ describe("TurnService.advanceTurnIfDue", () => {
   it("ターン処理後、logKeepTurns より古いログを削除する", () => {
     const config = { ...defaultConfig, logKeepTurns: 2 };
     const repo = new FakeGameRepository();
-    repo.initialize({ turn: 5, lastTime: 0, nextIslandId: 2, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 5,
+      lastTime: 0,
+      nextIslandId: 2,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     repo.insertIsland(makeIsland(config, createSeededRng(1), 1), 0);
     repo.appendLogs([
       { turn: 1, secret: false, islandId: 0, targetId: 0, html: "古いログ", seq: 0 },
@@ -131,7 +166,14 @@ describe("TurnService.advanceTurnIfDue", () => {
 
   it("人口が0になった島はターン処理後にリポジトリから削除される", () => {
     const repo = new FakeGameRepository();
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 3, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 3,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     const dead = makeIsland(defaultConfig, createSeededRng(1), 1, { alive: false });
     const alive = makeIsland(defaultConfig, createSeededRng(3), 2, { alive: true });
     repo.insertIsland(dead, 0);
@@ -154,7 +196,14 @@ describe("TurnService.advanceTurnIfDue", () => {
   it("backupEveryTurns の倍数なら fire-and-forget でバックアップを作成する", async () => {
     const config = { ...defaultConfig, backupEveryTurns: 1 };
     const repo = new FakeGameRepository();
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 2, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 2,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     repo.insertIsland(makeIsland(config, createSeededRng(1), 1), 0);
     const backupStore = new FakeBackupStore();
     const turnService = new TurnService({
@@ -173,10 +222,71 @@ describe("TurnService.advanceTurnIfDue", () => {
   });
 });
 
+describe("tmp/16-season.md: ターンの長さも DB に持つ (meta.unitTimeSec を使う)", () => {
+  it("期限判定は config.unitTimeSec ではなく meta.unitTimeSec を使う", () => {
+    const repo = new FakeGameRepository();
+    // config は 6 時間だが、meta は 60 秒。
+    repo.initialize({
+      turn: 1,
+      lastTime: 1000,
+      nextIslandId: 2,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: 60,
+    });
+    repo.insertIsland(makeIsland(defaultConfig, createSeededRng(1), 1), 0);
+    const turnService = new TurnService({
+      repo,
+      config: defaultConfig,
+      rng: createSeededRng(2),
+      backupStore: new FakeBackupStore(),
+      logger: new FakeLogger(),
+    });
+
+    // config.unitTimeSec (21600) 未満だが meta.unitTimeSec (60) 以上なので進む。
+    const advanced = turnService.advanceTurnIfDue(1000 + 60);
+
+    expect(advanced).toBe(1);
+    expect(repo.getMeta().turn).toBe(2);
+    expect(repo.getMeta().lastTime).toBe(1000 + 60);
+  });
+
+  it("lastTime の増分も meta.unitTimeSec を使う (config とは異なる値)", () => {
+    const repo = new FakeGameRepository();
+    repo.initialize({
+      turn: 1,
+      lastTime: 1000,
+      nextIslandId: 2,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: 120,
+    });
+    repo.insertIsland(makeIsland(defaultConfig, createSeededRng(1), 1), 0);
+    const turnService = new TurnService({
+      repo,
+      config: defaultConfig,
+      rng: createSeededRng(2),
+      backupStore: new FakeBackupStore(),
+      logger: new FakeLogger(),
+    });
+
+    turnService.advanceTurn(0);
+
+    expect(repo.getMeta().lastTime).toBe(1000 + 120);
+  });
+});
+
 describe("TurnService.advanceTurn", () => {
   it("期限に関係なく 1 ターン進める", () => {
     const repo = new FakeGameRepository();
-    repo.initialize({ turn: 1, lastTime: 1_000_000, nextIslandId: 2, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 1_000_000,
+      nextIslandId: 2,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     repo.insertIsland(makeIsland(defaultConfig, createSeededRng(1), 1), 0);
     const turnService = new TurnService({
       repo,
@@ -199,6 +309,7 @@ describe("TurnService.advanceTurn", () => {
       nextIslandId: 2,
       finalTurn: 5,
       startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
     });
     repo.insertIsland(makeIsland(defaultConfig, createSeededRng(1), 1), 0);
     const turnService = new TurnService({
@@ -224,6 +335,7 @@ describe("TurnService.advanceTurnIfDue (終了後)", () => {
       nextIslandId: 2,
       finalTurn: 5,
       startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
     });
     repo.insertIsland(makeIsland(defaultConfig, createSeededRng(1), 1), 0);
     const turnService = new TurnService({
@@ -249,6 +361,7 @@ describe("TurnService.advanceTurnIfDue (終了後)", () => {
       nextIslandId: 2,
       finalTurn: 5,
       startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
     });
     repo.insertIsland(makeIsland(config, createSeededRng(1), 1), 0);
     const turnService = new TurnService({

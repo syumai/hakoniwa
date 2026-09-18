@@ -41,7 +41,9 @@ export class TurnService {
       if (isFinished(meta)) {
         break;
       }
-      if (now - meta.lastTime < config.unitTimeSec) {
+      // tmp/16-season.md「ターンの長さも DB に持つ」節: 期限判定は config ではなく meta.unitTimeSec
+      // (管理画面「ゲーム設定」/ CLI `game set-unit-time` で変更された値) を使う。
+      if (now - meta.lastTime < meta.unitTimeSec) {
         break;
       }
       const advancedTurn = this.#advanceOnce(meta);
@@ -76,7 +78,7 @@ export class TurnService {
       const next: GameMeta = {
         ...meta,
         turn: meta.turn + 1,
-        lastTime: meta.lastTime + config.unitTimeSec,
+        lastTime: meta.lastTime + meta.unitTimeSec,
       };
       if (!repo.tryBumpTurn(meta.turn, next)) {
         return false;
@@ -89,7 +91,11 @@ export class TurnService {
         nextIslandId: meta.nextIslandId,
         islands,
       };
-      const ctx = createTurnContext({ config, rng, turn: meta.turn });
+      // tmp/16-season.md「ターンの長さも DB に持つ」節: runTurn に渡す config は
+      // meta.unitTimeSec で上書きする (runTurn 内の `world.lastTime += ctx.config.unitTimeSec` も
+      // meta の値に従わせるため)。
+      const turnConfig: GameConfig = { ...config, unitTimeSec: meta.unitTimeSec };
+      const ctx = createTurnContext({ config: turnConfig, rng, turn: meta.turn });
       const result = runTurn(world, ctx);
 
       repo.replaceAllIslands(result.world.islands);

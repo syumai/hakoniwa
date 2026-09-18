@@ -240,6 +240,13 @@ describe("tmp/16-season.md: トップの3状態 (開始前/進行中/終了)", (
     expect(html).not.toContain("ゲーム開始:");
   });
 
+  it("tmp/16-season.md: 「1 ターン: …」を meta.unitTimeSec から整形して表示する", async () => {
+    const { app } = setupTestApp({ unitTimeSec: 3600 });
+    const res = await app.request("/");
+    const html = await res.text();
+    expect(html).toContain("1 ターン: 1時間");
+  });
+
   it("開始前: 「ゲーム開始: …」を表示し、「次のターン:」は表示しない", async () => {
     const futureStart = INITIAL_CLOCK + 10_000;
     const { app } = setupTestApp({ startAt: futureStart, lastTime: futureStart });

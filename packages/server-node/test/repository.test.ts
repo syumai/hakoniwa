@@ -42,7 +42,14 @@ describe("SqliteGameRepository", () => {
 
   it("初期化前は isInitialized が false、initialize 後は true", () => {
     expect(repo.isInitialized()).toBe(false);
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 1, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 1,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     expect(repo.isInitialized()).toBe(true);
     expect(repo.getMeta()).toEqual({
       turn: 1,
@@ -50,17 +57,39 @@ describe("SqliteGameRepository", () => {
       nextIslandId: 1,
       finalTurn: null,
       startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
     });
   });
 
   it("tryBumpTurn は expectedTurn が一致する時のみ成功する", () => {
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 1, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 1,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     expect(
-      repo.tryBumpTurn(2, { turn: 3, lastTime: 100, nextIslandId: 1, finalTurn: null, startAt: 0 }),
+      repo.tryBumpTurn(2, {
+        turn: 3,
+        lastTime: 100,
+        nextIslandId: 1,
+        finalTurn: null,
+        startAt: 0,
+        unitTimeSec: defaultConfig.unitTimeSec,
+      }),
     ).toBe(false);
     expect(repo.getMeta().turn).toBe(1);
     expect(
-      repo.tryBumpTurn(1, { turn: 2, lastTime: 100, nextIslandId: 1, finalTurn: null, startAt: 0 }),
+      repo.tryBumpTurn(1, {
+        turn: 2,
+        lastTime: 100,
+        nextIslandId: 1,
+        finalTurn: null,
+        startAt: 0,
+        unitTimeSec: defaultConfig.unitTimeSec,
+      }),
     ).toBe(true);
     expect(repo.getMeta()).toEqual({
       turn: 2,
@@ -68,11 +97,19 @@ describe("SqliteGameRepository", () => {
       nextIslandId: 1,
       finalTurn: null,
       startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
     });
   });
 
   it("insertIsland → findIsland は terrain/commands/prize/lbbs を含めて完全往復し、返り値の変更は DB に影響しない", () => {
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 2, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 2,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     const island = makeIsland(1, "島1");
     repo.insertIsland(island, 0);
 
@@ -94,7 +131,14 @@ describe("SqliteGameRepository", () => {
   });
 
   it("updateIsland は rank 以外の全列と lbbs を更新する", () => {
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 2, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 2,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     const island = makeIsland(1, "島1");
     repo.insertIsland(island, 0);
 
@@ -116,7 +160,14 @@ describe("SqliteGameRepository", () => {
   });
 
   it("listIslandSummaries / loadAllIslands は rank 昇順", () => {
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 3, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 3,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     repo.insertIsland(makeIsland(1, "島1"), 0);
     repo.insertIsland(makeIsland(2, "島2"), 1);
 
@@ -125,14 +176,28 @@ describe("SqliteGameRepository", () => {
   });
 
   it("findIslandByName で名前から検索できる", () => {
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 2, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 2,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     repo.insertIsland(makeIsland(1, "島1"), 0);
     expect(repo.findIslandByName("島1")?.id).toBe(1);
     expect(repo.findIslandByName("存在しない島")).toBeUndefined();
   });
 
   it("replaceAllIslands は渡された順に rank を振り直し、含まれない島を lbbs ごと削除する", () => {
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 3, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 3,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     const island1 = makeIsland(1, "島1");
     const island2 = makeIsland(2, "島2");
     repo.insertIsland(island1, 0);
@@ -157,7 +222,14 @@ describe("SqliteGameRepository", () => {
   });
 
   it("replaceAllIslands で順序を入れ替えても rank の UNIQUE 制約に抵触しない", () => {
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 3, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 3,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     const island1 = makeIsland(1, "島1");
     const island2 = makeIsland(2, "島2");
     repo.insertIsland(island1, 0);
@@ -169,7 +241,14 @@ describe("SqliteGameRepository", () => {
   });
 
   it("deleteIsland は lbbs_posts も削除する", () => {
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 2, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 2,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     repo.insertIsland(makeIsland(1, "島1"), 0);
     repo.replaceLbbs(1, [
       { author: "owner", userId: "owner-1", name: "島主", message: "hi", turn: 1 },
@@ -183,7 +262,14 @@ describe("SqliteGameRepository", () => {
   });
 
   it("listLogs は sinceTurn / islandId / includeSecretFor で絞り込み、turn DESC, seq ASC で返す", () => {
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 1, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 1,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     repo.appendLogs([
       { turn: 1, secret: false, islandId: 1, targetId: 0, html: "通常1", seq: 0 },
       { turn: 1, secret: true, islandId: 1, targetId: 0, html: "機密1", seq: 1 },
@@ -204,14 +290,28 @@ describe("SqliteGameRepository", () => {
   });
 
   it("appendLogs / listLogs は secret の真偽値を保持する", () => {
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 1, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 1,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     repo.appendLogs([{ turn: 1, secret: true, islandId: 1, targetId: 0, html: "s", seq: 0 }]);
     const logs = repo.listLogs({ sinceTurn: 1, includeSecretFor: 1 });
     expect(logs[0]?.secret).toBe(true);
   });
 
   it("deleteLogsBefore は指定 turn 未満を削除する", () => {
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 1, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 1,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     repo.appendLogs([
       { turn: 1, secret: false, islandId: 0, targetId: 0, html: "a", seq: 0 },
       { turn: 3, secret: false, islandId: 0, targetId: 0, html: "b", seq: 0 },
@@ -221,7 +321,14 @@ describe("SqliteGameRepository", () => {
   });
 
   it("history: appendHistory / listHistory (新しい順) / trimHistory", () => {
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 1, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 1,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     repo.appendHistory([
       { turn: 1, html: "a" },
       { turn: 2, html: "b" },
@@ -233,7 +340,14 @@ describe("SqliteGameRepository", () => {
   });
 
   it("reset は全テーブルの行を削除する", () => {
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 2, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 2,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     repo.insertIsland(makeIsland(1, "島1"), 0);
     repo.appendLogs([{ turn: 1, secret: false, islandId: 0, targetId: 0, html: "a", seq: 0 }]);
     repo.appendHistory([{ turn: 1, html: "a" }]);
@@ -247,7 +361,14 @@ describe("SqliteGameRepository", () => {
   });
 
   it("transaction 内で throw すると変更が残らない (ROLLBACK)", () => {
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 2, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 2,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     expect(() =>
       repo.transaction(() => {
         repo.insertIsland(makeIsland(1, "島1"), 0);
@@ -258,7 +379,14 @@ describe("SqliteGameRepository", () => {
   });
 
   it("壊れた JSON (terrain) は findIsland 時に throw する", () => {
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 2, finalTurn: null, startAt: 0 });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 2,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     repo.insertIsland(makeIsland(1, "島1"), 0);
     driver.run("UPDATE islands SET terrain = ? WHERE id = 1", "not-json");
     expect(() => repo.findIsland(1)).toThrow();
@@ -266,8 +394,22 @@ describe("SqliteGameRepository", () => {
 
   it("FakeGameRepository と同じ意味論であることの確認 (簡易比較)", () => {
     const fake: GameRepository = new FakeGameRepository();
-    fake.initialize({ turn: 1, lastTime: 0, nextIslandId: 2, finalTurn: null, startAt: 0 });
-    repo.initialize({ turn: 1, lastTime: 0, nextIslandId: 2, finalTurn: null, startAt: 0 });
+    fake.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 2,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
+    repo.initialize({
+      turn: 1,
+      lastTime: 0,
+      nextIslandId: 2,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
     const island = makeIsland(1, "島1");
     fake.insertIsland(island, 0);
     repo.insertIsland(island, 0);

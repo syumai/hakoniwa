@@ -22,6 +22,11 @@ export interface AdminInitializeOptions {
   startAt?: number;
   /** 省略時 (または未指定) は無期限 (null)。 */
   finalTurn?: number | null;
+  /**
+   * 1 ターンの長さ (秒)。tmp/16-season.md「ターンの長さも DB に持つ (追加要件)」節。
+   * 省略時は `config.unitTimeSec` (`HAKONIWA_UNIT_TIME_SEC`)。開始時刻の切り下げにもこの値を使う。
+   */
+  unitTimeSec?: number;
 }
 
 /** 管理画面のログイン方法設定 UI 向け VM。 */
@@ -57,13 +62,13 @@ export class AdminService {
   }
 
   async status(): Promise<AdminStatus> {
-    const { repo, backupStore, clock, config } = this.#deps;
+    const { repo, backupStore, clock } = this.#deps;
     const backups = await backupStore.list();
     if (!repo.isInitialized()) {
       return { initialized: false, backups };
     }
     const meta = repo.getMeta();
-    const season = buildSeasonVM(meta, clock.now(), config.unitTimeSec);
+    const season = buildSeasonVM(meta, clock.now());
     return { initialized: true, turn: meta.turn, lastTime: meta.lastTime, backups, season };
   }
 
@@ -71,15 +76,25 @@ export class AdminService {
    * Perl 版 Maintenance.pm newMode の移植: turn=1, nextIslandId=1。
    * tmp/16-season.md「設定の入口」節: `startAt` 省略時は従来どおり `now` を `unitTimeSec` で
    * 切り下げる。`finalTurn` 省略時は無期限 (null)。
+   * 「ターンの長さも DB に持つ (追加要件)」節: `unitTimeSec` 省略時は `config.unitTimeSec`
+   * (`HAKONIWA_UNIT_TIME_SEC`)。開始時刻の切り下げにもこの値を使う。
    */
   initialize(now: number, options: AdminInitializeOptions = {}): void {
     const { repo, config } = this.#deps;
-    const lastTime = options.startAt ?? now - (now % config.unitTimeSec);
+    const unitTimeSec = options.unitTimeSec ?? config.unitTimeSec;
+    const lastTime = options.startAt ?? now - (now % unitTimeSec);
     const finalTurn = options.finalTurn ?? null;
     repo.transaction(() => {
       repo.reset();
       // startAt はターン1の lastTime と同じ値で初期化する (16「開始時刻」の定義)。
-      repo.initialize({ turn: 1, lastTime, nextIslandId: 1, finalTurn, startAt: lastTime });
+      repo.initialize({
+        turn: 1,
+        lastTime,
+        nextIslandId: 1,
+        finalTurn,
+        startAt: lastTime,
+        unitTimeSec,
+      });
     });
   }
 
@@ -111,6 +126,24 @@ export class AdminService {
     repo.transaction(() => {
       const meta = repo.getMeta();
       repo.saveMeta({ ...meta, finalTurn });
+    });
+  }
+
+  /**
+   * 1 ターンの長さ (秒) の変更。tmp/16-season.md「ターンの長さも DB に持つ (追加要件)」節
+   * (管理画面「ゲーム設定」/ CLI `game set-unit-time`)。`lastTime` は変えないため、変更は
+   * 次のターン境界 (`lastTime + 新しい値`) から効く。
+   */
+  setUnitTimeSec(unitTimeSec: number): void {
+    if (!Number.isInteger(unitTimeSec) || unitTimeSec < 1) {
+      throw new Error(
+        `AdminService.setUnitTimeSec: must be a positive integer (got: ${unitTimeSec})`,
+      );
+    }
+    const { repo } = this.#deps;
+    repo.transaction(() => {
+      const meta = repo.getMeta();
+      repo.saveMeta({ ...meta, unitTimeSec });
     });
   }
 

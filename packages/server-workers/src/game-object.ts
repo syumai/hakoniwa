@@ -24,10 +24,10 @@ export class HakoniwaGame extends DurableObject<Env> {
     // 呼ばれないので、このまま Promise を返さなくてよい)。
     void ctx.blockConcurrencyWhile(async () => {
       const driver = new DurableObjectSqlDriver(ctx.storage);
-      migrate(driver);
+      const config = loadConfigFromEnv(pickStringEnv(env));
+      migrate(driver, { defaultUnitTimeSec: config.game.unitTimeSec });
       const backupStore = new BookmarkBackupStore(ctx);
       const clock = { now: () => Math.floor(Date.now() / 1000) };
-      const config = loadConfigFromEnv(pickStringEnv(env));
       this.#deps = buildDeps({ driver, backupStore, clock, config });
     });
   }

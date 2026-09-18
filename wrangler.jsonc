@@ -44,6 +44,8 @@
     // HAKONIWA_BASE_URL は通常不要 (better-auth がリクエストから baseURL/trustedOrigins を
     // 推定する)。カスタムドメインや逆プロキシ配下で明示したい場合だけここに追加する:
     //   "HAKONIWA_BASE_URL": "https://hakoniwa.example.com",
+    // 新しいデータを作るときの1ターンの長さ (秒) の既定値。以後は管理画面「ゲーム設定」/
+    // CLI game set-unit-time で変更する (この値を変えても既存データには影響しない)。
     "HAKONIWA_UNIT_TIME_SEC": "21600",
     "HAKONIWA_MAX_CATCH_UP_TURNS": "3",
     "HAKONIWA_ADMIN_EMAILS": "",

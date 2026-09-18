@@ -85,12 +85,13 @@ HAKONIWA_AUTH_SECRET=xxxx HAKONIWA_DEV_LOGIN=true HAKONIWA_ADMIN_EMAILS=you@exam
 ```sh
 node packages/server-node/dist/cli.js --help
 node packages/server-node/dist/cli.js db init          # データの新規作成
-node packages/server-node/dist/cli.js db init --start-at 2026-10-01T21:00:00+09:00 --final-turn 100
-node packages/server-node/dist/cli.js db status        # ターン数、最終更新時刻、開始時刻、最終ターン、状態、島数など
+node packages/server-node/dist/cli.js db init --start-at 2026-10-01T21:00:00+09:00 --final-turn 100 --unit-time 3600
+node packages/server-node/dist/cli.js db status        # ターン数、最終更新時刻、開始時刻、最終ターン、1ターンの長さ、状態、島数など
 node packages/server-node/dist/cli.js turn check       # 期限が来ていればターンを進める (終了後は 0)
 node packages/server-node/dist/cli.js turn advance     # 強制的に 1 ターン進める (終了後は何もしない)
 node packages/server-node/dist/cli.js time set <unix|ISO8601>
 node packages/server-node/dist/cli.js game set-final-turn <N|none>  # 最終ターン数の変更 (none で無期限に戻す)
+node packages/server-node/dist/cli.js game set-unit-time <sec>      # 1ターンの長さ(秒)の変更 (次のターン境界から効く)
 node packages/server-node/dist/cli.js backup list|create [label]|restore <label>|delete <label>
 ```
 
@@ -100,34 +101,34 @@ node packages/server-node/dist/cli.js backup list|create [label]|restore <label>
 
 ## 環境変数
 
-| 環境変数                                                        | 既定値                                    | 用途                                                                                                                                      |
-| --------------------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `PORT`                                                          | `3000`                                    | サーバーの待受ポート                                                                                                                      |
-| `HAKONIWA_DB_PATH`                                              | `./data/hakoniwa.sqlite`                  | SQLite データベースファイル                                                                                                               |
-| `HAKONIWA_BACKUP_DIR`                                           | `./data/backups`                          | バックアップの出力先                                                                                                                      |
-| `HAKONIWA_TURN_CHECK_INTERVAL_SEC`                              | `60`                                      | ターン進行判定のタイマー間隔 (秒)。`0` で無効                                                                                             |
-| `HAKONIWA_BASE_URL`                                             | (なし = リクエストのオリジンから自動判定) | better-auth の baseURL。OAuth コールバックと Origin 検査に使う。通常は不要。カスタムドメインや逆プロキシ配下で明示したいときだけ設定する  |
-| `HAKONIWA_AUTH_SECRET`                                          | (なし、**必須**)                          | better-auth の secret と CSRF トークンの鍵。`openssl rand -base64 32` 等                                                                  |
-| `HAKONIWA_X_CLIENT_ID` / `HAKONIWA_X_CLIENT_SECRET`             | (なし)                                    | 両方設定すると X (Twitter) ログインが有効になる                                                                                           |
-| `HAKONIWA_DISCORD_CLIENT_ID` / `HAKONIWA_DISCORD_CLIENT_SECRET` | (なし)                                    | 両方設定すると Discord ログインが有効になる                                                                                               |
-| `HAKONIWA_DEV_LOGIN`                                            | `false`                                   | `true` で開発ログイン (任意のメールアドレスでログイン) を有効化                                                                           |
-| `HAKONIWA_ADMIN_EMAILS`                                         | (なし)                                    | 管理者とみなすメールアドレス (カンマ区切り)                                                                                               |
-| `HAKONIWA_RESEND_API_KEY`                                       | (なし)                                    | メール送信 (Resend)。未設定ならコンソールにリンクを出力するだけの開発用 Mailer                                                            |
-| `HAKONIWA_MAIL_FROM`                                            | `hakoniwa@example.com`                    | メールの送信元アドレス                                                                                                                    |
-| `HAKONIWA_NG_WORDS`                                             | (なし)                                    | 追加の NG ワード (カンマ区切り)                                                                                                           |
-| `HAKONIWA_DEBUG`                                                | `false`                                   | `true` でトップに「ターンを進める」ボタンを表示 (管理者ログイン必須)                                                                      |
-| `HAKONIWA_ADMIN_ENABLED`                                        | `true`                                    | 管理画面 (`/admin`) の有効 / 無効                                                                                                         |
-| `HAKONIWA_USE_LBBS`                                             | `false`                                   | 島ごとのローカル掲示板の有効 / 無効                                                                                                       |
-| `HAKONIWA_UNIT_TIME_SEC`                                        | `21600`                                   | 1 ターンの長さ (秒)                                                                                                                       |
-| `HAKONIWA_MAX_CATCH_UP_TURNS`                                   | `1`                                       | 1 回の判定で進める最大ターン数                                                                                                            |
-| `HAKONIWA_SITE_TITLE`                                           | `箱庭諸島２`                              | サイトタイトル                                                                                                                            |
-| `HAKONIWA_ADMIN_NAME`                                           | (なし)                                    | フッタの管理者名。未設定ならフッタに表示しない                                                                                            |
-| `HAKONIWA_EMAIL`                                                | (なし)                                    | フッタの連絡先。未設定ならフッタに表示しない                                                                                              |
-| `HAKONIWA_BBS_URL`                                              | (なし)                                    | フッタの掲示板リンク。未設定ならフッタに表示しない                                                                                        |
-| `HAKONIWA_TOPPAGE_URL`                                          | (なし)                                    | フッタのトップページリンク。未設定ならフッタに表示しない                                                                                  |
-| `HAKONIWA_START_AT`                                             | (なし)                                    | ターン1が始まる開始日時 (ISO 8601)。管理画面の初期化フォームと CLI `db init` の既定値。未設定なら初期化時の現在時刻を切り下げた時刻を使う |
-| `HAKONIWA_FINAL_TURN`                                           | (なし)                                    | 最終ターン数 (正の整数)。管理画面の初期化フォームと CLI `db init` の既定値。未設定なら無期限                                              |
-| `HAKONIWA_TIMEZONE`                                             | `Asia/Tokyo`                              | datetime-local の解釈と日時表示に使う IANA タイムゾーン名                                                                                 |
+| 環境変数                                                        | 既定値                                    | 用途                                                                                                                                                                    |
+| --------------------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`                                                          | `3000`                                    | サーバーの待受ポート                                                                                                                                                    |
+| `HAKONIWA_DB_PATH`                                              | `./data/hakoniwa.sqlite`                  | SQLite データベースファイル                                                                                                                                             |
+| `HAKONIWA_BACKUP_DIR`                                           | `./data/backups`                          | バックアップの出力先                                                                                                                                                    |
+| `HAKONIWA_TURN_CHECK_INTERVAL_SEC`                              | `60`                                      | ターン進行判定のタイマー間隔 (秒)。`0` で無効                                                                                                                           |
+| `HAKONIWA_BASE_URL`                                             | (なし = リクエストのオリジンから自動判定) | better-auth の baseURL。OAuth コールバックと Origin 検査に使う。通常は不要。カスタムドメインや逆プロキシ配下で明示したいときだけ設定する                                |
+| `HAKONIWA_AUTH_SECRET`                                          | (なし、**必須**)                          | better-auth の secret と CSRF トークンの鍵。`openssl rand -base64 32` 等                                                                                                |
+| `HAKONIWA_X_CLIENT_ID` / `HAKONIWA_X_CLIENT_SECRET`             | (なし)                                    | 両方設定すると X (Twitter) ログインが有効になる                                                                                                                         |
+| `HAKONIWA_DISCORD_CLIENT_ID` / `HAKONIWA_DISCORD_CLIENT_SECRET` | (なし)                                    | 両方設定すると Discord ログインが有効になる                                                                                                                             |
+| `HAKONIWA_DEV_LOGIN`                                            | `false`                                   | `true` で開発ログイン (任意のメールアドレスでログイン) を有効化                                                                                                         |
+| `HAKONIWA_ADMIN_EMAILS`                                         | (なし)                                    | 管理者とみなすメールアドレス (カンマ区切り)                                                                                                                             |
+| `HAKONIWA_RESEND_API_KEY`                                       | (なし)                                    | メール送信 (Resend)。未設定ならコンソールにリンクを出力するだけの開発用 Mailer                                                                                          |
+| `HAKONIWA_MAIL_FROM`                                            | `hakoniwa@example.com`                    | メールの送信元アドレス                                                                                                                                                  |
+| `HAKONIWA_NG_WORDS`                                             | (なし)                                    | 追加の NG ワード (カンマ区切り)                                                                                                                                         |
+| `HAKONIWA_DEBUG`                                                | `false`                                   | `true` でトップに「ターンを進める」ボタンを表示 (管理者ログイン必須)                                                                                                    |
+| `HAKONIWA_ADMIN_ENABLED`                                        | `true`                                    | 管理画面 (`/admin`) の有効 / 無効                                                                                                                                       |
+| `HAKONIWA_USE_LBBS`                                             | `false`                                   | 島ごとのローカル掲示板の有効 / 無効                                                                                                                                     |
+| `HAKONIWA_UNIT_TIME_SEC`                                        | `21600`                                   | 新しいデータを作るときの1ターンの長さ (秒) の既定値。以後は管理画面「ゲーム設定」/ CLI `game set-unit-time` で変更する (この環境変数を変えても既存データには影響しない) |
+| `HAKONIWA_MAX_CATCH_UP_TURNS`                                   | `1`                                       | 1 回の判定で進める最大ターン数                                                                                                                                          |
+| `HAKONIWA_SITE_TITLE`                                           | `箱庭諸島２`                              | サイトタイトル                                                                                                                                                          |
+| `HAKONIWA_ADMIN_NAME`                                           | (なし)                                    | フッタの管理者名。未設定ならフッタに表示しない                                                                                                                          |
+| `HAKONIWA_EMAIL`                                                | (なし)                                    | フッタの連絡先。未設定ならフッタに表示しない                                                                                                                            |
+| `HAKONIWA_BBS_URL`                                              | (なし)                                    | フッタの掲示板リンク。未設定ならフッタに表示しない                                                                                                                      |
+| `HAKONIWA_TOPPAGE_URL`                                          | (なし)                                    | フッタのトップページリンク。未設定ならフッタに表示しない                                                                                                                |
+| `HAKONIWA_START_AT`                                             | (なし)                                    | ターン1が始まる開始日時 (ISO 8601)。管理画面の初期化フォームと CLI `db init` の既定値。未設定なら初期化時の現在時刻を切り下げた時刻を使う                               |
+| `HAKONIWA_FINAL_TURN`                                           | (なし)                                    | 最終ターン数 (正の整数)。管理画面の初期化フォームと CLI `db init` の既定値。未設定なら無期限                                                                            |
+| `HAKONIWA_TIMEZONE`                                             | `Asia/Tokyo`                              | datetime-local の解釈と日時表示に使う IANA タイムゾーン名                                                                                                               |
 
 最終ターンを設定すると、そのターンの処理が終わった時点でゲームが終了し、以降はターンが進まなくなります (管理画面の「ゲーム設定」または CLI `game set-final-turn` でいつでも変更・解除できます)。終了後もトップと観光・開発画面は閲覧でき、掲示板への記帳もできますが、計画登録・コメント更新・名前変更・新しい島の作成はできなくなります。
 
@@ -224,7 +225,7 @@ wrangler dev --port 8787 \
 
 ### ターン進行の仕組み (Cron Trigger)
 
-Node 版のタイマーの代わりに、`wrangler.jsonc` の `triggers.crons` (既定 `*/15 * * * *`、15 分ごと) から Worker の `scheduled` ハンドラが呼ばれ、DO の RPC `checkTurn()` (`turnService.advanceTurnIfDue`) を実行します。実際にターンを進めるべきかどうかは `HAKONIWA_UNIT_TIME_SEC` と最終更新時刻から判定するため、Cron 側は境界を意識しません。ターン境界と Cron 間隔の差 (最大 15 分) だけ進行が遅れますが、リクエストごとの遅延判定 (turn-check ミドルウェア) も併存するのでアクセスがあればその時点で進みます。ローカルの `wrangler dev` では Cron は自動発火しないため、手動で `curl http://localhost:8787/cdn-cgi/local/scheduled` を叩いて試せます。
+Node 版のタイマーの代わりに、`wrangler.jsonc` の `triggers.crons` (既定 `*/15 * * * *`、15 分ごと) から Worker の `scheduled` ハンドラが呼ばれ、DO の RPC `checkTurn()` (`turnService.advanceTurnIfDue`) を実行します。実際にターンを進めるべきかどうかは DB に保存された1ターンの長さ (初期化時に `HAKONIWA_UNIT_TIME_SEC` で決まり、以後は管理画面/CLI で変更できる) と最終更新時刻から判定するため、Cron 側は境界を意識しません。ターン境界と Cron 間隔の差 (最大 15 分) だけ進行が遅れますが、リクエストごとの遅延判定 (turn-check ミドルウェア) も併存するのでアクセスがあればその時点で進みます。ローカルの `wrangler dev` では Cron は自動発火しないため、手動で `curl http://localhost:8787/cdn-cgi/local/scheduled` を叩いて試せます。
 
 ### バックアップ (PITR)
 

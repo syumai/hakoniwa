@@ -283,3 +283,85 @@ describe("tmp/16-season.md: 管理画面の開始時刻・最終ターン", () =
     expect(testApp.repo.getMeta().finalTurn).toBeNull();
   });
 });
+
+describe("tmp/16-season.md: ターンの長さも DB に持つ (追加要件)", () => {
+  it("GET /admin: 現役データに「1 ターンの長さ」を整形して表示する", async () => {
+    const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL], unitTimeSec: 21600 });
+    const admin = await loginAdmin(testApp);
+    const res = await testApp.app.request("/admin", { headers: { cookie: admin.cookie } });
+    const html = await res.text();
+    expect(html).toContain("1 ターンの長さ");
+    expect(html).toContain("6時間");
+  });
+
+  it("未初期化の「新しいデータを作る」フォームは config.unitTimeSec を既定値として表示する", async () => {
+    const testApp = setupTestApp({
+      adminEmails: [ADMIN_EMAIL],
+      skipInit: true,
+      gameOverrides: { unitTimeSec: 3600 },
+    });
+    const admin = await loginAdmin(testApp);
+    const res = await testApp.app.request("/admin", { headers: { cookie: admin.cookie } });
+    const html = await res.text();
+    expect(html).toContain('name="unit-time"');
+    expect(html).toContain('value="3600"');
+  });
+
+  it("POST /admin/init: unit-time を指定して初期化できる", async () => {
+    const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL], skipInit: true });
+    const admin = await loginAdmin(testApp);
+    const res = await postForm(
+      testApp.app,
+      "/admin/init",
+      { "unit-time": 60, _csrf: admin.csrfToken },
+      { cookie: admin.cookie },
+    );
+    expect(res.status).toBe(200);
+    expect(testApp.repo.getMeta().unitTimeSec).toBe(60);
+  });
+
+  it("POST /admin/init: unit-time を省略すると config.unitTimeSec が使われる", async () => {
+    const testApp = setupTestApp({
+      adminEmails: [ADMIN_EMAIL],
+      skipInit: true,
+      gameOverrides: { unitTimeSec: 3600 },
+    });
+    const admin = await loginAdmin(testApp);
+    await postForm(
+      testApp.app,
+      "/admin/init",
+      { _csrf: admin.csrfToken },
+      { cookie: admin.cookie },
+    );
+    expect(testApp.repo.getMeta().unitTimeSec).toBe(3600);
+  });
+
+  it("POST /admin/unit-time: 1 ターンの長さを変更できる (lastTime は変わらない)", async () => {
+    const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL] });
+    const admin = await loginAdmin(testApp);
+    const before = testApp.repo.getMeta();
+    const res = await postForm(
+      testApp.app,
+      "/admin/unit-time",
+      { "unit-time": 120, _csrf: admin.csrfToken },
+      { cookie: admin.cookie },
+    );
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("1 ターンの長さを変更しました");
+    const after = testApp.repo.getMeta();
+    expect(after.unitTimeSec).toBe(120);
+    expect(after.lastTime).toBe(before.lastTime);
+  });
+
+  it("POST /admin/unit-time: 0 以下は 400 (invalid_input)", async () => {
+    const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL] });
+    const admin = await loginAdmin(testApp);
+    const res = await postForm(
+      testApp.app,
+      "/admin/unit-time",
+      { "unit-time": 0, _csrf: admin.csrfToken },
+      { cookie: admin.cookie },
+    );
+    expect(res.status).toBe(400);
+  });
+});

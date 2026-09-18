@@ -113,6 +113,8 @@ export interface SetupOptions {
   startAt?: number;
   /** 省略時は INITIAL_CLOCK (turn=1 の meta.lastTime)。開始前状態のテストに使う。 */
   lastTime?: number;
+  /** tmp/16-season.md「ターンの長さも DB に持つ」節のテスト用。省略時は config.unitTimeSec。 */
+  unitTimeSec?: number;
   /** 省略時は "Asia/Tokyo"。 */
   timezone?: string;
 }
@@ -129,6 +131,9 @@ export interface TestApp {
 }
 
 export function setupTestApp(options: SetupOptions = {}): TestApp {
+  const debug = options.debug ?? false;
+  const game: GameConfig = { ...defaultConfig, debug, ...options.gameOverrides };
+
   const repo = new FakeGameRepository();
   if (options.skipInit !== true) {
     repo.initialize({
@@ -137,6 +142,7 @@ export function setupTestApp(options: SetupOptions = {}): TestApp {
       nextIslandId: 1,
       finalTurn: options.finalTurn ?? null,
       startAt: options.startAt ?? INITIAL_CLOCK,
+      unitTimeSec: options.unitTimeSec ?? game.unitTimeSec,
     });
   }
   const clock = new FakeClock(INITIAL_CLOCK);
@@ -144,9 +150,6 @@ export function setupTestApp(options: SetupOptions = {}): TestApp {
   const backupStore = new FakeBackupStore();
   const logger = new FakeLogger();
   const auth = new FakeAuth();
-
-  const debug = options.debug ?? false;
-  const game: GameConfig = { ...defaultConfig, debug, ...options.gameOverrides };
 
   const config: AppConfig = {
     game,

@@ -54,7 +54,11 @@ export interface GameConfig {
   site: SiteConfig;
 
   // 進行
-  /** 1ターンが何秒か。 */
+  /**
+   * 1ターンが何秒か。tmp/16-season.md「ターンの長さも DB に持つ (追加要件)」節: 初期化後は
+   * `GameMeta.unitTimeSec` (DB の値) が実際のターン進行に使われ、この値は「新しいデータを
+   * 作るときの既定値」としてのみ使われる。
+   */
   unitTimeSec: number;
   /** 島の最大数。 */
   maxIslands: number;

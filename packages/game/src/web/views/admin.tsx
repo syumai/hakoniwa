@@ -2,6 +2,7 @@
 // tmp/14-users-auth.md によりパスワード欄を撤去し (`_csrf` で保護)、
 // ログイン方法のトグルと資金・食料最大化フォームを追加した。
 import type { AdminStatus, AuthMethodsVM } from "../../app/admin-service.ts";
+import { formatDuration } from "../../app/format.ts";
 import type { BackupInfo } from "../../app/ports.ts";
 import type { SeasonState } from "../../app/season.ts";
 import { formatDateTime, formatDateTimeLocalValue } from "../../app/timezone.ts";
@@ -140,20 +141,26 @@ export interface AdminPageProps {
   islands: readonly IslandSelectVM[];
   /** datetime-local の解釈・表示に使うタイムゾーン。tmp/16-season.md「タイムゾーン」節。 */
   timezone: string;
-  /** 「新しいデータを作る」フォームの既定値 (HAKONIWA_START_AT / HAKONIWA_FINAL_TURN 由来)。 */
-  initDefaults: { startAt?: number; finalTurn?: number };
+  /**
+   * 「新しいデータを作る」フォームの既定値
+   * (HAKONIWA_START_AT / HAKONIWA_FINAL_TURN / HAKONIWA_UNIT_TIME_SEC 由来)。
+   */
+  initDefaults: { startAt?: number; finalTurn?: number; unitTimeSec: number };
   csrfToken: string;
   notice: string | undefined;
 }
 
-/** 「新しいデータを作る」フォーム。開始日時 (省略可) と最終ターン数 (省略可) を入力する。 */
+/**
+ * 「新しいデータを作る」フォーム。開始日時 (省略可)、最終ターン数 (省略可)、
+ * 1 ターンの長さ (秒) を入力する。
+ */
 function InitForm({
   timezone,
   initDefaults,
   csrfToken,
 }: {
   timezone: string;
-  initDefaults: { startAt?: number; finalTurn?: number };
+  initDefaults: { startAt?: number; finalTurn?: number; unitTimeSec: number };
   csrfToken: string;
 }) {
   return (
@@ -176,6 +183,11 @@ function InitForm({
         最終ターン数 (省略時: 無期限)
         <br />
         <input type="number" name="final-turn" min={1} value={initDefaults.finalTurn ?? ""} />
+      </p>
+      <p>
+        1 ターンの長さ (秒)
+        <br />
+        <input type="number" name="unit-time" min={1} value={initDefaults.unitTimeSec} />
       </p>
       <input type="submit" value="新しいデータを作る" />
     </form>
@@ -215,6 +227,9 @@ export function AdminPage({
             <b>最終ターン</b>:{status.season.finalTurn ?? "無期限"}
           </p>
           <p>
+            <b>1 ターンの長さ</b>:{formatDuration(status.season.unitTimeSec)}
+          </p>
+          <p>
             <b>状態</b>:{seasonStateLabel(status.season.state)}
           </p>
           <form action="/admin/reset" method="post">
@@ -247,6 +262,12 @@ export function AdminPage({
             最終ターン数 (空欄で無期限)
             <input type="number" name="final-turn" min={1} value={status.season.finalTurn ?? ""} />
             <input type="submit" value="最終ターン数を変更" />
+          </form>
+          <form action="/admin/unit-time" method="post">
+            <input type="hidden" name="_csrf" value={csrfToken} />1 ターンの長さ
+            (秒。変更は次のターン境界から効く)
+            <input type="number" name="unit-time" min={1} value={status.season.unitTimeSec} />
+            <input type="submit" value="1 ターンの長さを変更" />
           </form>
 
           <h3>資金・食料の最大化</h3>

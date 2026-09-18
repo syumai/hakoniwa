@@ -2,6 +2,7 @@
 // tmp/14-users-auth.md によりパスワード関連フォームを撤去し、ログイン状態で出し分ける。
 import type { GameConfig } from "../../core/config.ts";
 import { monsters } from "../../core/constants.ts";
+import { formatDuration } from "../../app/format.ts";
 import type { SeasonVM } from "../../app/season.ts";
 import { formatDateTime } from "../../app/timezone.ts";
 import type { IslandRowVM, TopPageVM } from "../../app/view-models.ts";
@@ -197,6 +198,7 @@ function SeasonHeading({
         ターン{season.turn}
         {season.finalTurn !== null ? ` / 最終ターン${season.finalTurn}` : ""}
       </h1>
+      <p>1 ターン: {formatDuration(season.unitTimeSec)}</p>
       {season.state === "before" ? (
         <p>
           ゲーム開始:{formatDateTime(season.startAt, timezone)}({timezone})

@@ -181,7 +181,7 @@ export class GameService {
       formatCommand(command, index, config, resolveIslandName),
     );
     const defaults: UserPrefs = repo.getUserPrefs(userId) ?? {};
-    const season = buildSeasonVM(meta, this.#deps.clock.now(), config.unitTimeSec);
+    const season = buildSeasonVM(meta, this.#deps.clock.now());
     return {
       ...buildDetailVM(island, rank, meta.turn),
       money: island.money,
@@ -227,7 +227,7 @@ export class GameService {
     const logs = repo.listLogs({ sinceTurn });
     const history = repo.listHistory(config.historyMax);
     const hasIsland = actor !== undefined && repo.findIslandByOwner(actor.id) !== undefined;
-    const season = buildSeasonVM(meta, this.#deps.clock.now(), config.unitTimeSec);
+    const season = buildSeasonVM(meta, this.#deps.clock.now());
     return {
       turn: meta.turn,
       islands,

@@ -58,7 +58,14 @@ describe("AdminService.initialize", () => {
   it("既存データがあっても上書きしてやり直せる", () => {
     const { repo, admin } = setup();
     admin.initialize(0);
-    repo.saveMeta({ turn: 99, lastTime: 0, nextIslandId: 5, finalTurn: null, startAt: 0 });
+    repo.saveMeta({
+      turn: 99,
+      lastTime: 0,
+      nextIslandId: 5,
+      finalTurn: null,
+      startAt: 0,
+      unitTimeSec: defaultConfig.unitTimeSec,
+    });
 
     admin.initialize(defaultConfig.unitTimeSec);
 
@@ -84,6 +91,49 @@ describe("AdminService.initialize", () => {
 
     admin.initialize(0);
     expect(repo.getMeta().finalTurn).toBeNull();
+  });
+
+  it("tmp/16-season.md: unitTimeSec を指定すると保存され、その値で lastTime を切り下げる", () => {
+    const { repo, admin } = setup();
+    const now = 60 * 7 + 30;
+
+    admin.initialize(now, { unitTimeSec: 60 });
+
+    const meta = repo.getMeta();
+    expect(meta.unitTimeSec).toBe(60);
+    expect(meta.lastTime).toBe(60 * 7);
+    expect(meta.startAt).toBe(60 * 7);
+  });
+
+  it("tmp/16-season.md: unitTimeSec 省略時は config.unitTimeSec になる", () => {
+    const { repo, admin } = setup();
+
+    admin.initialize(0);
+
+    expect(repo.getMeta().unitTimeSec).toBe(defaultConfig.unitTimeSec);
+  });
+});
+
+describe("AdminService.setUnitTimeSec", () => {
+  it("unitTimeSec だけを更新し、lastTime は変えない", () => {
+    const { repo, admin } = setup();
+    admin.initialize(0);
+    const before = repo.getMeta();
+
+    admin.setUnitTimeSec(120);
+
+    const after = repo.getMeta();
+    expect(after.unitTimeSec).toBe(120);
+    expect(after.lastTime).toBe(before.lastTime);
+    expect(after.turn).toBe(before.turn);
+  });
+
+  it("0 以下や非整数は Error", () => {
+    const { admin } = setup();
+    admin.initialize(0);
+    expect(() => admin.setUnitTimeSec(0)).toThrow();
+    expect(() => admin.setUnitTimeSec(-1)).toThrow();
+    expect(() => admin.setUnitTimeSec(1.5)).toThrow();
   });
 });
 
@@ -126,6 +176,14 @@ describe("AdminService.status", () => {
     const status = await admin.status();
     expect(status.initialized).toBe(true);
     expect(status.turn).toBe(1);
+  });
+
+  it("tmp/16-season.md: season.unitTimeSec は config ではなく meta の値を返す", async () => {
+    const { admin } = setup();
+    admin.initialize(0, { unitTimeSec: 60 });
+    admin.setUnitTimeSec(120);
+    const status = await admin.status();
+    expect(status.season?.unitTimeSec).toBe(120);
   });
 });
 

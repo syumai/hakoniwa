@@ -17,6 +17,14 @@ export interface GameMeta {
    * `setLastTime` (管理画面「最終更新時刻の変更」) が同期して更新する。ターン2以降は不変。
    */
   startAt: number;
+  /**
+   * 1 ターンの長さ (秒)。tmp/16-season.md「ターンの長さも DB に持つ (追加要件)」節。
+   * `initialize` 時に `config.unitTimeSec` (または管理画面/CLI で指定した値) で設定され、
+   * 以後は管理画面「ゲーム設定」/ CLI `game set-unit-time` でのみ変わる。ターン進行・
+   * 次のターン予定・開始時刻の切り下げは以後すべてこの値を使う (`config.unitTimeSec` は
+   * 新しいデータを作るときの既定値としてのみ使う)。
+   */
+  unitTimeSec: number;
 }
 
 /** 一覧用の軽量な島情報。地形・コマンド・掲示板を含まない (トップ画面/セレクト用)。 */

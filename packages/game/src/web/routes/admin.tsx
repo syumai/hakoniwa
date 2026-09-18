@@ -13,6 +13,7 @@ import {
   parseAdminLastTimeForm,
   parseAuthMethodsForm,
   parseFinalTurnForm,
+  parseUnitTimeForm,
 } from "../forms/admin-forms.ts";
 import { listIslandSelectOptions } from "./helpers.ts";
 import { renderPage } from "./render.tsx";
@@ -47,6 +48,7 @@ async function renderAdmin(c: Context<AppEnv>, deps: WebDeps, notice: string | u
       initDefaults={{
         ...(deps.config.startAt !== undefined ? { startAt: deps.config.startAt } : {}),
         ...(deps.config.finalTurn !== undefined ? { finalTurn: deps.config.finalTurn } : {}),
+        unitTimeSec: deps.config.game.unitTimeSec,
       }}
       csrfToken={c.get("csrfToken") ?? ""}
       notice={notice}
@@ -91,6 +93,16 @@ export function createAdminRoutes(deps: WebDeps): Hono<AppEnv> {
     const finalTurn = parseFinalTurnForm(body);
     deps.adminService.setFinalTurn(finalTurn);
     return renderAdmin(c, deps, "最終ターン数を変更しました。");
+  });
+
+  // 追加: tmp/16-season.md「ターンの長さも DB に持つ (追加要件)」節。「ゲーム設定」の
+  // 1 ターンの長さ変更。lastTime は変えないため、次のターン境界から効く。
+  app.post("/admin/unit-time", async (c) => {
+    requireAdmin(c);
+    const body = await parseStringBody(c);
+    const unitTimeSec = parseUnitTimeForm(body);
+    deps.adminService.setUnitTimeSec(unitTimeSec);
+    return renderAdmin(c, deps, "1 ターンの長さを変更しました。");
   });
 
   app.post("/admin/turn", async (c) => {

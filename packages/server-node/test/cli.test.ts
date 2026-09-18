@@ -237,3 +237,55 @@ describe("cli (tmp/16-season.md: 開始時刻・最終ターン)", () => {
     expect(statusAfterIO.lines.join("\n")).toContain("ターン: 2");
   });
 });
+
+describe("cli (tmp/16-season.md: ターンの長さも DB に持つ)", () => {
+  let dir: string;
+  let env: Record<string, string | undefined>;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "hakoniwa-cli-unittime-test-"));
+    env = {
+      HAKONIWA_DB_PATH: join(dir, "hakoniwa.sqlite"),
+      HAKONIWA_BACKUP_DIR: join(dir, "backups"),
+      HAKONIWA_AUTH_SECRET: "a".repeat(32),
+    };
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("db init --unit-time で1ターンの長さを指定できる", async () => {
+    expect(await runCli(["db", "init", "--unit-time", "60"], env, createIO())).toBe(0);
+
+    const statusIO = createIO();
+    expect(await runCli(["db", "status"], env, statusIO)).toBe(0);
+    expect(statusIO.lines.join("\n")).toContain("1 ターンの長さ: 1分");
+  });
+
+  it("db init は HAKONIWA_UNIT_TIME_SEC を既定値として使う", async () => {
+    const envWithDefault = { ...env, HAKONIWA_UNIT_TIME_SEC: "3600" };
+    expect(await runCli(["db", "init"], envWithDefault, createIO())).toBe(0);
+
+    const statusIO = createIO();
+    await runCli(["db", "status"], envWithDefault, statusIO);
+    expect(statusIO.lines.join("\n")).toContain("1 ターンの長さ: 1時間");
+  });
+
+  it("game set-unit-time <sec> で1ターンの長さを変更できる", async () => {
+    await runCli(["db", "init"], env, createIO());
+    const io = createIO();
+    expect(await runCli(["game", "set-unit-time", "120"], env, io)).toBe(0);
+    expect(io.lines.join("\n")).toContain("2分");
+
+    const statusIO = createIO();
+    await runCli(["db", "status"], env, statusIO);
+    expect(statusIO.lines.join("\n")).toContain("1 ターンの長さ: 2分");
+  });
+
+  it("game set-unit-time に不正な値を渡すと 2 を返す", async () => {
+    await runCli(["db", "init"], env, createIO());
+    expect(await runCli(["game", "set-unit-time", "0"], env, createIO())).toBe(2);
+    expect(await runCli(["game", "set-unit-time", "abc"], env, createIO())).toBe(2);
+  });
+});
