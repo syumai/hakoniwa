@@ -1,4 +1,4 @@
-# 箱庭諸島
+# 箱庭諸島２
 
 徳岡宏樹氏による Web ブラウザゲーム「箱庭諸島２」を、TypeScript (Node.js + Hono + `node:sqlite`) で書き直したものです。
 ゲームロジックと HTTP 層をランタイムから独立させてあり、将来的に Cloudflare Workers (Durable Objects SQLite) でも動かせる構成にしています。
