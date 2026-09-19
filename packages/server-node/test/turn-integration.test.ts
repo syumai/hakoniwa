@@ -40,7 +40,6 @@ function setup(overrides: Partial<typeof defaultConfig> = {}) {
     clock,
     config,
     rng: createSeededRng(42),
-    turnCheckOnRequest: true,
   });
   deps.adminService.initialize(clock.now());
   const gameId = deps.repo.getCurrentGameId();
@@ -123,14 +122,7 @@ describe("turn-integration (実 DB)", () => {
       debug: false,
       timezone: "Asia/Tokyo",
     };
-    const deps = buildDeps({
-      driver,
-      backupStore,
-      clock,
-      config,
-      rng: createSeededRng(42),
-      turnCheckOnRequest: true,
-    });
+    const deps = buildDeps({ driver, backupStore, clock, config, rng: createSeededRng(42) });
     deps.adminService.initialize(clock.now(), { finalTurn: 2 });
     const gameId = deps.repo.getCurrentGameId();
     if (gameId === undefined) throw new Error("unreachable");

@@ -363,28 +363,3 @@ describe("tmp/16-season.md: トップの3状態 (開始前/進行中/終了)", (
     expect(html).toContain("諸島の状況");
   });
 });
-
-describe("turnCheckOnRequest (Cloudflare Workers 版はリクエスト時に進行させない)", () => {
-  it("turnCheckOnRequest: false のとき、期限を過ぎていても GET / でターンが進まない", async () => {
-    const testApp = setupTestApp({ turnCheckOnRequest: false });
-    testApp.clock.advance(defaultConfig.unitTimeSec * 2);
-
-    const res = await testApp.app.request("/games/1");
-    expect(res.status).toBe(200);
-    expect(currentMeta(testApp).turn).toBe(1);
-
-    // turnService 自体は生きているので、明示的な呼び出し (Workers 版の Cron 相当) では進む
-    // (defaultConfig.maxCatchUpTurns === 1 のため、1 回の呼び出しで 1 ターンだけ進む)。
-    testApp.turnService.advanceTurnIfDue(testApp.clock.now());
-    expect(currentMeta(testApp).turn).toBe(2);
-  });
-
-  it("turnCheckOnRequest: true (既定) のとき、期限を過ぎていれば GET / でターンが進む", async () => {
-    const testApp = setupTestApp({ turnCheckOnRequest: true });
-    testApp.clock.advance(defaultConfig.unitTimeSec * 2);
-
-    const res = await testApp.app.request("/games/1");
-    expect(res.status).toBe(200);
-    expect(currentMeta(testApp).turn).toBe(2);
-  });
-});

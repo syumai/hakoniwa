@@ -90,7 +90,6 @@ HAKONIWA_AUTH_SECRET=xxxx HAKONIWA_ADMIN_EMAILS=you@example.com node packages/se
 | `HAKONIWA_DB_PATH`                                              | `./data/hakoniwa.sqlite`                  | SQLite データベースファイル                                                                                                                                                   |  ○   | - (DO の SQLite ストレージ) |
 | `HAKONIWA_BACKUP_DIR`                                           | `./data/backups`                          | バックアップの出力先                                                                                                                                                          |  ○   | - (PITR を使う)             |
 | `HAKONIWA_TURN_CHECK_INTERVAL_SEC`                              | `60`                                      | ターン進行判定のタイマー間隔 (秒)。`0` で無効                                                                                                                                 |  ○   | - (Cron Trigger を使う)     |
-| `HAKONIWA_TURN_CHECK_ON_REQUEST`                                | `true`                                    | リクエスト時にもターン進行判定を行うか。Node 版のみの設定で、Workers 版は常に `false` 固定 (Cron Trigger のみ。詳細は [development.md](development.md#ターン進行の仕組み))    |  ○   | - (常に `false` 固定)       |
 
 ## 5. 管理画面の機能一覧と運用 (`/admin`)
 

@@ -30,13 +30,7 @@ export function composeNode(config: NodeConfig): ComposedNode {
   const backupStore = new FileBackupStore(config.dbPath, config.backupDir, driver);
   const clock = createSystemClock();
 
-  const deps = buildDeps({
-    driver,
-    backupStore,
-    clock,
-    config,
-    turnCheckOnRequest: config.turnCheckOnRequest,
-  });
+  const deps = buildDeps({ driver, backupStore, clock, config });
 
   return { ...deps, driver, backupStore };
 }

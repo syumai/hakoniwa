@@ -86,64 +86,6 @@ describe("HakoniwaGame (DO 経由の Hono app)", () => {
     expect(await topAfterInit.text()).toContain("<h2>ターン 1</h2>");
   });
 
-  // ターン進行のトリガーを Cron Trigger に限定する (buildDeps に turnCheckOnRequest: false を
-  // 渡している) ことの確認。管理画面「最終更新時刻の変更」で期限を大きく過ぎた状態を作り、
-  // GET だけではターンが進まず、checkTurn() (Cron 相当の RPC) を呼んで初めて進むことを見る。
-  it("期限を過ぎた状態で GET /games/1 を叩いてもターンが進まず、checkTurn() で進む", async () => {
-    const stub = getStub("game-test-cron-only");
-
-    const loginRes = await stub.fetch("http://example.com/auth/dev", {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: "email=admin%40example.com",
-      redirect: "manual",
-    });
-    expect(loginRes.status).toBe(302);
-    const cookie = cookieValue(loginRes.headers.get("set-cookie"), "hako.session_token");
-    expect(cookie).toBeDefined();
-    if (cookie === undefined) {
-      throw new Error("unreachable");
-    }
-
-    const adminRes = await stub.fetch("http://example.com/admin", { headers: { cookie } });
-    expect(adminRes.status).toBe(200);
-    const adminHtml = await adminRes.text();
-    const csrfMatch = adminHtml.match(/name="_csrf" value="([^"]+)"/);
-    expect(csrfMatch).not.toBeNull();
-    const csrfToken = csrfMatch?.[1] ?? "";
-
-    const startRes = await stub.fetch("http://example.com/admin/games", {
-      method: "POST",
-      headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
-      body: `_csrf=${encodeURIComponent(csrfToken)}`,
-    });
-    expect(startRes.status).toBe(200);
-
-    // wrangler.jsonc の HAKONIWA_UNIT_TIME_SEC (21600 秒) の 4 倍前に最終更新時刻をずらし、
-    // 期限を大きく過ぎた状態にする (csrfToken はセッション固定なので使い回せる)。
-    const pastUnix = Math.floor(Date.now() / 1000) - 21600 * 4;
-    const lastTimeRes = await stub.fetch("http://example.com/admin/last-time", {
-      method: "POST",
-      headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
-      body: `unix=${pastUnix}&_csrf=${encodeURIComponent(csrfToken)}`,
-    });
-    expect(lastTimeRes.status).toBe(200);
-
-    // turnCheckOnRequest: false のため、GET だけではターンが進まない (Cron を待たないとアクセス
-    // だけでターンが進んでしまう挙動が Workers では起きないことの確認)。
-    const beforeCheckTurn = await stub.fetch("http://example.com/games/1", { headers: { cookie } });
-    expect(beforeCheckTurn.status).toBe(200);
-    expect(await beforeCheckTurn.text()).toContain("<h2>ターン 1</h2>");
-
-    // Cron Trigger 相当の checkTurn() を呼んで初めて進む。
-    const advanced = await stub.checkTurn();
-    expect(advanced).toBeGreaterThan(0);
-
-    const afterCheckTurn = await stub.fetch("http://example.com/games/1", { headers: { cookie } });
-    expect(afterCheckTurn.status).toBe(200);
-    expect(await afterCheckTurn.text()).not.toContain("<h2>ターン 1</h2>");
-  });
-
   // HAKONIWA_BASE_URL は vitest.config.ts の miniflare.bindings で設定していない
   // (tmp/12-workers-adapter.md「Deploy to Cloudflare ボタン」節: 省略可能)。
   // この場合の Origin 検査はリクエスト URL のオリジンを基準にする

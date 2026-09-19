@@ -147,11 +147,6 @@ export interface SetupOptions {
    * (既存テストの挙動どおり)。X / Discord ログインボタンの表示を確認するテスト用に上書きできる。
    */
   authMethodsConfigured?: Partial<AuthMethodsFlags>;
-  /**
-   * リクエスト時の turn-check ミドルウェアを登録するか。省略時は `true` (既存テストの挙動どおり)。
-   * Workers 版 (`turnCheckOnRequest: false`) 相当の挙動を確認するテスト用に上書きできる。
-   */
-  turnCheckOnRequest?: boolean;
 }
 
 export interface TestApp {
@@ -228,7 +223,6 @@ export function setupTestApp(options: SetupOptions = {}): TestApp {
     clock,
     auth: auth as unknown as WebDeps["auth"],
     logger,
-    turnCheckOnRequest: options.turnCheckOnRequest ?? true,
   };
   const app = createApp(deps);
 

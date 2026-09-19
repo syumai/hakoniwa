@@ -51,7 +51,6 @@ function setup(options: SetupOptions = {}): Ctx {
     dbPath: ":memory:",
     backupDir,
     turnCheckIntervalSec: 0,
-    turnCheckOnRequest: true,
   };
   const deps = composeNode(config);
   if (options.skipInit !== true) {

@@ -8,23 +8,6 @@ export interface NodeConfig extends AppConfig {
   dbPath: string;
   backupDir: string;
   turnCheckIntervalSec: number;
-  /** リクエスト時の turn-check ミドルウェアを登録するか。既定 `true` (従来どおり)。 */
-  turnCheckOnRequest: boolean;
-}
-
-function parseBool(name: string, raw: string | undefined, fallback: boolean): boolean {
-  if (raw === undefined) {
-    return fallback;
-  }
-  if (raw === "true") {
-    return true;
-  }
-  if (raw === "false") {
-    return false;
-  }
-  throw new Error(
-    `loadNodeConfig: ${name} must be "true" or "false" (got: ${JSON.stringify(raw)})`,
-  );
 }
 
 function parseInteger(name: string, raw: string | undefined, fallback: number): number {
@@ -54,10 +37,5 @@ export function loadNodeConfig(env: Record<string, string | undefined> = process
     env.HAKONIWA_TURN_CHECK_INTERVAL_SEC,
     60,
   );
-  const turnCheckOnRequest = parseBool(
-    "HAKONIWA_TURN_CHECK_ON_REQUEST",
-    env.HAKONIWA_TURN_CHECK_ON_REQUEST,
-    true,
-  );
-  return { ...appConfig, port, dbPath, backupDir, turnCheckIntervalSec, turnCheckOnRequest };
+  return { ...appConfig, port, dbPath, backupDir, turnCheckIntervalSec };
 }

@@ -28,14 +28,6 @@ export interface BuildDepsInput {
   logger?: Logger;
   /** テスト用に注入可能。省略時は `config.mail` から `ConsoleMailer`/`ResendMailer` を組み立てる。 */
   mailer?: Mailer;
-  /**
-   * リクエスト時 (turn-check ミドルウェア) でもターン進行判定を行うか。Adapter が明示する必須項目
-   * (既定値を持たない)。
-   * - Node: `true` (従来どおりリクエスト時 + `setInterval` の二重トリガー)。
-   * - Cloudflare Workers: `false` (Cron Trigger の `checkTurn()` のみに限定する。アクセスだけで
-   *   課金対象のターン処理が走らないようにするため)。
-   */
-  turnCheckOnRequest: boolean;
 }
 
 export interface BuiltDeps {
@@ -138,16 +130,7 @@ export function buildDeps(input: BuildDepsInput): BuiltDeps {
     mailerIsConsole: isMailerConsole(mailer),
   });
 
-  const webDeps: WebDeps = {
-    gameService,
-    turnService,
-    adminService,
-    config,
-    clock,
-    auth,
-    logger,
-    turnCheckOnRequest: input.turnCheckOnRequest,
-  };
+  const webDeps: WebDeps = { gameService, turnService, adminService, config, clock, auth, logger };
   const app = createApp(webDeps);
 
   return { repo, auth, mailer, authMethods, gameService, turnService, adminService, config, app };

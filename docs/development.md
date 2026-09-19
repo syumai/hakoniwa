@@ -143,10 +143,10 @@ pnpm --filter @hakoniwa/game generate:ogp-tiles
 
 ## ターン進行の仕組み
 
-ターンは「最終更新時刻から 1 ターン分の時間が経過しているか」で判定します (`TurnService.advanceTurnIfDue`)。この判定をいつ呼ぶか (トリガー) は Adapter ごとに異なり、`buildDeps` の `turnCheckOnRequest: boolean` (必須。Adapter が明示する) で切り替えます。`turnCheckOnRequest: false` の場合、`createApp` はリクエスト時の turn-check ミドルウェア自体を登録しません。
+ターンは「最終更新時刻から 1 ターン分の時間が経過しているか」で判定します。判定はリクエスト時に行われるほか、次の 2 つの経路でも進みます。
 
-- **Node サーバー**: `turnCheckOnRequest: true` (既定。`HAKONIWA_TURN_CHECK_ON_REQUEST` で変更可能)。リクエスト時のミドルウェアに加えて、`HAKONIWA_TURN_CHECK_INTERVAL_SEC` (既定 60 秒) 間隔のタイマーからも判定されるため、アクセスがなくてもターンが進みます
-- **Cloudflare Workers**: `turnCheckOnRequest: false` (`packages/server-workers/src/game-object.ts` で固定。環境変数での変更は不可)。ターン進行のトリガーを `wrangler.jsonc` の `triggers.crons` (既定 `*/15 * * * *`、15 分ごと) だけに限定しています。Worker の `scheduled` ハンドラから DO の RPC `checkTurn()` (`turnService.advanceTurnIfDue`) を実行し、アクセス (GET/POST) だけではターンが進みません。実際にターンを進めるべきかどうかは DB に保存された1ターンの長さ (初期化時に `HAKONIWA_UNIT_TIME_SEC` で決まり、以後は管理画面/CLI で変更できる) と最終更新時刻から判定するため、Cron 側は境界を意識しません。ターン境界と Cron 間隔の差 (最大 15 分) だけ進行が遅れます。ローカルの `wrangler dev` では Cron は自動発火しないため、手動で `curl http://localhost:8787/cdn-cgi/local/scheduled` を叩いて試せます
+- **Node サーバー**: `HAKONIWA_TURN_CHECK_INTERVAL_SEC` (既定 60 秒) 間隔のタイマーから判定されるため、アクセスがなくてもターンが進みます
+- **Cloudflare Workers**: `wrangler.jsonc` の `triggers.crons` (既定 `*/15 * * * *`、15 分ごと) から Worker の `scheduled` ハンドラが呼ばれ、DO の RPC `checkTurn()` (`turnService.advanceTurnIfDue`) を実行します。実際にターンを進めるべきかどうかは DB に保存された1ターンの長さ (初期化時に `HAKONIWA_UNIT_TIME_SEC` で決まり、以後は管理画面/CLI で変更できる) と最終更新時刻から判定するため、Cron 側は境界を意識しません。ターン境界と Cron 間隔の差 (最大 15 分) だけ進行が遅れますが、リクエストごとの遅延判定 (turn-check ミドルウェア) も併存するのでアクセスがあればその時点で進みます。ローカルの `wrangler dev` では Cron は自動発火しないため、手動で `curl http://localhost:8787/cdn-cgi/local/scheduled` を叩いて試せます
 
 ## 島の放棄
 

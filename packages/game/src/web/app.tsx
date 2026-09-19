@@ -62,21 +62,15 @@ export function createApp(deps: WebDeps): Hono<AppEnv> {
   // ゲーム系ルートの前にターン進行判定。auth/account/admin/静的には掛けない。
   // tmp/18-games.md「ルート」節: パスに依らず 1 回進行判定できればよいので、ゲーム系ルート
   // (トップ・ゲーム一覧・`/games/*`・旧 URL) すべてに掛けておく。
-  //
-  // `deps.turnCheckOnRequest === false` の場合はミドルウェア自体を登録しない (Cloudflare Workers
-  // 版: ターン進行のトリガーを Cron Trigger の `checkTurn()` に限定し、アクセスだけではターンが
-  // 進まないようにするため)。
-  if (deps.turnCheckOnRequest) {
-    const turnCheck = turnCheckMiddleware({ turnService: deps.turnService, clock: deps.clock });
-    app.use("/", turnCheck);
-    app.use("/games", turnCheck);
-    app.use("/games/*", turnCheck);
-    app.use("/islands", turnCheck);
-    app.use("/islands/*", turnCheck);
-    app.use("/my-island", turnCheck);
-    app.use("/my-island/*", turnCheck);
-    app.use("/turn", turnCheck);
-  }
+  const turnCheck = turnCheckMiddleware({ turnService: deps.turnService, clock: deps.clock });
+  app.use("/", turnCheck);
+  app.use("/games", turnCheck);
+  app.use("/games/*", turnCheck);
+  app.use("/islands", turnCheck);
+  app.use("/islands/*", turnCheck);
+  app.use("/my-island", turnCheck);
+  app.use("/my-island/*", turnCheck);
+  app.use("/turn", turnCheck);
 
   app.route("/", createAuthRoutes(deps));
   app.route("/", createAccountRoutes(deps));
