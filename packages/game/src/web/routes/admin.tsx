@@ -9,10 +9,11 @@ import type { AppEnv } from "../env.ts";
 import { parseStrictNonNegativeInt, parseStringBody } from "../forms/common.ts";
 import {
   parseAdminBackupForm,
-  parseAdminInitForm,
   parseAdminLastTimeForm,
   parseAuthMethodsForm,
   parseFinalTurnForm,
+  parseFinishGameForm,
+  parseStartGameForm,
   parseUnitTimeForm,
 } from "../forms/admin-forms.ts";
 import { listIslandSelectOptions } from "./helpers.ts";
@@ -36,7 +37,10 @@ async function renderAdmin(c: Context<AppEnv>, deps: WebDeps, notice: string | u
   const authMethods = deps.adminService.getAuthMethods();
   // 未初期化のときに gameService.getTopPage (listIslandSelectOptions が内部で呼ぶ) を叩くと
   // not_initialized で例外になるため、初期化済みのときだけ島一覧 (maximize 用) を取得する。
-  const islands = status.initialized ? listIslandSelectOptions(deps.gameService) : [];
+  const islands =
+    status.initialized && status.gameId !== undefined
+      ? listIslandSelectOptions(deps.gameService, status.gameId)
+      : [];
   return renderPage(
     c,
     deps,
@@ -64,12 +68,22 @@ export function createAdminRoutes(deps: WebDeps): Hono<AppEnv> {
     return renderAdmin(c, deps, undefined);
   });
 
-  app.post("/admin/init", async (c) => {
+  // tmp/18-games.md「ルート」節: 「新しいゲームを開始」。旧 POST /admin/init はこれに統合した。
+  app.post("/admin/games", async (c) => {
     requireAdmin(c);
     const body = await parseStringBody(c);
-    const form = parseAdminInitForm(body, deps.config.timezone);
-    deps.adminService.initialize(deps.clock.now(), form);
-    return renderAdmin(c, deps, "新しいデータを作成しました。");
+    const form = parseStartGameForm(body, deps.config.timezone);
+    deps.adminService.startGame(form, deps.clock.now());
+    return renderAdmin(c, deps, "新しいゲームを開始しました。");
+  });
+
+  // tmp/18-games.md「ルート」節: 「このゲームを終了する」。running のときのみ成功する。
+  app.post("/admin/games/current/finish", async (c) => {
+    requireAdmin(c);
+    const body = await parseStringBody(c);
+    parseFinishGameForm(body);
+    deps.adminService.finishCurrentGame(deps.clock.now());
+    return renderAdmin(c, deps, "このゲームを終了しました。");
   });
 
   app.post("/admin/reset", async (c) => {

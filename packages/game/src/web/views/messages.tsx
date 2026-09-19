@@ -2,11 +2,17 @@
 // $HtempBack (「トップへ戻る」リンク) に相当する共通コンポーネントを併せて定義する。
 import type { AppErrorKind } from "../../app/errors.ts";
 
-/** Perl 版 $HtempBack。「トップへ戻る」リンク。 */
-export function BackLink() {
+/**
+ * Perl 版 $HtempBack。「トップへ戻る」リンク。
+ * tmp/18-games.md「表示」節: 島ページ内のリンクはゲーム ID 入りにする。`gameId` を渡せる文脈
+ * (観光/新規発見画面) ではそのゲームのトップへ、渡せない汎用エラー画面 (ErrorPage) では
+ * `/` (現在のゲームへのリダイレクト、無ければ「ゲームはまだ開始されていません」画面) へ戻す。
+ */
+export function BackLink({ gameId }: { gameId?: number } = {}) {
+  const href = gameId !== undefined ? `/games/${gameId}` : "/";
   return (
     <p>
-      <a href="/" class="back-link">
+      <a href={href} class="back-link">
         トップへ戻る
       </a>
     </p>

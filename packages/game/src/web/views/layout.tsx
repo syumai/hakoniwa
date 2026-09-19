@@ -91,6 +91,10 @@ function Nav({
         {config.site.title}
       </a>
       <div class="nav-links">
+        {/* tmp/18-games.md「ルート」節: 現在のゲームが無くても表示する。 */}
+        <a href="/games" class="nav-games">
+          過去のゲーム
+        </a>
         {user === undefined ? (
           <a href="/login" class="nav-login">
             ログイン

@@ -24,9 +24,9 @@ describe("Cache-Control (Workers Cache が従う応答ヘッダ)", () => {
     expect(res.headers.get("cache-control")).toBe("private, no-store");
   });
 
-  it("/islands/:id/ogp.png は public, max-age=3600 (island が無くても no-store ではなく 404)", async () => {
+  it("/games/:gameId/islands/:id/ogp.png は public, max-age=3600 (island が無くても no-store ではなく 404)", async () => {
     const stub = getStub("cache-control-ogp-missing");
-    const res = await stub.fetch("http://example.com/islands/1/ogp.png");
+    const res = await stub.fetch("http://example.com/games/1/islands/1/ogp.png");
     // 島が無い (未初期化/未作成) ため 404 だが、既定の no-store が付くことを確認する。
     expect(res.status).not.toBe(200);
     expect(res.headers.get("cache-control")).toBe("private, no-store");
@@ -53,27 +53,34 @@ describe("Cache-Control (Workers Cache が従う応答ヘッダ)", () => {
       throw new Error("csrf token not found");
     }
 
-    await stub.fetch("http://example.com/admin/init", {
+    await stub.fetch("http://example.com/admin/games", {
       method: "POST",
       headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
       body: `_csrf=${encodeURIComponent(csrfToken)}`,
     });
-    await stub.fetch("http://example.com/islands", {
+    await stub.fetch("http://example.com/games/1/islands", {
       method: "POST",
       headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
       body: `name=${encodeURIComponent("てすとじま")}&_csrf=${encodeURIComponent(csrfToken)}`,
     });
 
-    const ogpRes = await stub.fetch("http://example.com/islands/1/ogp.png");
+    const ogpRes = await stub.fetch("http://example.com/games/1/islands/1/ogp.png");
     expect(ogpRes.status).toBe(200);
     expect(ogpRes.headers.get("content-type")).toBe("image/png");
     expect(ogpRes.headers.get("cache-control")).toBe("public, max-age=3600");
     expect(ogpRes.headers.get("cache-tag")).toBe("island-1");
 
-    const pageRes = await stub.fetch("http://example.com/islands/1", { headers: { cookie } });
+    // 旧 URL (ゲーム ID を含まない) は現在のゲームへ 302 で転送される。
+    const legacyOgpRes = await stub.fetch("http://example.com/islands/1/ogp.png", {
+      redirect: "manual",
+    });
+    expect(legacyOgpRes.status).toBe(302);
+    expect(legacyOgpRes.headers.get("location")).toBe("/games/1/islands/1/ogp.png");
+
+    const pageRes = await stub.fetch("http://example.com/games/1/islands/1", {
+      headers: { cookie },
+    });
     expect(pageRes.headers.get("cache-control")).toBe("private, no-store");
-    // tmp/18-games.md: OGP の imagePath はゲーム ID 入りの URL になった (実ルートのマウント先は
-    // まだ /islands/:id/ogp.png のままで、URL 変更は第 2 段階)。
     expect(await pageRes.text()).toContain(
       'content="http://example.com/games/1/islands/1/ogp.png?turn=1"',
     );

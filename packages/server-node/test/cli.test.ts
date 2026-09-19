@@ -289,3 +289,111 @@ describe("cli (tmp/16-season.md: ターンの長さも DB に持つ)", () => {
     expect(await runCli(["game", "set-unit-time", "abc"], env, createIO())).toBe(2);
   });
 });
+
+describe("cli (tmp/18-games.md: game new/finish/list)", () => {
+  let dir: string;
+  let env: Record<string, string | undefined>;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "hakoniwa-cli-games-test-"));
+    env = {
+      HAKONIWA_DB_PATH: join(dir, "hakoniwa.sqlite"),
+      HAKONIWA_BACKUP_DIR: join(dir, "backups"),
+      HAKONIWA_AUTH_SECRET: "a".repeat(32),
+    };
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("game new: ゲームが無ければ開始できる (db init と同じ効果)", async () => {
+    const io = createIO();
+    expect(await runCli(["game", "new"], env, io)).toBe(0);
+    expect(io.lines.join("\n")).toContain("新しいゲームを開始しました");
+
+    const statusIO = createIO();
+    await runCli(["db", "status"], env, statusIO);
+    const status = statusIO.lines.join("\n");
+    expect(status).toContain("初期化済み");
+    expect(status).toContain("第 1 回");
+    expect(status).toContain("過去のゲーム数: 0");
+  });
+
+  it("game new --name/--final-turn/--unit-time を指定できる", async () => {
+    const io = createIO();
+    expect(
+      await runCli(
+        ["game", "new", "--name", "特別編", "--final-turn", "5", "--unit-time", "1h"],
+        env,
+        io,
+      ),
+    ).toBe(0);
+    expect(io.lines.join("\n")).toContain("特別編");
+
+    const statusIO = createIO();
+    await runCli(["db", "status"], env, statusIO);
+    const status = statusIO.lines.join("\n");
+    expect(status).toContain("特別編");
+    expect(status).toContain("最終ターン: 5");
+    expect(status).toContain("1 ターンの長さ: 1時間");
+  });
+
+  it("game new: 現在のゲームが running のときはエラーで終了コード 1", async () => {
+    await runCli(["game", "new"], env, createIO());
+    const io = createIO();
+    const code = await runCli(["game", "new"], env, io);
+    expect(code).toBe(1);
+    expect(io.errLines.length).toBeGreaterThan(0);
+  });
+
+  it("game finish: 現在のゲームを終了できる (db status の状態がすべて終了になる)", async () => {
+    await runCli(["game", "new"], env, createIO());
+    const io = createIO();
+    expect(await runCli(["game", "finish"], env, io)).toBe(0);
+    expect(io.lines.join("\n")).toContain("終了しました");
+
+    const statusIO = createIO();
+    await runCli(["db", "status"], env, statusIO);
+    expect(statusIO.lines.join("\n")).toContain("状態(シーズン): 終了");
+  });
+
+  it("game finish: ゲームが無いときはエラーで終了コード 1", async () => {
+    const io = createIO();
+    const code = await runCli(["game", "finish"], env, io);
+    expect(code).toBe(1);
+  });
+
+  it("game finish: 既に終了したゲームをもう一度終了しようとするとエラーで終了コード 1", async () => {
+    await runCli(["game", "new"], env, createIO());
+    await runCli(["game", "finish"], env, createIO());
+    const io = createIO();
+    const code = await runCli(["game", "finish"], env, io);
+    expect(code).toBe(1);
+  });
+
+  it("game list: ゲームが無ければその旨を表示する", async () => {
+    const io = createIO();
+    expect(await runCli(["game", "list"], env, io)).toBe(0);
+    expect(io.lines.join("\n")).toContain("ゲームはありません");
+  });
+
+  it("game list: 現在 + 過去のゲームを一覧表示する", async () => {
+    await runCli(["game", "new", "--name", "第 1 回"], env, createIO());
+    await runCli(["game", "finish"], env, createIO());
+    await runCli(["game", "new", "--name", "第 2 回"], env, createIO());
+
+    const io = createIO();
+    expect(await runCli(["game", "list"], env, io)).toBe(0);
+    const output = io.lines.join("\n");
+    expect(output).toContain("第 1 回");
+    expect(output).toContain("第 2 回");
+    expect(output).toContain("(現在)");
+  });
+
+  it("db init はゲームが無いときだけ game new として働く (既にゲームがあれば失敗)", async () => {
+    expect(await runCli(["db", "init"], env, createIO())).toBe(0);
+    const io = createIO();
+    expect(await runCli(["db", "init"], env, io)).toBe(1);
+  });
+});

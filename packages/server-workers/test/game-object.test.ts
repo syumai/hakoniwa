@@ -37,8 +37,8 @@ describe("HakoniwaGame (DO 経由の Hono app)", () => {
 
     // HAKONIWA_DEV_LOGIN=true, HAKONIWA_ADMIN_EMAILS=admin@example.com は
     // vitest.config.ts の miniflare.bindings で設定している (実運用は wrangler secret/vars)。
-    // `redirect: "manual"` を指定しないと fetch が 302 を自動で追いかけてしまい、
-    // (未初期化な世界の) GET / を踏んで 503 になるため 302 のまま観測できない。
+    // `redirect: "manual"` を指定しないと fetch が 302 を自動で追いかけてしまい、302 のまま
+    // 観測できないため付けている。
     const loginRes = await stub.fetch("http://example.com/auth/dev", {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -52,8 +52,8 @@ describe("HakoniwaGame (DO 経由の Hono app)", () => {
       throw new Error("unreachable");
     }
 
-    // 管理画面から _csrf を取り出し、POST /admin/init で初期化する
-    // (管理画面自体は未初期化でも表示できる)。
+    // 管理画面から _csrf を取り出し、POST /admin/games で新しいゲームを開始する
+    // (管理画面自体はゲームが無くても表示できる)。
     const adminRes = await stub.fetch("http://example.com/admin", { headers: { cookie } });
     expect(adminRes.status).toBe(200);
     const adminHtml = await adminRes.text();
@@ -61,19 +61,27 @@ describe("HakoniwaGame (DO 経由の Hono app)", () => {
     expect(csrfMatch).not.toBeNull();
     const csrfToken = csrfMatch?.[1] ?? "";
 
-    const initRes = await stub.fetch("http://example.com/admin/init", {
+    const startRes = await stub.fetch("http://example.com/admin/games", {
       method: "POST",
       headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
       body: `_csrf=${encodeURIComponent(csrfToken)}`,
     });
-    expect(initRes.status).toBe(200);
-    expect(await initRes.text()).toContain("新しいデータを作成しました");
+    expect(startRes.status).toBe(200);
+    expect(await startRes.text()).toContain("新しいゲームを開始しました");
 
     // 初期化直後は last_time が現在時刻なので、Cron (checkTurn) は期限前として 0 を返す。
     const advanced = await stub.checkTurn();
     expect(advanced).toBe(0);
 
-    const topAfterInit = await stub.fetch("http://example.com/", { headers: { cookie } });
+    // tmp/18-games.md: GET / は現在のゲーム (/games/1) へ 302。
+    const rootAfterInit = await stub.fetch("http://example.com/", {
+      headers: { cookie },
+      redirect: "manual",
+    });
+    expect(rootAfterInit.status).toBe(302);
+    expect(rootAfterInit.headers.get("location")).toBe("/games/1");
+
+    const topAfterInit = await stub.fetch("http://example.com/games/1", { headers: { cookie } });
     expect(topAfterInit.status).toBe(200);
     expect(await topAfterInit.text()).toContain("ターン1");
   });

@@ -1,4 +1,5 @@
-// tmp/14-users-auth.md ルート表: POST /islands, GET /islands/:id, POST /islands/:id/lbbs
+// tmp/14-users-auth.md ルート表、tmp/18-games.md「ルート」節: `/games/:gameId{[0-9]+}` 配下の
+// POST /islands, GET /islands/:id, POST /islands/:id/lbbs。
 // tmp/17-ogp.md: GET /islands/:id/ogp.png (OGP 画像)。
 import { Hono } from "hono";
 import type { IslandPageVM, OwnerPageVM } from "../../app/view-models.ts";
@@ -7,7 +8,7 @@ import type { WebDeps } from "../deps.ts";
 import type { AppEnv } from "../env.ts";
 import { parseIdParam, parseStringBody } from "../forms/common.ts";
 import { parseLbbsMessageForm, parseNewIslandForm } from "../forms/island-forms.ts";
-import { listIslandSelectOptions, requireCurrentGameId } from "./helpers.ts";
+import { listIslandSelectOptions, requireGameIdParam } from "./helpers.ts";
 import { renderPage } from "./render.tsx";
 import { IslandOgpHead, IslandPage } from "../views/island.tsx";
 import { MyIslandPage } from "../views/my-island.tsx";
@@ -26,19 +27,20 @@ function isOwnerPageVM(vm: OwnerPageVM | IslandPageVM): vm is OwnerPageVM {
   return "commands" in vm;
 }
 
+/** `/games/:gameId{[0-9]+}` 配下にマウントする、島の観光・作成・記帳・OGP のルート。 */
 export function createIslandsRoutes(deps: WebDeps): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
 
   app.post("/islands", async (c) => {
-    const gameId = requireCurrentGameId(deps.gameService);
+    const gameId = requireGameIdParam(c);
     const body = await parseStringBody(c);
     const form = parseNewIslandForm(body);
     const vm = deps.gameService.createIsland(c.get("user"), gameId, form.name);
-    return renderPage(c, deps, <NewIslandPage vm={vm} config={deps.config.game} />);
+    return renderPage(c, deps, <NewIslandPage vm={vm} config={deps.config.game} gameId={gameId} />);
   });
 
   app.get("/islands/:id{[0-9]+}", (c) => {
-    const gameId = requireCurrentGameId(deps.gameService);
+    const gameId = requireGameIdParam(c);
     const id = parseIdParam(c);
     const vm = deps.gameService.getIslandPage(gameId, id);
     const origin = resolveOrigin(deps, c.req.url);
@@ -53,7 +55,7 @@ export function createIslandsRoutes(deps: WebDeps): Hono<AppEnv> {
 
   // tmp/17-ogp.md 「ルートとメタタグ」節。認証・セッションに依存しない (誰でも同じ画像)。
   app.get("/islands/:id{[0-9]+}/ogp.png", async (c) => {
-    const gameId = requireCurrentGameId(deps.gameService);
+    const gameId = requireGameIdParam(c);
     const id = parseIdParam(c);
     const { island, turn } = deps.gameService.getIslandOgp(gameId, id);
     const png = await renderIslandOgp(island, turn);
@@ -69,13 +71,13 @@ export function createIslandsRoutes(deps: WebDeps): Hono<AppEnv> {
   });
 
   app.post("/islands/:id{[0-9]+}/lbbs", async (c) => {
-    const gameId = requireCurrentGameId(deps.gameService);
+    const gameId = requireGameIdParam(c);
     const id = parseIdParam(c);
     const body = await parseStringBody(c);
     const form = parseLbbsMessageForm(body);
     const result = deps.gameService.postLbbs(c.get("user"), gameId, id, form.message);
     if (isOwnerPageVM(result)) {
-      const targets = listIslandSelectOptions(deps.gameService);
+      const targets = listIslandSelectOptions(deps.gameService, gameId);
       return renderPage(
         c,
         deps,

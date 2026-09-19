@@ -11,10 +11,21 @@ export function LbbsHead({ islandName }: { islandName: string }) {
   );
 }
 
-/** 記帳フォーム。観光者・島主どちらも同じ POST /islands/:id/lbbs を使う (表示名は actor.name)。 */
-export function LbbsInput({ islandId, csrfToken }: { islandId: number; csrfToken: string }) {
+/**
+ * 記帳フォーム。観光者・島主どちらも同じ `POST /games/:gameId/islands/:id/lbbs` を使う
+ * (表示名は actor.name)。tmp/18-games.md「ルート」節。
+ */
+export function LbbsInput({
+  islandId,
+  gameId,
+  csrfToken,
+}: {
+  islandId: number;
+  gameId: number;
+  csrfToken: string;
+}) {
   return (
-    <form action={`/islands/${islandId}/lbbs`} method="post">
+    <form action={`/games/${gameId}/islands/${islandId}/lbbs`} method="post">
       <input type="hidden" name="_csrf" value={csrfToken} />
       <input type="text" size={80} name="message" placeholder="ひとこと記帳する" />
       <input type="submit" value="記帳する" />
@@ -23,10 +34,18 @@ export function LbbsInput({ islandId, csrfToken }: { islandId: number; csrfToken
 }
 
 /** 島主用の記帳削除フォーム。Perl 版 tempLbbsInputOW の削除部分。 */
-export function LbbsDeleteForm({ lbbsMax, csrfToken }: { lbbsMax: number; csrfToken: string }) {
+export function LbbsDeleteForm({
+  gameId,
+  lbbsMax,
+  csrfToken,
+}: {
+  gameId: number;
+  lbbsMax: number;
+  csrfToken: string;
+}) {
   const numbers = Array.from({ length: lbbsMax }, (_, i) => i);
   return (
-    <form action="/my-island/lbbs/delete" method="post">
+    <form action={`/games/${gameId}/my-island/lbbs/delete`} method="post">
       <input type="hidden" name="_csrf" value={csrfToken} />
       番号
       <select name="number">

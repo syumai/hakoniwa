@@ -43,7 +43,7 @@ describe("管理画面 (/admin)", () => {
     expect(res.status).toBe(403);
   });
 
-  it("管理者は GET /admin が 200 でメンテナンスツールを表示する", async () => {
+  it("管理者は GET /admin が 200 でメンテナンスツールを表示する (ゲーム名・状態・ID を含む)", async () => {
     const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL] });
     const admin = await loginAdmin(testApp);
     const res = await testApp.app.request("/admin", { headers: { cookie: admin.cookie } });
@@ -51,37 +51,121 @@ describe("管理画面 (/admin)", () => {
     const html = await res.text();
     expect(html).toContain("メンテナンスツール");
     expect(html).toContain("現役データ");
+    expect(html).toContain("第 1 回");
+    expect(html).toContain("<b>ID</b>:1");
+    expect(html).toContain("ゲーム一覧");
   });
 
-  it("未初期化なら「新しいデータを作る」を表示する", async () => {
+  it("未初期化なら「新しいゲームを開始」フォームを表示する", async () => {
     const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL], skipInit: true });
     const admin = await loginAdmin(testApp);
     const res = await testApp.app.request("/admin", { headers: { cookie: admin.cookie } });
     const html = await res.text();
-    expect(html).toContain("新しいデータを作る");
+    expect(html).toContain("新しいゲームを開始");
+    expect(html).toContain('action="/admin/games"');
   });
 
-  it("_csrf なしの POST /admin/init は 403", async () => {
+  it("_csrf なしの POST /admin/games は 403", async () => {
     const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL], skipInit: true });
     const admin = await loginAdmin(testApp);
-    const res = await postForm(testApp.app, "/admin/init", {}, { cookie: admin.cookie });
+    const res = await postForm(testApp.app, "/admin/games", {}, { cookie: admin.cookie });
     expect(res.status).toBe(403);
   });
 
-  it("POST /admin/init: 管理者は初期化できる", async () => {
+  it("POST /admin/games: 管理者は新しいゲームを開始できる", async () => {
     const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL], skipInit: true });
     const admin = await loginAdmin(testApp);
     const res = await postForm(
       testApp.app,
-      "/admin/init",
+      "/admin/games",
       { _csrf: admin.csrfToken },
       {
         cookie: admin.cookie,
       },
     );
     expect(res.status).toBe(200);
+    expect(await res.text()).toContain("新しいゲームを開始しました");
     expect(testApp.repo.isInitialized()).toBe(true);
     expect(currentMeta(testApp).turn).toBe(1);
+    expect(currentMeta(testApp).name).toBe("第 1 回");
+  });
+
+  it("POST /admin/games: name を指定できる", async () => {
+    const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL], skipInit: true });
+    const admin = await loginAdmin(testApp);
+    await postForm(
+      testApp.app,
+      "/admin/games",
+      { name: "特別編", _csrf: admin.csrfToken },
+      { cookie: admin.cookie },
+    );
+    expect(currentMeta(testApp).name).toBe("特別編");
+  });
+
+  it("POST /admin/games: 現在のゲームが running のときは 409 で「現在のゲームが終了していません」", async () => {
+    const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL] });
+    const admin = await loginAdmin(testApp);
+    const res = await postForm(
+      testApp.app,
+      "/admin/games",
+      { _csrf: admin.csrfToken },
+      { cookie: admin.cookie },
+    );
+    expect(res.status).toBe(409);
+    expect(await res.text()).toContain("現在のゲームが終了していません");
+  });
+
+  it("running のときは「新しいゲームを開始」フォームの代わりに案内文を表示する", async () => {
+    const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL] });
+    const admin = await loginAdmin(testApp);
+    const res = await testApp.app.request("/admin", { headers: { cookie: admin.cookie } });
+    const html = await res.text();
+    expect(html).not.toContain('action="/admin/games" method="post"');
+    expect(html).toContain("現在のゲームが終了していません。");
+  });
+
+  it("POST /admin/games/current/finish: confirm チェックなしは 400 (invalid_input)", async () => {
+    const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL] });
+    const admin = await loginAdmin(testApp);
+    const res = await postForm(
+      testApp.app,
+      "/admin/games/current/finish",
+      { _csrf: admin.csrfToken },
+      { cookie: admin.cookie },
+    );
+    expect(res.status).toBe(400);
+    expect(currentMeta(testApp).status).toBe("running");
+  });
+
+  it("POST /admin/games/current/finish: confirm 付きでゲームを終了できる", async () => {
+    const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL] });
+    const admin = await loginAdmin(testApp);
+    const res = await postForm(
+      testApp.app,
+      "/admin/games/current/finish",
+      { confirm: "on", _csrf: admin.csrfToken },
+      { cookie: admin.cookie },
+    );
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("このゲームを終了しました");
+    expect(currentMeta(testApp).status).toBe("finished");
+  });
+
+  it("finished のときは「このゲームを終了する」フォームの代わりに案内文を表示する", async () => {
+    const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL] });
+    const admin = await loginAdmin(testApp);
+    await postForm(
+      testApp.app,
+      "/admin/games/current/finish",
+      { confirm: "on", _csrf: admin.csrfToken },
+      { cookie: admin.cookie },
+    );
+    const res = await testApp.app.request("/admin", { headers: { cookie: admin.cookie } });
+    const html = await res.text();
+    expect(html).not.toContain('action="/admin/games/current/finish"');
+    expect(html).toContain("このゲームは既に終了しています。");
+    // finished になったので「新しいゲームを開始」フォームが出る。
+    expect(html).toContain('action="/admin/games"');
   });
 
   it("POST /admin/turn: ターンを進められる", async () => {
@@ -193,7 +277,7 @@ describe("管理画面 (/admin)", () => {
     const owner = await loginAs(testApp, { id: "u1", name: "しまぬし", email: "u1@example.com" });
     await postForm(
       testApp.app,
-      "/islands",
+      "/games/1/islands",
       { name: "てすとじま", _csrf: owner.csrfToken },
       {
         cookie: owner.cookie,
@@ -227,12 +311,12 @@ describe("tmp/16-season.md: 管理画面の開始時刻・最終ターン", () =
     expect(html).toContain("進行中");
   });
 
-  it("POST /admin/init: 開始日時 (start-at) と最終ターン数 (final-turn) を指定して初期化できる", async () => {
+  it("POST /admin/games: 開始日時 (start-at) と最終ターン数 (final-turn) を指定して開始できる", async () => {
     const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL], skipInit: true });
     const admin = await loginAdmin(testApp);
     const res = await postForm(
       testApp.app,
-      "/admin/init",
+      "/admin/games",
       { "start-at": "2026-10-01T21:00", "final-turn": 50, _csrf: admin.csrfToken },
       { cookie: admin.cookie },
     );
@@ -243,12 +327,12 @@ describe("tmp/16-season.md: 管理画面の開始時刻・最終ターン", () =
     expect(meta.lastTime).toBe(meta.startAt);
   });
 
-  it("POST /admin/init: start-at/final-turn を省略すると従来どおり (現在時刻の切り下げ・無期限)", async () => {
+  it("POST /admin/games: start-at/final-turn を省略すると従来どおり (現在時刻の切り下げ・無期限)", async () => {
     const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL], skipInit: true });
     const admin = await loginAdmin(testApp);
     const res = await postForm(
       testApp.app,
-      "/admin/init",
+      "/admin/games",
       { _csrf: admin.csrfToken },
       { cookie: admin.cookie },
     );
@@ -294,7 +378,7 @@ describe("tmp/16-season.md: ターンの長さも DB に持つ (追加要件)", 
     expect(html).toContain("6時間");
   });
 
-  it("未初期化の「新しいデータを作る」フォームは config.unitTimeSec を既定値として表示する", async () => {
+  it("未初期化の「新しいゲームを開始」フォームは config.unitTimeSec を既定値として表示する", async () => {
     const testApp = setupTestApp({
       adminEmails: [ADMIN_EMAIL],
       skipInit: true,
@@ -308,12 +392,12 @@ describe("tmp/16-season.md: ターンの長さも DB に持つ (追加要件)", 
     expect(html).toMatch(/name="unit-minutes"[^>]*value="0"/);
   });
 
-  it("POST /admin/init: unit-hours/unit-minutes を指定して初期化できる", async () => {
+  it("POST /admin/games: unit-hours/unit-minutes を指定して開始できる", async () => {
     const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL], skipInit: true });
     const admin = await loginAdmin(testApp);
     const res = await postForm(
       testApp.app,
-      "/admin/init",
+      "/admin/games",
       { "unit-hours": 0, "unit-minutes": 1, _csrf: admin.csrfToken },
       { cookie: admin.cookie },
     );
@@ -321,7 +405,7 @@ describe("tmp/16-season.md: ターンの長さも DB に持つ (追加要件)", 
     expect(currentMeta(testApp).unitTimeSec).toBe(60);
   });
 
-  it("POST /admin/init: unit-time を省略すると config.unitTimeSec が使われる", async () => {
+  it("POST /admin/games: unit-time を省略すると config.unitTimeSec が使われる", async () => {
     const testApp = setupTestApp({
       adminEmails: [ADMIN_EMAIL],
       skipInit: true,
@@ -330,7 +414,7 @@ describe("tmp/16-season.md: ターンの長さも DB に持つ (追加要件)", 
     const admin = await loginAdmin(testApp);
     await postForm(
       testApp.app,
-      "/admin/init",
+      "/admin/games",
       { _csrf: admin.csrfToken },
       { cookie: admin.cookie },
     );

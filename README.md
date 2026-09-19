@@ -12,11 +12,12 @@
 
 ## 機能
 
-- **ゲーム本体**: オリジナル (箱庭諸島 ver2.3) のルールを移植しています。1 ユーザー 1 島です。
+- **ゲーム本体**: オリジナル (箱庭諸島 ver2.3) のルールを移植しています。ゲームごとに 1 ユーザー 1 島です。
 - **ログイン**: X (Twitter) / Discord / メール (マジックリンク) / 開発ログイン (ローカル開発・検証用) に対応しています ([better-auth](https://www.better-auth.com/) を使用)。管理画面から方法ごとに ON/OFF を切り替えられ、アカウント設定画面から複数の方法を同じアカウントに連携できます。
 - **管理者**: メールアドレスを指定した特定のユーザーだけが管理画面 (`/admin`) を使えます。
 - **NG ワード**: 島名・コメント・掲示板の投稿に含まれる不適切な語を拒否します。
-- **シーズン**: 開始時刻、最終ターン (結果発表)、1 ターンの長さを設定できます。最終ターンに達するとゲームが終了し、以降は計画登録などができなくなります。
+- **シーズン**: 開始時刻、最終ターン (結果発表)、1 ターンの長さを設定できます。最終ターンに達するか管理者が手動で終了させるとゲームが終了し、以降は計画登録などができなくなります。
+- **複数ゲーム**: 同時に実行できるゲームは 1 つですが、終了後は次のゲームを開始でき、過去のゲームは読み取り専用のまま残ります (`/games` から一覧・閲覧できます)。
 - **OGP 画像**: 島ページをシェアすると、島の地図を描画した PNG が OGP 画像として表示されます。
 - **スマートフォン対応**: スマートフォンの画面幅でも入力欄や長い URL がはみ出さないようにしています。
 - **2 つの実行環境**: Node.js (`node:sqlite`) と Cloudflare Workers (Durable Objects SQLite) のどちらでも同じゲームロジックで動きます。
@@ -30,6 +31,25 @@ pnpm workspace によるモノレポです。パッケージ化しているの�
 | `packages/game` (`@hakoniwa/game`)                     | ゲーム本体。ランタイム非依存で、Node や Cloudflare 固有の API を使いません。`core` (ゲームロジック)、`app` (ユースケース)、`storage` (SQLite 用ストレージ抽象)、`web` (Hono + hono/jsx の画面)、`bootstrap` (組み立て) と、画像や CSS などの `public` を含みます |
 | `packages/server-node` (`@hakoniwa/server-node`)       | Node.js 向け Adapter。`node:sqlite` によるストレージ、HTTP サーバー、ファイルバックアップ、CLI                                                                                                                                                                   |
 | `packages/server-workers` (`@hakoniwa/server-workers`) | Cloudflare Workers (Durable Objects SQLite) 向け Adapter。DO のストレージ、Cron Trigger によるターン進行、PITR バックアップ                                                                                                                                      |
+
+## ルート構造
+
+全ページのゲーム依存部分は `/games/:gameId/` 配下にあり、URL だけでどのゲームを見ているか特定できます。
+
+| メソッド | パス                                                                  | 内容                                                                                                                     |
+| -------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| GET      | `/`                                                                   | 現在のゲームへ 302 (`/games/:id`)。ゲームが無ければ「ゲームはまだ開始されていません」画面 (管理者には `/admin` への案内) |
+| GET      | `/games`                                                              | ゲーム一覧 (名前・開始・終了・ターン数・島数・状態)                                                                      |
+| GET      | `/games/:gameId`                                                      | そのゲームのトップ (順位表・出来事・発見の記録)。過去のゲームは「結果発表」表示                                          |
+| POST     | `/games/:gameId/islands`                                              | 島の作成 (現在のゲームのみ)                                                                                              |
+| GET      | `/games/:gameId/islands/:id`                                          | 観光                                                                                                                     |
+| GET      | `/games/:gameId/islands/:id/ogp.png`                                  | OGP 画像                                                                                                                 |
+| POST     | `/games/:gameId/islands/:id/lbbs`                                     | 記帳 (現在のゲームのみ。終了後でも記帳自体は可能)                                                                        |
+| GET      | `/games/:gameId/my-island`                                            | 自分の島の開発画面 (過去のゲームは読み取り専用)                                                                          |
+| POST     | `/games/:gameId/my-island/commands`\|`comment`\|`name`\|`lbbs/delete` | 現在のゲームのみ                                                                                                         |
+| GET      | `/my-island`, `/islands/:id`, `/islands/:id/ogp.png`                  | ゲーム ID を含まない旧 URL。現在のゲームの同じパスへ 302 (シェア済み URL 対策)                                           |
+
+`/login`、`/account`、`/admin` はゲームに依存しないので従来どおりのパスのままです。
 
 ## はじめ方 (Node でローカル開発)
 
@@ -68,10 +88,12 @@ X (Twitter) / Discord ログインを試したい場合は `HAKONIWA_X_CLIENT_ID
 vp run dev
 ```
 
-開発サーバーが http://localhost:5173/ で起動します。初回はデータが未初期化なので、次のいずれかで作成してください。
+開発サーバーが http://localhost:5173/ で起動します。初回はゲームがまだ無いので、次のいずれかで開始してください。
 
-- `/login` を開き、開発ログインのフォームに任意のメールアドレス (`HAKONIWA_ADMIN_EMAILS` に指定したもの) を入力してログインし、`/admin` で「新しいデータを作る」(開始日時・最終ターン・1 ターンの長さを指定可能) を実行する
-- CLI で初期化する: `vp run --filter ./packages/server-node cli -- db init`
+- `/login` を開き、開発ログインのフォームに任意のメールアドレス (`HAKONIWA_ADMIN_EMAILS` に指定したもの) を入力してログインし、`/admin` で「新しいゲームを開始」(ゲーム名・開始日時・最終ターン・1 ターンの長さを指定可能。名前は省略すると「第 N 回」になる) を実行する
+- CLI で開始する: `vp run --filter ./packages/server-node cli -- db init` (`game new` のエイリアス)
+
+ゲームが終了したら (最終ターン到達、または管理画面の「このゲームを終了する」)、管理画面や CLI (`game new`) から次のゲームを開始できます。過去のゲームは `/games` から一覧・閲覧できます (読み取り専用。再開はできません)。
 
 データベースのスキーマ変更は、Node/Workers いずれも起動時に自動でマイグレーションされます。ただし初期のスキーマ (v1) で作られたデータベースファイルが残っている場合はスキーマに互換性が無いため、`vp run --filter ./packages/server-node cli -- db reset --yes` で一度削除してから初期化し直してください (`HAKONIWA_DB_PATH` を新しいパスにして作り直しても構いません)。
 
@@ -90,15 +112,19 @@ HAKONIWA_AUTH_SECRET=xxxx HAKONIWA_DEV_LOGIN=true HAKONIWA_ADMIN_EMAILS=you@exam
 
 ```sh
 node packages/server-node/dist/cli.js --help
-node packages/server-node/dist/cli.js db init          # データの新規作成
+node packages/server-node/dist/cli.js db init          # ゲームが無いときだけ新しいゲームを開始する (game new のエイリアス)
 node packages/server-node/dist/cli.js db init --start-at 2026-10-01T21:00:00+09:00 --final-turn 100 --unit-time 6h30m
-node packages/server-node/dist/cli.js db status        # ターン数、最終更新時刻、開始時刻、最終ターン、1ターンの長さ、状態、島数など
-node packages/server-node/dist/cli.js db reset --yes    # 現役データを削除する (古いスキーマの DB を作り直す場合にも使う)
+node packages/server-node/dist/cli.js db status        # 現在のゲーム名・状態・ターン数・最終更新時刻・開始時刻・最終ターン・1ターンの長さ・状態・島数・過去のゲーム数など
+node packages/server-node/dist/cli.js db reset --yes    # 全ゲームを削除する (古いスキーマの DB を作り直す場合にも使う)
 node packages/server-node/dist/cli.js turn check       # 期限が来ていればターンを進める (終了後は 0)
 node packages/server-node/dist/cli.js turn advance     # 強制的に 1 ターン進める (終了後は何もしない)
 node packages/server-node/dist/cli.js time set <unix|ISO8601>
-node packages/server-node/dist/cli.js game set-final-turn <N|none>  # 最終ターン数の変更 (none で無期限に戻す)
-node packages/server-node/dist/cli.js game set-unit-time <値>       # 1ターンの長さの変更 (次のターン境界から効く。6h/90m/1h30m/3600 (数字のみは秒) を受け付ける)
+node packages/server-node/dist/cli.js game new         # 新しいゲームを開始する (現在のゲームが running なら失敗)
+node packages/server-node/dist/cli.js game new --name 第2回 --start-at 2026-10-01T21:00:00+09:00 --final-turn 100 --unit-time 6h30m
+node packages/server-node/dist/cli.js game finish      # 現在のゲームを終了する (running でなければ失敗)
+node packages/server-node/dist/cli.js game list        # ゲーム一覧 (現在 + 過去) を表示する
+node packages/server-node/dist/cli.js game set-final-turn <N|none>  # 現在のゲームの最終ターン数の変更 (none で無期限に戻す)
+node packages/server-node/dist/cli.js game set-unit-time <値>       # 現在のゲームの1ターンの長さの変更 (次のターン境界から効く。6h/90m/1h30m/3600 (数字のみは秒) を受け付ける)
 node packages/server-node/dist/cli.js backup list|create [label]|restore <label>|delete <label>
 ```
 
@@ -133,7 +159,7 @@ Wrangler の設定はリポジトリ直下の `wrangler.jsonc` 1 つだけです
 5. デプロイ完了後に表示される公開 URL (`https://<name>.<subdomain>.workers.dev` 形式) を確認する
 6. X / Discord ログインを使いたい場合は、[X Developer Portal](https://developer.x.com/) / [Discord Developer Portal](https://discord.com/developers/applications) でアプリを作成し、コールバック URL に `https://あなたのWorkerのURL/api/auth/callback/twitter` または `.../callback/discord` を登録した上で、Cloudflare ダッシュボードの当該 Worker の Settings → Variables and Secrets から `HAKONIWA_X_CLIENT_ID`/`HAKONIWA_X_CLIENT_SECRET` や `HAKONIWA_DISCORD_CLIENT_ID`/`HAKONIWA_DISCORD_CLIENT_SECRET` を追加する (Secret として登録する)
 7. 公開 URL の `/login` から、手順 3 で指定した `HAKONIWA_ADMIN_EMAILS` のメールアドレスでログインする (開発ログインは本番では無効)。Discord や Resend をまだ設定していない場合は「メールでログイン」を使う。Resend 未設定のときはメールは送られず、ログイン用リンクが Worker のログに出力されるので、ダッシュボードの当該 Worker の Logs (リアルタイムログ) か `wrangler tail` でリンクを確認して開く
-8. `/admin` に入り、「新しいデータを作る」でゲームを初期化し、必要なログイン方法を有効化する
+8. `/admin` に入り、「新しいゲームを開始」でゲームを開始し、必要なログイン方法を有効化する
 
 `HAKONIWA_BASE_URL` はここでは設定不要です (未設定ならリクエストから自動判定されます)。カスタムドメインを使う場合だけ、あとから Variables and Secrets に追加してください。
 
@@ -183,7 +209,7 @@ wrangler dev --port 8787 \
   --var HAKONIWA_ADMIN_EMAILS:you@example.com
 ```
 
-初回のデータ作成手順は Node 版と同じです (`/login` から開発ログイン → `/admin` で「新しいデータを作る」)。ローカルの DO の状態は `.wrangler/state` (リポジトリ直下) に保存されます (git 管理外)。
+初回のゲーム開始手順は Node 版と同じです (`/login` から開発ログイン → `/admin` で「新しいゲームを開始」)。ローカルの DO の状態は `.wrangler/state` (リポジトリ直下) に保存されます (git 管理外)。
 
 ### ターン進行の仕組み (Cron Trigger)
 
@@ -191,11 +217,11 @@ Node 版のタイマーの代わりに、`wrangler.jsonc` の `triggers.crons` (
 
 ### Workers Cache (OGP 画像のキャッシュ)
 
-島の URL (`/islands/:id`) を X や Discord、Slack 等でシェアすると、`GET /islands/:id/ogp.png` (800×420 PNG) の地図画像が OGP (`og:image`) として表示されます。地図は観光者向けの表示 (基地→森、海底基地→海、ハリボテ→防衛施設に見える偽装ルールを含む) をそのまま敷き詰めたもので、文字は描画しません (島名やターン・人口・面積・順位は `og:title`/`og:description` に載せます)。画像 URL には現在ターンの `?turn=N` が付き、ターンが進むと URL が変わるため、SNS 側のキャッシュも新しい地図に更新されます。画像は外部サービスやネイティブライブラリを使わず、`packages/game/src/ogp/` の純粋な TypeScript (自前の PNG エンコーダ + 事前生成したタイル画像データ) で毎回組み立てます。`GET /islands/:id/ogp.png` のレスポンスは `Cache-Control: public, max-age=3600` (1 時間) を返します。
+島の URL (`/games/:gameId/islands/:id`) を X や Discord、Slack 等でシェアすると、`GET /games/:gameId/islands/:id/ogp.png` (800×420 PNG) の地図画像が OGP (`og:image`) として表示されます。地図は観光者向けの表示 (基地→森、海底基地→海、ハリボテ→防衛施設に見える偽装ルールを含む) をそのまま敷き詰めたもので、文字は描画しません (島名やターン・人口・面積・順位は `og:title`/`og:description` に載せます)。画像 URL には現在ターンの `?turn=N` が付き、ターンが進むと URL が変わるため、SNS 側のキャッシュも新しい地図に更新されます。画像は外部サービスやネイティブライブラリを使わず、`packages/game/src/ogp/` の純粋な TypeScript (自前の PNG エンコーダ + 事前生成したタイル画像データ) で毎回組み立てます。`GET /islands/:id/ogp.png` のレスポンスは `Cache-Control: public, max-age=3600` (1 時間) を返します。
 
 Cloudflare Workers 版は、自前で Cache API (`caches.default`) を呼ぶ実装は持たず、代わりに [Workers Cache](https://developers.cloudflare.com/workers/cache/) (`wrangler.jsonc` の `cache.enabled: true`) を使います。これは応答の `Cache-Control` に従って Cloudflare 側が自動でキャッシュする機能で、**`*.workers.dev` のデフォルトドメインでも有効**です (Cache API と違いカスタムドメインは不要)。
 
-Workers Cache は `Cache-Control` の無い応答も RFC 9111 のヒューリスティックでキャッシュしてしまい、しかも Cookie 付きリクエストをバイパスしません (バイパス対象は `Set-Cookie` を含む応答と `Authorization` 付きリクエストのみ)。そのため、セッション依存の HTML (`/api/auth/*` の better-auth の応答を含む) が他人に配信されてしまわないよう、`packages/game/src/web/app.tsx` の `defaultCacheControlMiddleware` が **すべての応答に既定で `Cache-Control: private, no-store` を付け**、ルートが明示的に `Cache-Control` を設定している場合だけそちらを優先します。`GET /islands/:id/ogp.png` は自身で `public, max-age=3600` (と、将来のパージ用に `Cache-Tag: island-<id>`) を設定するので、そちらがキャッシュされます。
+Workers Cache は `Cache-Control` の無い応答も RFC 9111 のヒューリスティックでキャッシュしてしまい、しかも Cookie 付きリクエストをバイパスしません (バイパス対象は `Set-Cookie` を含む応答と `Authorization` 付きリクエストのみ)。そのため、セッション依存の HTML (`/api/auth/*` の better-auth の応答を含む) が他人に配信されてしまわないよう、`packages/game/src/web/app.tsx` の `defaultCacheControlMiddleware` が **すべての応答に既定で `Cache-Control: private, no-store` を付け**、ルートが明示的に `Cache-Control` を設定している場合だけそちらを優先します。`GET /games/:gameId/islands/:id/ogp.png` は自身で `public, max-age=3600` (と、将来のパージ用に `Cache-Tag: island-<id>`) を設定するので、そちらがキャッシュされます。
 
 この既定 no-store のミドルウェアは Node 版でも同じように動きますが、Node 版自体はキャッシュ層を持たないため実質無害です (必要ならリバースプロキシ側でキャッシュしてください)。
 
@@ -207,40 +233,42 @@ Workers Cache は `Cache-Control` の無い応答も RFC 9111 のヒューリス
 
 `packages/game/src/bootstrap/config-from-env.ts` (ゲーム本体・両ランタイム共通) と `packages/server-node/src/config.ts` (Node 固有) の一覧です。Node では `.env` (または環境変数) に、Workers では `wrangler.jsonc` の `vars` か `wrangler secret put` (secret) に設定します。
 
-| 環境変数                                                        | 既定値                                    | 用途                                                                                                                                                                    | Node | Workers                     |
-| --------------------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--: | --------------------------- |
-| `HAKONIWA_AUTH_SECRET`                                          | (なし、**必須**)                          | better-auth の secret と CSRF トークンの鍵。`openssl rand -base64 32` 等                                                                                                |  ○   | secret (必須)               |
-| `HAKONIWA_BASE_URL`                                             | (なし = リクエストのオリジンから自動判定) | better-auth の baseURL。OAuth コールバックと Origin 検査に使う。通常は不要。カスタムドメインや逆プロキシ配下で明示したいときだけ設定する                                |  ○   | vars (通常不要)             |
-| `HAKONIWA_X_CLIENT_ID` / `HAKONIWA_X_CLIENT_SECRET`             | (なし)                                    | 両方設定すると X (Twitter) ログインが有効になる                                                                                                                         |  ○   | secret                      |
-| `HAKONIWA_DISCORD_CLIENT_ID` / `HAKONIWA_DISCORD_CLIENT_SECRET` | (なし)                                    | 両方設定すると Discord ログインが有効になる                                                                                                                             |  ○   | secret                      |
-| `HAKONIWA_DEV_LOGIN`                                            | `false`                                   | `true` で開発ログイン (任意のメールアドレスでログイン) を有効化。本番では必ず `false`                                                                                   |  ○   | vars                        |
-| `HAKONIWA_ADMIN_EMAILS`                                         | (なし)                                    | 管理者とみなすメールアドレス (カンマ区切り)                                                                                                                             |  ○   | vars                        |
-| `HAKONIWA_RESEND_API_KEY`                                       | (なし)                                    | メール送信 (Resend)。未設定ならコンソール/ログにリンクを出力するだけの開発用 Mailer                                                                                     |  ○   | secret                      |
-| `HAKONIWA_MAIL_FROM`                                            | `hakoniwa@example.com`                    | メールの送信元アドレス                                                                                                                                                  |  ○   | vars                        |
-| `HAKONIWA_NG_WORDS`                                             | (なし)                                    | 追加の NG ワード (カンマ区切り)                                                                                                                                         |  ○   | vars                        |
-| `HAKONIWA_DEBUG`                                                | `false`                                   | `true` でトップに「ターンを進める」ボタンを表示 (管理者ログイン必須)                                                                                                    |  ○   | vars                        |
-| `HAKONIWA_ADMIN_ENABLED`                                        | `true`                                    | 管理画面 (`/admin`) の有効 / 無効                                                                                                                                       |  ○   | vars                        |
-| `HAKONIWA_USE_LBBS`                                             | `false`                                   | 島ごとのローカル掲示板の有効 / 無効                                                                                                                                     |  ○   | vars                        |
-| `HAKONIWA_UNIT_TIME_SEC`                                        | `21600`                                   | 新しいデータを作るときの1ターンの長さ (秒) の既定値。以後は管理画面「ゲーム設定」/ CLI `game set-unit-time` で変更する (この環境変数を変えても既存データには影響しない) |  ○   | vars                        |
-| `HAKONIWA_MAX_CATCH_UP_TURNS`                                   | `1`                                       | 1 回の判定で進める最大ターン数 (Workers 版は Cron が 15 分間隔のため `wrangler.jsonc` では既定 `3`)                                                                     |  ○   | vars                        |
-| `HAKONIWA_SITE_TITLE`                                           | `箱庭諸島２`                              | サイトタイトル                                                                                                                                                          |  ○   | vars                        |
-| `HAKONIWA_ADMIN_NAME`                                           | (なし)                                    | フッタの管理者名。未設定ならフッタに表示しない                                                                                                                          |  ○   | vars                        |
-| `HAKONIWA_EMAIL`                                                | (なし)                                    | フッタの連絡先。未設定ならフッタに表示しない                                                                                                                            |  ○   | vars                        |
-| `HAKONIWA_BBS_URL`                                              | (なし)                                    | フッタの掲示板リンク。未設定ならフッタに表示しない                                                                                                                      |  ○   | vars                        |
-| `HAKONIWA_TOPPAGE_URL`                                          | (なし)                                    | フッタのトップページリンク。未設定ならフッタに表示しない                                                                                                                |  ○   | vars                        |
-| `HAKONIWA_START_AT`                                             | (なし)                                    | ターン1が始まる開始日時 (ISO 8601)。管理画面の初期化フォームと CLI `db init` の既定値。未設定なら初期化時の現在時刻を切り下げた時刻を使う                               |  ○   | vars                        |
-| `HAKONIWA_FINAL_TURN`                                           | (なし)                                    | 最終ターン数 (正の整数)。管理画面の初期化フォームと CLI `db init` の既定値。未設定なら無期限                                                                            |  ○   | vars                        |
-| `HAKONIWA_TIMEZONE`                                             | `Asia/Tokyo`                              | datetime-local の解釈と日時表示に使う IANA タイムゾーン名                                                                                                               |  ○   | vars                        |
-| `PORT`                                                          | `3000`                                    | サーバーの待受ポート                                                                                                                                                    |  ○   | - (Workers は不要)          |
-| `HAKONIWA_DB_PATH`                                              | `./data/hakoniwa.sqlite`                  | SQLite データベースファイル                                                                                                                                             |  ○   | - (DO の SQLite ストレージ) |
-| `HAKONIWA_BACKUP_DIR`                                           | `./data/backups`                          | バックアップの出力先                                                                                                                                                    |  ○   | - (PITR を使う)             |
-| `HAKONIWA_TURN_CHECK_INTERVAL_SEC`                              | `60`                                      | ターン進行判定のタイマー間隔 (秒)。`0` で無効                                                                                                                           |  ○   | - (Cron Trigger を使う)     |
+| 環境変数                                                        | 既定値                                    | 用途                                                                                                                                                                          | Node | Workers                     |
+| --------------------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--: | --------------------------- |
+| `HAKONIWA_AUTH_SECRET`                                          | (なし、**必須**)                          | better-auth の secret と CSRF トークンの鍵。`openssl rand -base64 32` 等                                                                                                      |  ○   | secret (必須)               |
+| `HAKONIWA_BASE_URL`                                             | (なし = リクエストのオリジンから自動判定) | better-auth の baseURL。OAuth コールバックと Origin 検査に使う。通常は不要。カスタムドメインや逆プロキシ配下で明示したいときだけ設定する                                      |  ○   | vars (通常不要)             |
+| `HAKONIWA_X_CLIENT_ID` / `HAKONIWA_X_CLIENT_SECRET`             | (なし)                                    | 両方設定すると X (Twitter) ログインが有効になる                                                                                                                               |  ○   | secret                      |
+| `HAKONIWA_DISCORD_CLIENT_ID` / `HAKONIWA_DISCORD_CLIENT_SECRET` | (なし)                                    | 両方設定すると Discord ログインが有効になる                                                                                                                                   |  ○   | secret                      |
+| `HAKONIWA_DEV_LOGIN`                                            | `false`                                   | `true` で開発ログイン (任意のメールアドレスでログイン) を有効化。本番では必ず `false`                                                                                         |  ○   | vars                        |
+| `HAKONIWA_ADMIN_EMAILS`                                         | (なし)                                    | 管理者とみなすメールアドレス (カンマ区切り)                                                                                                                                   |  ○   | vars                        |
+| `HAKONIWA_RESEND_API_KEY`                                       | (なし)                                    | メール送信 (Resend)。未設定ならコンソール/ログにリンクを出力するだけの開発用 Mailer                                                                                           |  ○   | secret                      |
+| `HAKONIWA_MAIL_FROM`                                            | `hakoniwa@example.com`                    | メールの送信元アドレス                                                                                                                                                        |  ○   | vars                        |
+| `HAKONIWA_NG_WORDS`                                             | (なし)                                    | 追加の NG ワード (カンマ区切り)                                                                                                                                               |  ○   | vars                        |
+| `HAKONIWA_DEBUG`                                                | `false`                                   | `true` でトップに「ターンを進める」ボタンを表示 (管理者ログイン必須)                                                                                                          |  ○   | vars                        |
+| `HAKONIWA_ADMIN_ENABLED`                                        | `true`                                    | 管理画面 (`/admin`) の有効 / 無効                                                                                                                                             |  ○   | vars                        |
+| `HAKONIWA_USE_LBBS`                                             | `false`                                   | 島ごとのローカル掲示板の有効 / 無効                                                                                                                                           |  ○   | vars                        |
+| `HAKONIWA_UNIT_TIME_SEC`                                        | `21600`                                   | 新しいゲームを開始するときの1ターンの長さ (秒) の既定値。以後は管理画面「ゲーム設定」/ CLI `game set-unit-time` で変更する (この環境変数を変えても既存のゲームには影響しない) |  ○   | vars                        |
+| `HAKONIWA_MAX_CATCH_UP_TURNS`                                   | `1`                                       | 1 回の判定で進める最大ターン数 (Workers 版は Cron が 15 分間隔のため `wrangler.jsonc` では既定 `3`)                                                                           |  ○   | vars                        |
+| `HAKONIWA_SITE_TITLE`                                           | `箱庭諸島２`                              | サイトタイトル                                                                                                                                                                |  ○   | vars                        |
+| `HAKONIWA_ADMIN_NAME`                                           | (なし)                                    | フッタの管理者名。未設定ならフッタに表示しない                                                                                                                                |  ○   | vars                        |
+| `HAKONIWA_EMAIL`                                                | (なし)                                    | フッタの連絡先。未設定ならフッタに表示しない                                                                                                                                  |  ○   | vars                        |
+| `HAKONIWA_BBS_URL`                                              | (なし)                                    | フッタの掲示板リンク。未設定ならフッタに表示しない                                                                                                                            |  ○   | vars                        |
+| `HAKONIWA_TOPPAGE_URL`                                          | (なし)                                    | フッタのトップページリンク。未設定ならフッタに表示しない                                                                                                                      |  ○   | vars                        |
+| `HAKONIWA_START_AT`                                             | (なし)                                    | ターン1が始まる開始日時 (ISO 8601)。管理画面の「新しいゲームを開始」フォームと CLI `game new`/`db init` の既定値。未設定なら開始時の現在時刻を切り下げた時刻を使う            |  ○   | vars                        |
+| `HAKONIWA_FINAL_TURN`                                           | (なし)                                    | 最終ターン数 (正の整数)。管理画面の「新しいゲームを開始」フォームと CLI `game new`/`db init` の既定値。未設定なら無期限                                                       |  ○   | vars                        |
+| `HAKONIWA_TIMEZONE`                                             | `Asia/Tokyo`                              | datetime-local の解釈と日時表示に使う IANA タイムゾーン名                                                                                                                     |  ○   | vars                        |
+| `PORT`                                                          | `3000`                                    | サーバーの待受ポート                                                                                                                                                          |  ○   | - (Workers は不要)          |
+| `HAKONIWA_DB_PATH`                                              | `./data/hakoniwa.sqlite`                  | SQLite データベースファイル                                                                                                                                                   |  ○   | - (DO の SQLite ストレージ) |
+| `HAKONIWA_BACKUP_DIR`                                           | `./data/backups`                          | バックアップの出力先                                                                                                                                                          |  ○   | - (PITR を使う)             |
+| `HAKONIWA_TURN_CHECK_INTERVAL_SEC`                              | `60`                                      | ターン進行判定のタイマー間隔 (秒)。`0` で無効                                                                                                                                 |  ○   | - (Cron Trigger を使う)     |
 
-最終ターンを設定すると、そのターンの処理が終わった時点でゲームが終了し、以降はターンが進まなくなります (管理画面の「ゲーム設定」または CLI `game set-final-turn` でいつでも変更・解除できます)。終了後もトップと観光・開発画面は閲覧でき、掲示板への記帳もできますが、計画登録・コメント更新・名前変更・新しい島の作成はできなくなります。
+最終ターンを設定すると、そのターンの処理が終わった時点でゲームが終了し (`status` が `finished` になり)、以降はターンが進まなくなります (管理画面の「ゲーム設定」または CLI `game set-final-turn` でいつでも変更・解除できます)。終了後もトップと観光・開発画面は閲覧でき、掲示板への記帳もできますが、計画登録・コメント更新・名前変更・新しい島の作成はできなくなります。管理者が「このゲームを終了する」で手動終了させた場合も同じ状態になります。ゲームが終了すると、現在のゲームが `finished` のときだけ次のゲームを開始でき (管理画面「新しいゲームを開始」または CLI `game new`)、終了した (それまでの) ゲームは `/games` から一覧・閲覧できる読み取り専用の過去のゲームとして残ります (再開はできません)。
 
 ## 管理画面の機能一覧 (`/admin`)
 
-- **データ作成・削除**: 「新しいデータを作る」(開始日時・最終ターン・1 ターンの長さ (時間・分の入力) を指定可能) / 「このデータを削除」
+- **ゲームの開始・終了**: 「新しいゲームを開始」(名前・開始日時・最終ターン・1 ターンの長さ (時間・分の入力) を指定可能。現在のゲームが無いか終了しているときだけ実行できる) / 「このゲームを終了する」(現在のゲームが進行中のときだけ、確認チェックボックス付きで実行できる) / 「このデータを削除」(現役データを削除)
+- **現役データ**: 現在のゲームの名前・ID・状態・ターン数・最終更新時刻・開始時刻・最終ターン・1 ターンの長さを表示
+- **ゲーム一覧**: 現在 + 過去のゲームを表 (名前・開始・終了・ターン数・島数・状態) で表示。名前から各ゲームのトップへ移動できる
 - **最終更新時刻の変更**: 日時指定 (datetime-local) または unix 秒指定
 - **ゲーム設定**: 最終ターン数の変更 (空欄で無期限)、1 ターンの長さの変更 (時間・分の入力。次のターン境界から反映)
 - **ターンを進める**: `HAKONIWA_DEBUG=true` のときにトップページにも表示される、手動でのターン進行 (管理者ログイン必須)

@@ -1,4 +1,5 @@
 // tmp/17-ogp.md 「テスト」節: web 層 (`/islands/:id/ogp.png` と `/islands/:id` の OGP メタタグ)。
+// tmp/18-games.md 対応で `/games/:gameId/islands/:id/ogp.png` に移った。
 import { describe, expect, it } from "vitest";
 import { defaultConfig } from "../core/config.ts";
 import { loginAs, postForm, setupTestApp } from "./test-helpers.ts";
@@ -12,7 +13,7 @@ async function createIsland(testApp: TestApp, name = "てすとじま") {
   });
   await postForm(
     testApp.app,
-    "/islands",
+    "/games/1/islands",
     { name, _csrf: owner.csrfToken },
     { cookie: owner.cookie },
   );
@@ -28,11 +29,11 @@ function readUint32BE(bytes: Uint8Array, offset: number): number {
   );
 }
 
-describe("GET /islands/:id/ogp.png", () => {
+describe("GET /games/:gameId/islands/:id/ogp.png", () => {
   it("image/png と Cache-Control を返し、800x420 の PNG になる", async () => {
     const testApp = setupTestApp();
     await createIsland(testApp);
-    const res = await testApp.app.request("/islands/1/ogp.png");
+    const res = await testApp.app.request("/games/1/islands/1/ogp.png");
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("image/png");
     expect(res.headers.get("cache-control")).toBe("public, max-age=3600");
@@ -48,30 +49,44 @@ describe("GET /islands/:id/ogp.png", () => {
   it("?turn= クエリが付いていても同じ画像を返す (キー違いのみ)", async () => {
     const testApp = setupTestApp();
     await createIsland(testApp);
-    const res = await testApp.app.request("/islands/1/ogp.png?turn=1");
+    const res = await testApp.app.request("/games/1/islands/1/ogp.png?turn=1");
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("image/png");
   });
 
   it("存在しない島は 404", async () => {
     const testApp = setupTestApp();
-    const res = await testApp.app.request("/islands/999/ogp.png");
+    const res = await testApp.app.request("/games/1/islands/999/ogp.png");
+    expect(res.status).toBe(404);
+  });
+
+  it("存在しないゲームは 404", async () => {
+    const testApp = setupTestApp();
+    const res = await testApp.app.request("/games/999/islands/1/ogp.png");
     expect(res.status).toBe(404);
   });
 
   it("認証なしで取得できる (誰でも同じ画像)", async () => {
     const testApp = setupTestApp();
     await createIsland(testApp);
-    const res = await testApp.app.request("/islands/1/ogp.png");
+    const res = await testApp.app.request("/games/1/islands/1/ogp.png");
     expect(res.status).toBe(200);
+  });
+
+  it("旧 URL (/islands/:id/ogp.png) は現在のゲームへ 302 (クエリも保持)", async () => {
+    const testApp = setupTestApp();
+    await createIsland(testApp);
+    const res = await testApp.app.request("/islands/1/ogp.png?turn=1", { redirect: "manual" });
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/games/1/islands/1/ogp.png?turn=1");
   });
 });
 
-describe("GET /islands/:id の OGP メタタグ", () => {
-  it("og:image が絶対 URL で ?turn= を含み、og:title/description/url を含む", async () => {
+describe("GET /games/:gameId/islands/:id の OGP メタタグ", () => {
+  it("og:image / og:url が絶対 URL でゲーム ID 入り、?turn= を含み、og:title/description を含む", async () => {
     const testApp = setupTestApp();
     await createIsland(testApp, "てすとじま");
-    const res = await testApp.app.request("/islands/1");
+    const res = await testApp.app.request("/games/1/islands/1");
     expect(res.status).toBe(200);
     const html = await res.text();
 
@@ -80,14 +95,14 @@ describe("GET /islands/:id の OGP メタタグ", () => {
       `<meta property="og:title" content="てすとじま島 - ${defaultConfig.site.title}"/>`,
     );
     expect(html).toContain("ターン1 / 人口");
-    // tmp/18-games.md: OGP の imagePath はゲーム ID 入りの URL になった (実ルートの
-    // マウント先はまだ /islands/:id/ogp.png のままで、URL 変更は第 2 段階)。
     expect(html).toContain(
       '<meta property="og:image" content="http://localhost:5173/games/1/islands/1/ogp.png?turn=1"/>',
     );
     expect(html).toContain('<meta property="og:image:width" content="800"/>');
     expect(html).toContain('<meta property="og:image:height" content="420"/>');
-    expect(html).toContain('<meta property="og:url" content="http://localhost:5173/islands/1"/>');
+    expect(html).toContain(
+      '<meta property="og:url" content="http://localhost:5173/games/1/islands/1"/>',
+    );
     expect(html).toContain('<meta name="twitter:card" content="summary_large_image"/>');
   });
 
@@ -96,9 +111,9 @@ describe("GET /islands/:id の OGP メタタグ", () => {
     await createIsland(testApp);
     const { baseUrl: _baseUrl, ...authWithoutBaseUrl } = testApp.config.auth;
     testApp.config.auth = authWithoutBaseUrl;
-    const res = await testApp.app.request("https://example.com/islands/1");
+    const res = await testApp.app.request("https://example.com/games/1/islands/1");
     const html = await res.text();
     expect(html).toContain('content="https://example.com/games/1/islands/1/ogp.png?turn=1"');
-    expect(html).toContain('content="https://example.com/islands/1"');
+    expect(html).toContain('content="https://example.com/games/1/islands/1"');
   });
 });

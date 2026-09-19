@@ -84,6 +84,33 @@ export function parseAdminInitForm(body: Record<string, string>, timezone: strin
   return form;
 }
 
+/**
+ * 「新しいゲームを開始」フォーム。tmp/18-games.md「ルート」節: `POST /admin/games`
+ * (name, start-at, final-turn, unit-hours/unit-minutes)。`name` 以外は `parseAdminInitForm` と同じ。
+ */
+export interface StartGameForm {
+  name?: string;
+  startAt?: number;
+  finalTurn?: number | null;
+  unitTimeSec?: number;
+}
+
+export function parseStartGameForm(body: Record<string, string>, timezone: string): StartGameForm {
+  const base = parseAdminInitForm(body, timezone);
+  const name = field(body, "name").trim();
+  return { ...base, ...(name !== "" ? { name } : {}) };
+}
+
+/**
+ * 「このゲームを終了する」フォーム。`POST /admin/games/current/finish`。tmp/18-games.md「ルート」節:
+ * 誤操作防止の確認チェックボックス (`<input type="checkbox" name="confirm">`) を必須にする。
+ */
+export function parseFinishGameForm(body: Record<string, string>): void {
+  if (field(body, "confirm") === "") {
+    throw new AppError("invalid_input", "confirm checkbox is required");
+  }
+}
+
 /** 「ゲーム設定」の最終ターン数変更フォーム。空欄なら無期限 (null)。 */
 export function parseFinalTurnForm(body: Record<string, string>): number | null {
   const raw = field(body, "final-turn");

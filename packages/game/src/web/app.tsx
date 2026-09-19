@@ -14,9 +14,11 @@ import { createAccountRoutes } from "./routes/account.tsx";
 import { createAdminRoutes } from "./routes/admin.tsx";
 import { createAuthRoutes } from "./routes/auth.tsx";
 import { createDebugRoutes } from "./routes/debug.tsx";
+import { createGamesRoutes } from "./routes/games.tsx";
 import { createIslandsRoutes } from "./routes/islands.tsx";
+import { createLegacyRoutes } from "./routes/legacy.tsx";
 import { createMyIslandRoutes } from "./routes/my-island.tsx";
-import { createTopRoutes } from "./routes/top.tsx";
+import { createGameTopRoutes, createTopRoutes } from "./routes/top.tsx";
 import { ErrorPage, errorMessage, errorStatus } from "./views/messages.tsx";
 
 /**
@@ -58,8 +60,12 @@ export function createApp(deps: WebDeps): Hono<AppEnv> {
   );
 
   // ゲーム系ルートの前にターン進行判定。auth/account/admin/静的には掛けない。
+  // tmp/18-games.md「ルート」節: パスに依らず 1 回進行判定できればよいので、ゲーム系ルート
+  // (トップ・ゲーム一覧・`/games/*`・旧 URL) すべてに掛けておく。
   const turnCheck = turnCheckMiddleware({ turnService: deps.turnService, clock: deps.clock });
   app.use("/", turnCheck);
+  app.use("/games", turnCheck);
+  app.use("/games/*", turnCheck);
   app.use("/islands", turnCheck);
   app.use("/islands/*", turnCheck);
   app.use("/my-island", turnCheck);
@@ -69,8 +75,12 @@ export function createApp(deps: WebDeps): Hono<AppEnv> {
   app.route("/", createAuthRoutes(deps));
   app.route("/", createAccountRoutes(deps));
   app.route("/", createTopRoutes(deps));
-  app.route("/", createIslandsRoutes(deps));
-  app.route("/", createMyIslandRoutes(deps));
+  app.route("/", createGamesRoutes(deps));
+  app.route("/", createLegacyRoutes(deps));
+  // tmp/18-games.md「ルート」節: 全ページを `/games/:gameId{[0-9]+}` 配下にする。
+  app.route("/games/:gameId{[0-9]+}", createGameTopRoutes(deps));
+  app.route("/games/:gameId{[0-9]+}", createIslandsRoutes(deps));
+  app.route("/games/:gameId{[0-9]+}", createMyIslandRoutes(deps));
 
   // config.debug=false の場合は POST /turn 自体を無効化する。
   if (deps.config.debug) {
@@ -89,8 +99,11 @@ export function createApp(deps: WebDeps): Hono<AppEnv> {
         return c.redirect("/login", 302);
       }
       // no_island はトップへ戻し、通知として表示する (GET/POST 共通)。
+      // tmp/18-games.md: トップは `/games/:id` に移ったため、現在のゲームがあればそちらへ戻す。
       if (err.kind === "no_island") {
-        return c.redirect("/?notice=no_island", 302);
+        const currentId = deps.gameService.getCurrentGameId();
+        const target = currentId !== undefined ? `/games/${currentId}` : "/";
+        return c.redirect(`${target}?notice=no_island`, 302);
       }
       return renderPage(
         c,

@@ -10,7 +10,7 @@ async function createIsland(testApp: TestApp) {
   });
   await postForm(
     testApp.app,
-    "/islands",
+    "/games/1/islands",
     { name: "てすとじま", _csrf: auth.csrfToken },
     {
       cookie: auth.cookie,
@@ -25,7 +25,7 @@ describe("ローカル掲示板", () => {
     const owner = await createIsland(testApp);
     const res = await postForm(
       testApp.app,
-      "/islands/1/lbbs",
+      "/games/1/islands/1/lbbs",
       { message: "こんにちは", _csrf: owner.csrfToken },
       { cookie: owner.cookie },
     );
@@ -35,7 +35,7 @@ describe("ローカル掲示板", () => {
   it("未ログインでの記帳は 401", async () => {
     const testApp = setupTestApp({ gameOverrides: { useLbbs: true } });
     await createIsland(testApp);
-    const res = await postForm(testApp.app, "/islands/1/lbbs", { message: "こんにちは" });
+    const res = await postForm(testApp.app, "/games/1/islands/1/lbbs", { message: "こんにちは" });
     expect(res.status).toBe(401);
   });
 
@@ -49,7 +49,7 @@ describe("ローカル掲示板", () => {
     });
     const res = await postForm(
       testApp.app,
-      "/islands/1/lbbs",
+      "/games/1/islands/1/lbbs",
       { message: "こんにちは", _csrf: visitor.csrfToken },
       { cookie: visitor.cookie },
     );
@@ -67,7 +67,7 @@ describe("ローカル掲示板", () => {
     const owner = await createIsland(testApp);
     const res = await postForm(
       testApp.app,
-      "/islands/1/lbbs",
+      "/games/1/islands/1/lbbs",
       { message: "よろしく", _csrf: owner.csrfToken },
       { cookie: owner.cookie },
     );
@@ -82,7 +82,7 @@ describe("ローカル掲示板", () => {
     const owner = await createIsland(testApp);
     const res = await postForm(
       testApp.app,
-      "/islands/1/lbbs",
+      "/games/1/islands/1/lbbs",
       { message: "こんにちは", _csrf: owner.csrfToken },
       { cookie: owner.cookie, origin: "http://evil.example.com", host: "example.com" },
     );
@@ -94,7 +94,7 @@ describe("ローカル掲示板", () => {
     const owner = await createIsland(testApp);
     const res = await postForm(
       testApp.app,
-      "/islands/1/lbbs",
+      "/games/1/islands/1/lbbs",
       { message: "こんにちは", _csrf: owner.csrfToken },
       { cookie: owner.cookie, origin: "http://localhost:5173", host: "localhost:5173" },
     );
@@ -106,7 +106,7 @@ describe("ローカル掲示板", () => {
     const owner = await createIsland(testApp);
     const post = await postForm(
       testApp.app,
-      "/islands/1/lbbs",
+      "/games/1/islands/1/lbbs",
       { message: "よろしく", _csrf: owner.csrfToken },
       { cookie: owner.cookie },
     );
@@ -115,7 +115,7 @@ describe("ローカル掲示板", () => {
 
     const del = await postForm(
       testApp.app,
-      "/my-island/lbbs/delete",
+      "/games/1/my-island/lbbs/delete",
       { number: 0, _csrf: owner.csrfToken },
       { cookie: owner.cookie },
     );
@@ -128,7 +128,7 @@ describe("ローカル掲示板", () => {
     const owner = await createIsland(testApp);
     const res = await postForm(
       testApp.app,
-      "/islands/1/lbbs",
+      "/games/1/islands/1/lbbs",
       { message: "", _csrf: owner.csrfToken },
       { cookie: owner.cookie },
     );
@@ -141,7 +141,7 @@ describe("ローカル掲示板", () => {
     const owner = await createIsland(testApp);
     const res = await postForm(
       testApp.app,
-      "/islands/1/lbbs",
+      "/games/1/islands/1/lbbs",
       { message: "ngだめ", _csrf: owner.csrfToken },
       { cookie: owner.cookie },
     );

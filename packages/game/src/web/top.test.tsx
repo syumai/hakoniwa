@@ -9,20 +9,57 @@ import {
   setupTestApp,
 } from "./test-helpers.ts";
 
-describe("GET /", () => {
-  it("200 で配布元リンク、ターン数、各見出しを含む (未ログイン)", async () => {
+describe("GET / (tmp/18-games.md: 現在のゲームへ 302)", () => {
+  it("ゲームがあれば /games/:id へ 302", async () => {
     const { app } = setupTestApp();
+    const res = await app.request("/", { redirect: "manual" });
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/games/1");
+  });
+
+  it("ゲームが無ければ200で「ゲームはまだ開始されていません」を表示する (管理者以外は /admin 案内なし)", async () => {
+    const { app } = setupTestApp({ skipInit: true });
     const res = await app.request("/");
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain("ゲームはまだ開始されていません");
+    expect(html).not.toContain('href="/admin"');
+  });
+
+  it("ゲームが無い場合、管理者には /admin への案内を表示する", async () => {
+    const testApp = setupTestApp({ skipInit: true, adminEmails: ["admin@example.com"] });
+    const auth = await loginAs(testApp, {
+      id: "admin1",
+      name: "かんりしゃ",
+      email: "admin@example.com",
+    });
+    const res = await testApp.app.request("/", { headers: { cookie: auth.cookie } });
+    const html = await res.text();
+    expect(html).toContain('href="/admin"');
+  });
+});
+
+describe("GET /games/:gameId (トップ)", () => {
+  it("200 で配布元リンク、ゲーム名、ターン数、各見出しを含む (未ログイン)", async () => {
+    const { app } = setupTestApp();
+    const res = await app.request("/games/1");
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain("http://www.bekkoame.ne.jp/~tokuoka/hakoniwa.html");
     expect(html).toContain("箱庭諸島スクリプト配布元");
+    expect(html).toContain("<h1>第 1 回</h1>");
     expect(html).toContain("ターン1");
     expect(html).toContain("自分の島へ");
     expect(html).toContain("諸島の状況");
     expect(html).toContain("最近の出来事");
     expect(html).toContain("発見の記録");
     expect(html).toContain("ログイン");
+  });
+
+  it("存在しない gameId は 404", async () => {
+    const { app } = setupTestApp();
+    const res = await app.request("/games/999");
+    expect(res.status).toBe(404);
   });
 
   it("ログイン済みで島未所持なら「新しい島を探す」フォームを含む", async () => {
@@ -32,9 +69,10 @@ describe("GET /", () => {
       name: "たろう",
       email: "u1@example.com",
     });
-    const res = await testApp.app.request("/", { headers: { cookie } });
+    const res = await testApp.app.request("/games/1", { headers: { cookie } });
     const html = await res.text();
     expect(html).toContain("新しい島を探す");
+    expect(html).toContain('action="/games/1/islands"');
     expect(html).not.toContain('action="/my-island"');
   });
 
@@ -43,13 +81,13 @@ describe("GET /", () => {
     const auth = await loginAs(testApp, { id: "u1", name: "たろう", email: "u1@example.com" });
     await postForm(
       testApp.app,
-      "/islands",
+      "/games/1/islands",
       { name: "てすと", _csrf: auth.csrfToken },
       {
         cookie: auth.cookie,
       },
     );
-    const res = await testApp.app.request("/", { headers: { cookie: auth.cookie } });
+    const res = await testApp.app.request("/games/1", { headers: { cookie: auth.cookie } });
     const html = await res.text();
     expect(html).toContain("自分の島の開発計画へ");
     expect(html).not.toContain("新しい島を探す");
@@ -57,32 +95,24 @@ describe("GET /", () => {
 
   it("debug=false ならターンを進めるボタンを含まない", async () => {
     const { app } = setupTestApp({ debug: false });
-    const res = await app.request("/");
+    const res = await app.request("/games/1");
     const html = await res.text();
     expect(html).not.toContain("ターンを進める");
   });
 
   it("debug=true ならターンを進めるボタンを含む", async () => {
     const { app } = setupTestApp({ debug: true });
-    const res = await app.request("/");
+    const res = await app.request("/games/1");
     const html = await res.text();
     expect(html).toContain("ターンを進める");
   });
 
-  it("not_initialized: 未初期化なら 503 でデータファイルが開けませんと表示する", async () => {
-    const { app } = setupTestApp({ skipInit: true });
-    const res = await app.request("/");
-    expect(res.status).toBe(503);
-    const html = await res.text();
-    expect(html).toContain("データファイルが開けません");
-  });
-
-  it("順位表の島名: absent === 0 なら island-name クラス", async () => {
+  it("順位表の島名: absent === 0 なら island-name クラスで、ゲーム ID 入りのリンクにする", async () => {
     const testApp = setupTestApp();
     const auth = await loginAs(testApp, { id: "u1", name: "たろう", email: "u1@example.com" });
     await postForm(
       testApp.app,
-      "/islands",
+      "/games/1/islands",
       { name: "てすと", _csrf: auth.csrfToken },
       {
         cookie: auth.cookie,
@@ -94,10 +124,11 @@ describe("GET /", () => {
     }
     testApp.repo.updateIsland(currentGameId(testApp), { ...island, absent: 0 });
 
-    const res = await testApp.app.request("/");
+    const res = await testApp.app.request("/games/1");
     const html = await res.text();
     expect(html).toContain('class="island-name"');
     expect(html).not.toContain('class="island-name-faded"');
+    expect(html).toContain('href="/games/1/islands/1"');
   });
 
   it("順位表の島名: absent > 0 なら island-name-faded クラスで薄く表示する", async () => {
@@ -105,7 +136,7 @@ describe("GET /", () => {
     const auth = await loginAs(testApp, { id: "u1", name: "たろう", email: "u1@example.com" });
     await postForm(
       testApp.app,
-      "/islands",
+      "/games/1/islands",
       { name: "てすと", _csrf: auth.csrfToken },
       {
         cookie: auth.cookie,
@@ -117,7 +148,7 @@ describe("GET /", () => {
     }
     testApp.repo.updateIsland(currentGameId(testApp), { ...island, absent: 25 });
 
-    const res = await testApp.app.request("/");
+    const res = await testApp.app.request("/games/1");
     const html = await res.text();
     expect(html).toContain('class="island-name-faded"');
     expect(html).toContain("てすと島(25)");
@@ -127,7 +158,7 @@ describe("GET /", () => {
 describe("フッタ", () => {
   it("管理者名・メール・掲示板・トップページ URL が未設定なら該当行を表示しない (配布元リンクは常に表示)", async () => {
     const { app } = setupTestApp();
-    const res = await app.request("/");
+    const res = await app.request("/games/1");
     const html = await res.text();
     expect(html).not.toContain("管理者:");
     expect(html).not.toContain("掲示板(");
@@ -139,7 +170,7 @@ describe("フッタ", () => {
     const { app } = setupTestApp({
       gameOverrides: { site: { ...defaultConfig.site, adminName: "かんりしゃ" } },
     });
-    const res = await app.request("/");
+    const res = await app.request("/games/1");
     const html = await res.text();
     expect(html).toContain("管理者:かんりしゃ");
     expect(html).not.toContain("管理者:かんりしゃ(");
@@ -149,7 +180,7 @@ describe("フッタ", () => {
     const { app } = setupTestApp({
       gameOverrides: { site: { ...defaultConfig.site, email: "admin@example.com" } },
     });
-    const res = await app.request("/");
+    const res = await app.request("/games/1");
     const html = await res.text();
     expect(html).toContain('管理者:(<a href="mailto:admin@example.com">admin@example.com</a>)');
   });
@@ -166,7 +197,7 @@ describe("フッタ", () => {
         },
       },
     });
-    const res = await app.request("/");
+    const res = await app.request("/games/1");
     const html = await res.text();
     expect(html).toContain(
       '管理者:かんりしゃ(<a href="mailto:admin@example.com">admin@example.com</a>)',
@@ -179,7 +210,7 @@ describe("フッタ", () => {
     const { app } = setupTestApp({
       gameOverrides: { site: { ...defaultConfig.site, bbsUrl: "掲示板は別紙参照" } },
     });
-    const res = await app.request("/");
+    const res = await app.request("/games/1");
     const html = await res.text();
     expect(html).toContain("掲示板(掲示板は別紙参照)");
     expect(html).not.toContain('<a href="掲示板は別紙参照"');
@@ -238,20 +269,21 @@ describe("POST /turn (デバッグ用)", () => {
 describe("tmp/16-season.md: トップの3状態 (開始前/進行中/終了)", () => {
   it("進行中: 「ターンN」を見出しにし、最終ターン・次のターン:+残り時間を補足行 (<small>) で表示する", async () => {
     const { app } = setupTestApp({ finalTurn: 10 });
-    const res = await app.request("/");
+    const res = await app.request("/games/1");
     const html = await res.text();
-    expect(html).toContain("<h1>ターン1</h1>");
+    expect(html).toContain("<h2>ターン1</h2>");
     expect(html).toContain("<small>最終ターン10</small>");
     expect(html).toContain("次のターン:");
     // 従来の「ターンN / 最終ターンM」の並記はやめた。
     expect(html).not.toContain("ターン1 / 最終ターン10");
     expect(html).not.toContain("結果発表");
     expect(html).not.toContain("ゲーム開始:");
+    expect(html).not.toContain("このゲームは終了しています。");
   });
 
   it("tmp/16-season.md: 「1 ターン: …」を meta.unitTimeSec から整形して表示する", async () => {
     const { app } = setupTestApp({ unitTimeSec: 3600 });
-    const res = await app.request("/");
+    const res = await app.request("/games/1");
     const html = await res.text();
     expect(html).toContain("1 ターン: 1時間");
   });
@@ -259,25 +291,27 @@ describe("tmp/16-season.md: トップの3状態 (開始前/進行中/終了)", (
   it("開始前: 「ゲーム開始: …」を表示し、「次のターン:」は表示しない", async () => {
     const futureStart = INITIAL_CLOCK + 10_000;
     const { app } = setupTestApp({ startAt: futureStart, lastTime: futureStart });
-    const res = await app.request("/");
+    const res = await app.request("/games/1");
     const html = await res.text();
     expect(html).toContain("ゲーム開始:");
     expect(html).not.toContain("次のターン:");
     expect(html).not.toContain("結果発表");
   });
 
-  it("終了後: 「結果発表 (ターンM終了時点)」を表示し、「次のターン:」は表示しない", async () => {
+  it("終了後 (現在のゲーム): 「結果発表 (ターンM終了時点)」を表示するが「このゲームは終了しています。」は表示しない", async () => {
     const testApp = setupTestApp({ finalTurn: 1 });
     const meta = currentMeta(testApp);
     testApp.repo.saveMeta({ ...meta, turn: 2 });
     // tmp/18-games.md: 終了判定は status 列に昇格したため、明示的に finishGame を呼ぶ。
     testApp.repo.finishGame(currentGameId(testApp), meta.lastTime);
 
-    const res = await testApp.app.request("/");
+    const res = await testApp.app.request("/games/1");
     const html = await res.text();
     expect(html).toContain("結果発表");
     expect(html).toContain("ターン1終了時点");
     expect(html).not.toContain("次のターン:");
+    // 現在のゲーム (isCurrent) が終了しただけなので、過去のゲーム向けの文言は出さない。
+    expect(html).not.toContain("このゲームは終了しています。");
     // 終了後も既存の順位表 (諸島の状況) はそのまま表示する。
     expect(html).toContain("諸島の状況");
   });

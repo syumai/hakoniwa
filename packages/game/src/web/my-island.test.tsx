@@ -6,7 +6,7 @@ async function createIsland(testApp: TestApp, name = "てすとじま") {
   const auth = await loginAs(testApp, { id: "u1", name: "たろう", email: "u1@example.com" });
   const res = await postForm(
     testApp.app,
-    "/islands",
+    "/games/1/islands",
     { name, _csrf: auth.csrfToken },
     {
       cookie: auth.cookie,
@@ -15,10 +15,10 @@ async function createIsland(testApp: TestApp, name = "てすとじま") {
   return { res, auth };
 }
 
-describe("POST /islands (新規作成)", () => {
+describe("POST /games/:gameId/islands (新規作成)", () => {
   it("未ログインなら 401", async () => {
     const { app } = setupTestApp();
-    const res = await postForm(app, "/islands", { name: "てすと" });
+    const res = await postForm(app, "/games/1/islands", { name: "てすと" });
     expect(res.status).toBe(401);
   });
 
@@ -29,6 +29,7 @@ describe("POST /islands (新規作成)", () => {
     const html = await res.text();
     expect(html).toContain("島を発見しました！！");
     expect(html).toContain("「てすとじま島」");
+    expect(html).toContain('href="/games/1"');
   });
 
   it("island_full: 上限のとき 409", async () => {
@@ -44,7 +45,7 @@ describe("POST /islands (新規作成)", () => {
     const auth = await loginAs(testApp, { id: "u1", name: "たろう", email: "u1@example.com" });
     const res = await postForm(
       testApp.app,
-      "/islands",
+      "/games/1/islands",
       { name: "", _csrf: auth.csrfToken },
       {
         cookie: auth.cookie,
@@ -59,7 +60,7 @@ describe("POST /islands (新規作成)", () => {
     const auth = await loginAs(testApp, { id: "u1", name: "たろう", email: "u1@example.com" });
     await postForm(
       testApp.app,
-      "/islands",
+      "/games/1/islands",
       { name: "ひとつめ", _csrf: auth.csrfToken },
       {
         cookie: auth.cookie,
@@ -67,7 +68,7 @@ describe("POST /islands (新規作成)", () => {
     );
     const res = await postForm(
       testApp.app,
-      "/islands",
+      "/games/1/islands",
       { name: "ふたつめ", _csrf: auth.csrfToken },
       { cookie: auth.cookie },
     );
@@ -80,7 +81,7 @@ describe("POST /islands (新規作成)", () => {
     const auth = await loginAs(testApp, { id: "u1", name: "たろう", email: "u1@example.com" });
     const res = await postForm(
       testApp.app,
-      "/islands",
+      "/games/1/islands",
       { name: "だめな単語島", _csrf: auth.csrfToken },
       { cookie: auth.cookie },
     );
@@ -97,7 +98,7 @@ describe("POST /islands (新規作成)", () => {
     });
     const res = await postForm(
       testApp.app,
-      "/islands",
+      "/games/1/islands",
       { name: "てすと" },
       {
         cookie: cookieHeader,
@@ -107,11 +108,11 @@ describe("POST /islands (新規作成)", () => {
   });
 });
 
-describe("GET /islands/:id (観光)", () => {
+describe("GET /games/:gameId/islands/:id (観光)", () => {
   it("成功: ようこそ画面を表示する", async () => {
     const testApp = setupTestApp();
     await createIsland(testApp);
-    const res = await testApp.app.request("/islands/1");
+    const res = await testApp.app.request("/games/1/islands/1");
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain("「てすとじま島」");
@@ -120,16 +121,22 @@ describe("GET /islands/:id (観光)", () => {
 
   it("存在しない島は 404", async () => {
     const { app } = setupTestApp();
-    const res = await app.request("/islands/999");
+    const res = await app.request("/games/1/islands/999");
     expect(res.status).toBe(404);
     expect(await res.text()).toContain("問題発生");
   });
+
+  it("存在しないゲームは 404", async () => {
+    const { app } = setupTestApp();
+    const res = await app.request("/games/999/islands/1");
+    expect(res.status).toBe(404);
+  });
 });
 
-describe("GET /my-island (開発画面)", () => {
+describe("GET /games/:gameId/my-island (開発画面)", () => {
   it("未ログインなら /login へ 302", async () => {
     const { app } = setupTestApp();
-    const res = await app.request("/my-island", { redirect: "manual" });
+    const res = await app.request("/games/1/my-island", { redirect: "manual" });
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe("/login");
   });
@@ -137,18 +144,20 @@ describe("GET /my-island (開発画面)", () => {
   it("ログイン済みだが島が無ければトップへ通知付きで 302", async () => {
     const testApp = setupTestApp();
     const auth = await loginAs(testApp, { id: "u1", name: "たろう", email: "u1@example.com" });
-    const res = await testApp.app.request("/my-island", {
+    const res = await testApp.app.request("/games/1/my-island", {
       headers: { cookie: auth.cookie },
       redirect: "manual",
     });
     expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toBe("/?notice=no_island");
+    expect(res.headers.get("location")).toBe("/games/1?notice=no_island");
   });
 
   it("成功: 開発計画画面を表示する", async () => {
     const testApp = setupTestApp();
     const { auth } = await createIsland(testApp);
-    const res = await testApp.app.request("/my-island", { headers: { cookie: auth.cookie } });
+    const res = await testApp.app.request("/games/1/my-island", {
+      headers: { cookie: auth.cookie },
+    });
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain("開発計画");
@@ -157,13 +166,13 @@ describe("GET /my-island (開発画面)", () => {
   });
 });
 
-describe("POST /my-island/commands (計画登録)", () => {
+describe("POST /games/:gameId/my-island/commands (計画登録)", () => {
   it("成功: コマンドを登録しました と (0,0)で整地 を表示する", async () => {
     const testApp = setupTestApp();
     const { auth } = await createIsland(testApp);
     const res = await postForm(
       testApp.app,
-      "/my-island/commands",
+      "/games/1/my-island/commands",
       {
         _csrf: auth.csrfToken,
         number: 0,
@@ -187,7 +196,7 @@ describe("POST /my-island/commands (計画登録)", () => {
     const { auth } = await createIsland(testApp);
     const res = await postForm(
       testApp.app,
-      "/my-island/commands",
+      "/games/1/my-island/commands",
       {
         _csrf: auth.csrfToken,
         number: 0,
@@ -208,7 +217,7 @@ describe("POST /my-island/commands (計画登録)", () => {
     const { auth } = await createIsland(testApp);
     const res = await postForm(
       testApp.app,
-      "/my-island/commands",
+      "/games/1/my-island/commands",
       {
         _csrf: auth.csrfToken,
         number: 0,
@@ -234,7 +243,7 @@ describe("POST /my-island/commands (計画登録)", () => {
     const { auth } = await createIsland(testApp);
     const res = await postForm(
       testApp.app,
-      "/my-island/commands",
+      "/games/1/my-island/commands",
       { number: 0, kind: 1, x: 0, y: 0, amount: 0, target: 0, mode: "insert" },
       { cookie: auth.cookie },
     );
@@ -242,33 +251,33 @@ describe("POST /my-island/commands (計画登録)", () => {
   });
 });
 
-describe("POST /my-island/comment (コメント更新)", () => {
+describe("POST /games/:gameId/my-island/comment (コメント更新)", () => {
   it("成功: コメントを更新しました を表示し、トップにも反映される", async () => {
     const testApp = setupTestApp();
     const { auth } = await createIsland(testApp);
     const res = await postForm(
       testApp.app,
-      "/my-island/comment",
+      "/games/1/my-island/comment",
       { _csrf: auth.csrfToken, message: "よろしくお願いします" },
       { cookie: auth.cookie },
     );
     expect(res.status).toBe(200);
     expect(await res.text()).toContain("コメントを更新しました");
 
-    const top = await testApp.app.request("/");
+    const top = await testApp.app.request("/games/1");
     const topHtml = await top.text();
     expect(topHtml).toContain("コメント：");
     expect(topHtml).toContain("よろしくお願いします");
   });
 });
 
-describe("POST /my-island/name (名前変更)", () => {
+describe("POST /games/:gameId/my-island/name (名前変更)", () => {
   it("no_money: 資金不足のときは 400", async () => {
     const testApp = setupTestApp();
     const { auth } = await createIsland(testApp);
     const res = await postForm(
       testApp.app,
-      "/my-island/name",
+      "/games/1/my-island/name",
       { _csrf: auth.csrfToken, name: "しんめい" },
       { cookie: auth.cookie },
     );
@@ -277,14 +286,14 @@ describe("POST /my-island/name (名前変更)", () => {
   });
 });
 
-describe("POST /my-island/* は他人の島には効かない (actor 自身の島に限定される)", () => {
+describe("POST /games/:gameId/my-island/* は他人の島には効かない (actor 自身の島に限定される)", () => {
   it("島を持たないユーザーが計画登録すると no_island でトップへ 302", async () => {
     const testApp = setupTestApp();
     await createIsland(testApp);
     const auth = await loginAs(testApp, { id: "u2", name: "じろう", email: "u2@example.com" });
     const res = await postForm(
       testApp.app,
-      "/my-island/commands",
+      "/games/1/my-island/commands",
       {
         _csrf: auth.csrfToken,
         number: 0,
@@ -298,11 +307,11 @@ describe("POST /my-island/* は他人の島には効かない (actor 自身の�
       { cookie: auth.cookie },
     );
     expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toBe("/?notice=no_island");
+    expect(res.headers.get("location")).toBe("/games/1?notice=no_island");
   });
 });
 
-describe("tmp/16-season.md: ゲーム終了後", () => {
+describe("tmp/16-season.md: ゲーム終了後 (現在のゲームのまま)", () => {
   async function createFinishedIsland(testApp: TestApp) {
     const { auth } = await createIsland(testApp);
     const meta = currentMeta(testApp);
@@ -312,26 +321,28 @@ describe("tmp/16-season.md: ゲーム終了後", () => {
     return auth;
   }
 
-  it("GET /my-island: 計画・コメント・名前変更フォームを出さず「ゲームは終了しました。」を表示するが、地図・計画一覧・近況は表示する", async () => {
+  it("GET /games/:gameId/my-island: 計画・コメント・名前変更フォームを出さず「ゲームは終了しました。」を表示するが、地図・計画一覧・近況は表示する", async () => {
     const testApp = setupTestApp();
     const auth = await createFinishedIsland(testApp);
-    const res = await testApp.app.request("/my-island", { headers: { cookie: auth.cookie } });
+    const res = await testApp.app.request("/games/1/my-island", {
+      headers: { cookie: auth.cookie },
+    });
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain("ゲームは終了しました。");
-    expect(html).not.toContain('action="/my-island/commands"');
-    expect(html).not.toContain('action="/my-island/comment"');
-    expect(html).not.toContain('action="/my-island/name"');
+    expect(html).not.toContain('action="/games/1/my-island/commands"');
+    expect(html).not.toContain('action="/games/1/my-island/comment"');
+    expect(html).not.toContain('action="/games/1/my-island/name"');
     expect(html).toContain("map-cell");
     expect(html).toContain("開発計画");
   });
 
-  it("POST /my-island/commands は 409 game_finished", async () => {
+  it("POST /games/:gameId/my-island/commands は 409 game_finished", async () => {
     const testApp = setupTestApp();
     const auth = await createFinishedIsland(testApp);
     const res = await postForm(
       testApp.app,
-      "/my-island/commands",
+      "/games/1/my-island/commands",
       {
         _csrf: auth.csrfToken,
         number: 0,
@@ -348,12 +359,12 @@ describe("tmp/16-season.md: ゲーム終了後", () => {
     expect(await res.text()).toContain("ゲームは終了しました。");
   });
 
-  it("POST /my-island/comment は 409 game_finished", async () => {
+  it("POST /games/:gameId/my-island/comment は 409 game_finished", async () => {
     const testApp = setupTestApp();
     const auth = await createFinishedIsland(testApp);
     const res = await postForm(
       testApp.app,
-      "/my-island/comment",
+      "/games/1/my-island/comment",
       { _csrf: auth.csrfToken, message: "よろしく" },
       { cookie: auth.cookie },
     );
@@ -361,12 +372,12 @@ describe("tmp/16-season.md: ゲーム終了後", () => {
     expect(await res.text()).toContain("ゲームは終了しました。");
   });
 
-  it("POST /my-island/name は 409 game_finished", async () => {
+  it("POST /games/:gameId/my-island/name は 409 game_finished", async () => {
     const testApp = setupTestApp();
     const auth = await createFinishedIsland(testApp);
     const res = await postForm(
       testApp.app,
-      "/my-island/name",
+      "/games/1/my-island/name",
       { _csrf: auth.csrfToken, name: "しんめい" },
       { cookie: auth.cookie },
     );
@@ -374,12 +385,12 @@ describe("tmp/16-season.md: ゲーム終了後", () => {
     expect(await res.text()).toContain("ゲームは終了しました。");
   });
 
-  it("POST /islands/:id/lbbs (記帳) は終了後も許可される", async () => {
+  it("POST /games/:gameId/islands/:id/lbbs (記帳) は現在のゲームなら終了後も許可される", async () => {
     const testApp = setupTestApp({ gameOverrides: { useLbbs: true } });
     const auth = await createFinishedIsland(testApp);
     const res = await postForm(
       testApp.app,
-      "/islands/1/lbbs",
+      "/games/1/islands/1/lbbs",
       { _csrf: auth.csrfToken, message: "感想です" },
       { cookie: auth.cookie },
     );
@@ -387,13 +398,13 @@ describe("tmp/16-season.md: ゲーム終了後", () => {
     expect(await res.text()).toContain("記帳を行いました");
   });
 
-  it("POST /islands (新しい島を探す) は 409 game_finished", async () => {
+  it("POST /games/:gameId/islands (新しい島を探す) は 409 game_finished", async () => {
     const testApp = setupTestApp();
     await createFinishedIsland(testApp);
     const auth = await loginAs(testApp, { id: "u2", name: "じろう", email: "u2@example.com" });
     const res = await postForm(
       testApp.app,
-      "/islands",
+      "/games/1/islands",
       { name: "あたらしいしま", _csrf: auth.csrfToken },
       { cookie: auth.cookie },
     );

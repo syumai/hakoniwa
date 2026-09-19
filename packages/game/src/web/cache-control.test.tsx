@@ -13,7 +13,7 @@ describe("既定の Cache-Control (private, no-store)", () => {
     expect(res.headers.get("cache-control")).toBe("private, no-store");
   });
 
-  it("観光画面 (/islands/:id)", async () => {
+  it("観光画面 (/games/:gameId/islands/:id)", async () => {
     const testApp = setupTestApp();
     const owner = await loginAs(testApp, {
       id: "owner1",
@@ -22,11 +22,11 @@ describe("既定の Cache-Control (private, no-store)", () => {
     });
     await postForm(
       testApp.app,
-      "/islands",
+      "/games/1/islands",
       { name: "てすとじま", _csrf: owner.csrfToken },
       { cookie: owner.cookie },
     );
-    const res = await testApp.app.request("/islands/1");
+    const res = await testApp.app.request("/games/1/islands/1");
     expect(res.headers.get("cache-control")).toBe("private, no-store");
   });
 
@@ -44,7 +44,7 @@ describe("既定の Cache-Control (private, no-store)", () => {
 
   it("エラー画面 (onError 経由) にも既定が付く", async () => {
     const { app } = setupTestApp();
-    const res = await app.request("/islands/999");
+    const res = await app.request("/games/1/islands/999");
     expect(res.status).toBe(404);
     expect(res.headers.get("cache-control")).toBe("private, no-store");
   });

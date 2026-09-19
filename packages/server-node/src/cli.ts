@@ -5,7 +5,7 @@
 import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
 import { formatDateTime, formatDuration, parseDuration } from "@hakoniwa/game";
-import type { SeasonState } from "@hakoniwa/game";
+import type { GameStatus, SeasonState } from "@hakoniwa/game";
 import { composeNode } from "./compose.ts";
 import type { ComposedNode } from "./compose.ts";
 import { loadNodeConfig } from "./config.ts";
@@ -34,7 +34,8 @@ const HELP_TEXT = `hakoniwa CLI
 使い方: hakoniwa <command> [options]
 
 コマンド:
-  db init                新しいデータを作る
+  db init                ゲームが無いときだけ新しいゲームを開始する (game new のエイリアス。
+                          既にゲームがあれば running/finished を問わず失敗する)
     --start-at <ISO8601>    開始日時 (省略時: HAKONIWA_START_AT、それも無ければ現在時刻を切り下げ)
     --final-turn <N>        最終ターン数 (省略時: HAKONIWA_FINAL_TURN、それも無ければ無期限)
     --unit-time <値>        1 ターンの長さ (省略時: HAKONIWA_UNIT_TIME_SEC。
@@ -47,8 +48,16 @@ const HELP_TEXT = `hakoniwa CLI
   turn check             期限が来ていればターンを進める (終了後は 0)
   turn advance           期限に関係なく強制的に 1 ターン進める (終了後は何もしない)
   time set <unix|ISO8601> 最終更新時間を変更する
-  game set-final-turn <N|none> 最終ターン数を変更する (none で無期限に戻す)
-  game set-unit-time <値> 1 ターンの長さを変更する (次のターン境界から効く。
+  game new               新しいゲームを開始する (現在のゲームが running なら失敗、終了コード 1)
+    --name <名前>            省略時「第 N 回」
+    --start-at <ISO8601>     省略時: 現在時刻を切り下げ
+    --final-turn <N>         省略時: 無期限
+    --unit-time <値>         省略時: HAKONIWA_UNIT_TIME_SEC。
+                             "6h"/"90m"/"1h30m"/"3600" (数字のみは秒) を受け付ける
+  game finish             現在のゲームを終了する (running でなければ失敗、終了コード 1)
+  game list               ゲーム一覧 (現在 + 過去) を表示する
+  game set-final-turn <N|none> 現在のゲームの最終ターン数を変更する (none で無期限に戻す)
+  game set-unit-time <値> 現在のゲームの1 ターンの長さを変更する (次のターン境界から効く。
                           "6h"/"90m"/"1h30m"/"3600" (数字のみは秒) を受け付ける)
   backup list            バックアップ一覧を表示する
   backup create [label]  バックアップを作成する (label 省略可)
@@ -169,6 +178,9 @@ async function runDb(
           io.stdout(`1 ターンの長さ: ${formatDuration(status.season.unitTimeSec)}`);
           io.stdout(`状態(シーズン): ${SEASON_STATE_LABELS[status.season.state]}`);
         }
+        // tmp/18-games.md「CLI」節: db status は現在のゲームを表示する。過去のゲーム数も併せて表示する。
+        const pastGameCount = status.games.filter((g) => g.id !== status.gameId).length;
+        io.stdout(`過去のゲーム数: ${pastGameCount}`);
       }
       io.stdout(`バックアップ数: ${status.backups.length}`);
       for (const backup of status.backups) {
@@ -217,9 +229,60 @@ async function runTime(positionals: string[], node: ComposedNode, io: CliIO): Pr
   }
 }
 
-async function runGame(positionals: string[], node: ComposedNode, io: CliIO): Promise<void> {
+const GAME_STATUS_LABELS: Record<GameStatus, string> = { running: "進行中", finished: "終了" };
+
+async function runGame(
+  positionals: string[],
+  values: { name?: string; "start-at"?: string; "final-turn"?: string; "unit-time"?: string },
+  node: ComposedNode,
+  io: CliIO,
+): Promise<void> {
   const sub = requirePositional(positionals, 0, "game サブコマンド");
   switch (sub) {
+    // tmp/18-games.md「CLI」節: 現在のゲームが running のときはエラー (AdminService.startGame が
+    // AppError('game_running') を throw し、runCli の catch で終了コード 1 になる)。
+    case "new": {
+      const startAtRaw = values["start-at"];
+      const finalTurnRaw = values["final-turn"];
+      const unitTimeSecRaw = values["unit-time"];
+      const newId = node.adminService.startGame(
+        {
+          ...(values.name !== undefined ? { name: values.name } : {}),
+          ...(startAtRaw !== undefined ? { startAt: parseUnixOrIso8601(startAtRaw) } : {}),
+          ...(finalTurnRaw !== undefined
+            ? { finalTurn: parsePositiveIntArg(finalTurnRaw, "--final-turn") }
+            : {}),
+          ...(unitTimeSecRaw !== undefined
+            ? { unitTimeSec: parseDurationArg(unitTimeSecRaw, "--unit-time") }
+            : {}),
+        },
+        Math.floor(Date.now() / 1000),
+      );
+      const meta = node.repo.getMeta(newId);
+      io.stdout(`新しいゲームを開始しました。(id=${newId}, name=${meta.name})`);
+      return;
+    }
+    case "finish": {
+      node.adminService.finishCurrentGame(Math.floor(Date.now() / 1000));
+      io.stdout("現在のゲームを終了しました。");
+      return;
+    }
+    case "list": {
+      const games = node.adminService.listGames();
+      if (games.length === 0) {
+        io.stdout("ゲームはありません。");
+        return;
+      }
+      const currentId = node.repo.getCurrentGameId();
+      for (const game of games) {
+        const marker = game.id === currentId ? " (現在)" : "";
+        io.stdout(
+          `${game.id}\t${game.name}\t${GAME_STATUS_LABELS[game.status]}${marker}\t` +
+            `turn=${game.turn}\tislands=${game.islandCount}\tstartAt=${formatTimestamp(game.startAt)}`,
+        );
+      }
+      return;
+    }
     case "set-final-turn": {
       const raw = requirePositional(positionals, 1, "game set-final-turn の値 (N または none)");
       const finalTurn = raw === "none" ? null : parsePositiveIntArg(raw, "game set-final-turn");
@@ -300,6 +363,7 @@ export async function runCli(
   let values: {
     help?: boolean;
     yes?: boolean;
+    name?: string;
     "start-at"?: string;
     "final-turn"?: string;
     "unit-time"?: string;
@@ -311,6 +375,7 @@ export async function runCli(
       options: {
         help: { type: "boolean", short: "h" },
         yes: { type: "boolean" },
+        name: { type: "string" },
         "start-at": { type: "string" },
         "final-turn": { type: "string" },
         "unit-time": { type: "string" },
@@ -354,7 +419,7 @@ export async function runCli(
         await runTime(rest, node, io);
         break;
       case "game":
-        await runGame(rest, node, io);
+        await runGame(rest, values, node, io);
         break;
       case "backup":
         await runBackup(rest, node, io);

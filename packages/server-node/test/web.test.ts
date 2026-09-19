@@ -104,7 +104,11 @@ function extractCsrfToken(html: string): string {
   return match[1];
 }
 
-/** 開発ログイン (POST /auth/dev) でログインし、Cookie ヘッダと `_csrf` トークンを返す。 */
+/**
+ * 開発ログイン (POST /auth/dev) でログインし、Cookie ヘッダと `_csrf` トークンを返す。
+ * `_csrf` の取得元には `/account` を使う (ゲームの有無に関わらず 200 を返し、Layout の
+ * ナビ (ログアウトフォーム) に `_csrf` を含む)。
+ */
 async function devLogin(
   app: ComposedNode["app"],
   email: string,
@@ -115,8 +119,8 @@ async function devLogin(
   if (cookie === undefined) {
     throw new Error(`hako.session_token cookie not set: ${res.headers.get("set-cookie")}`);
   }
-  const top = await app.request("/", { headers: { cookie } });
-  const csrfToken = extractCsrfToken(await top.text());
+  const account = await app.request("/account", { headers: { cookie } });
+  const csrfToken = extractCsrfToken(await account.text());
   return { cookie, csrfToken };
 }
 
@@ -125,7 +129,12 @@ async function createIsland(
   auth: { cookie: string; csrfToken: string },
   name: string,
 ): Promise<Response> {
-  return await postForm(app, "/islands", { name, _csrf: auth.csrfToken }, { cookie: auth.cookie });
+  return await postForm(
+    app,
+    "/games/1/islands",
+    { name, _csrf: auth.csrfToken },
+    { cookie: auth.cookie },
+  );
 }
 
 describe("packages/server-node 結合テスト (実 DB :memory: + 実 better-auth devLogin)", () => {
@@ -139,16 +148,20 @@ describe("packages/server-node 結合テスト (実 DB :memory: + 実 better-aut
     }
   });
 
-  it("トップ表示: 未初期化なら 503「データファイルが開けません。」", async () => {
+  it("トップ表示: 未初期化なら 200「ゲームはまだ開始されていません。」", async () => {
     ctx = setup({ skipInit: true });
     const res = await ctx.deps.app.request("/");
-    expect(res.status).toBe(503);
-    expect(await res.text()).toContain("データファイルが開けません。");
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("ゲームはまだ開始されていません");
   });
 
-  it("トップ表示: 初期化後は 200 でターン1と配布元リンクを表示する", async () => {
+  it("トップ表示: GET / は /games/1 へ 302。初期化後は 200 でターン1と配布元リンクを表示する", async () => {
     ctx = setup();
-    const res = await ctx.deps.app.request("/");
+    const redirectRes = await ctx.deps.app.request("/", { redirect: "manual" });
+    expect(redirectRes.status).toBe(302);
+    expect(redirectRes.headers.get("location")).toBe("/games/1");
+
+    const res = await ctx.deps.app.request("/games/1");
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain("ターン1");
@@ -164,10 +177,10 @@ describe("packages/server-node 結合テスト (実 DB :memory: + 実 better-aut
     expect(html).toContain('action="/auth/dev"');
   });
 
-  it("開発ログイン → Cookie を持って / にアクセスすると「新しい島を探す」導線が出る", async () => {
+  it("開発ログイン → Cookie を持って /games/1 にアクセスすると「新しい島を探す」導線が出る", async () => {
     ctx = setup();
     const auth = await devLogin(ctx.deps.app, "player1@example.com");
-    const res = await ctx.deps.app.request("/", { headers: { cookie: auth.cookie } });
+    const res = await ctx.deps.app.request("/games/1", { headers: { cookie: auth.cookie } });
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain("新しい島を探す");
@@ -181,7 +194,15 @@ describe("packages/server-node 結合テスト (実 DB :memory: + 実 better-aut
     expect(createRes.status).toBe(200);
     expect(await createRes.text()).toContain("「てすとじま島」");
 
-    const myIslandRes = await ctx.deps.app.request("/my-island", {
+    // /my-island (ゲーム ID を含まない旧 URL) は /games/1/my-island へ 302。
+    const myIslandRedirect = await ctx.deps.app.request("/my-island", {
+      headers: { cookie: auth.cookie },
+      redirect: "manual",
+    });
+    expect(myIslandRedirect.status).toBe(302);
+    expect(myIslandRedirect.headers.get("location")).toBe("/games/1/my-island");
+
+    const myIslandRes = await ctx.deps.app.request("/games/1/my-island", {
       headers: { cookie: auth.cookie },
     });
     expect(myIslandRes.status).toBe(200);
@@ -192,7 +213,7 @@ describe("packages/server-node 結合テスト (実 DB :memory: + 実 better-aut
 
     const commandRes = await postForm(
       ctx.deps.app,
-      "/my-island/commands",
+      "/games/1/my-island/commands",
       {
         _csrf: auth.csrfToken,
         number: 0,
@@ -210,14 +231,14 @@ describe("packages/server-node 結合テスト (実 DB :memory: + 実 better-aut
 
     const commentRes = await postForm(
       ctx.deps.app,
-      "/my-island/comment",
+      "/games/1/my-island/comment",
       { _csrf: auth.csrfToken, message: "よろしくお願いします" },
       { cookie: auth.cookie },
     );
     expect(commentRes.status).toBe(200);
     expect(await commentRes.text()).toContain("コメントを更新しました");
 
-    const top = await ctx.deps.app.request("/");
+    const top = await ctx.deps.app.request("/games/1");
     expect(await top.text()).toContain("よろしくお願いします");
 
     const logoutRes = await postForm(
@@ -230,19 +251,33 @@ describe("packages/server-node 結合テスト (実 DB :memory: + 実 better-aut
     const loggedOutCookie =
       cookieValue(logoutRes.headers.get("set-cookie"), "hako.session_token") ?? auth.cookie;
 
+    // /my-island (旧 URL) はログイン状態に関わらずまず /games/1/my-island へ 302 する。
     const afterLogout = await ctx.deps.app.request("/my-island", {
       headers: { cookie: loggedOutCookie },
       redirect: "manual",
     });
     expect(afterLogout.status).toBe(302);
-    expect(afterLogout.headers.get("location")).toBe("/login");
+    expect(afterLogout.headers.get("location")).toBe("/games/1/my-island");
+
+    // その先 (/games/1/my-island) でログイン必須になり /login へ 302 する。
+    const afterLogoutGameScoped = await ctx.deps.app.request("/games/1/my-island", {
+      headers: { cookie: loggedOutCookie },
+      redirect: "manual",
+    });
+    expect(afterLogoutGameScoped.status).toBe(302);
+    expect(afterLogoutGameScoped.headers.get("location")).toBe("/login");
   });
 
-  it("観光: GET /islands/:id でようこそ画面を表示する", async () => {
+  it("観光: GET /games/:gameId/islands/:id でようこそ画面を表示する (旧 URL は 302)", async () => {
     ctx = setup();
     const auth = await devLogin(ctx.deps.app, "player3@example.com");
     await createIsland(ctx.deps.app, auth, "てすとじま");
-    const res = await ctx.deps.app.request("/islands/1");
+
+    const legacyRes = await ctx.deps.app.request("/islands/1", { redirect: "manual" });
+    expect(legacyRes.status).toBe(302);
+    expect(legacyRes.headers.get("location")).toBe("/games/1/islands/1");
+
+    const res = await ctx.deps.app.request("/games/1/islands/1");
     expect(res.status).toBe(200);
     expect(await res.text()).toContain("へようこそ！！");
   });
@@ -253,7 +288,7 @@ describe("packages/server-node 結合テスト (実 DB :memory: + 実 better-aut
     await createIsland(ctx.deps.app, auth, "てすとじま");
     const res = await postForm(
       ctx.deps.app,
-      "/my-island/name",
+      "/games/1/my-island/name",
       { _csrf: auth.csrfToken, name: "しんめい" },
       { cookie: auth.cookie },
     );
@@ -268,7 +303,7 @@ describe("packages/server-node 結合テスト (実 DB :memory: + 実 better-aut
       const res = await createIsland(ctx.deps.app, auth, `島${i}`);
       expect(res.status).toBe(200);
     }
-    const top = await ctx.deps.app.request("/");
+    const top = await ctx.deps.app.request("/games/1");
     const html = await top.text();
     for (let i = 0; i < 10; i++) {
       expect(html).toContain(`島${i}島`);
@@ -290,20 +325,20 @@ describe("packages/server-node 結合テスト (実 DB :memory: + 実 better-aut
     expect(res.status).toBe(403);
   });
 
-  it("管理: POST /admin/init で初期化できる", async () => {
+  it("管理: POST /admin/games で新しいゲームを開始できる", async () => {
     ctx = setup({ adminEmails: ["admin@example.com"], skipInit: true });
     expect(ctx.deps.repo.isInitialized()).toBe(false);
     const auth = await devLogin(ctx.deps.app, "admin@example.com");
     const res = await postForm(
       ctx.deps.app,
-      "/admin/init",
+      "/admin/games",
       { _csrf: auth.csrfToken },
       {
         cookie: auth.cookie,
       },
     );
     expect(res.status).toBe(200);
-    expect(await res.text()).toContain("新しいデータを作成しました");
+    expect(await res.text()).toContain("新しいゲームを開始しました");
     expect(ctx.deps.repo.isInitialized()).toBe(true);
   });
 
@@ -346,7 +381,7 @@ describe("packages/server-node 結合テスト (実 DB :memory: + 実 better-aut
 
   it("ターンを進める: debug=true かつ管理者で POST /turn するとターン2になる", async () => {
     ctx = setup({ debug: true, adminEmails: ["admin@example.com"] });
-    const before = await ctx.deps.app.request("/");
+    const before = await ctx.deps.app.request("/games/1");
     expect(await before.text()).toContain("ターン1");
 
     const auth = await devLogin(ctx.deps.app, "admin@example.com");
@@ -360,5 +395,62 @@ describe("packages/server-node 結合テスト (実 DB :memory: + 実 better-aut
     );
     expect(res.status).toBe(200);
     expect(await res.text()).toContain("ターン2");
+  });
+
+  it("tmp/18-games.md: ゲーム終了 → 新しいゲーム開始 → 過去のゲームは閲覧できるが書き込みは 409、GET /games に 2 件", async () => {
+    ctx = setup({ adminEmails: ["admin@example.com"] });
+    const owner = await devLogin(ctx.deps.app, "owner@example.com");
+    await createIsland(ctx.deps.app, owner, "てすとじま");
+
+    const admin = await devLogin(ctx.deps.app, "admin@example.com");
+    const finishRes = await postForm(
+      ctx.deps.app,
+      "/admin/games/current/finish",
+      { confirm: "on", _csrf: admin.csrfToken },
+      { cookie: admin.cookie },
+    );
+    expect(finishRes.status).toBe(200);
+
+    const startRes = await postForm(
+      ctx.deps.app,
+      "/admin/games",
+      { _csrf: admin.csrfToken },
+      { cookie: admin.cookie },
+    );
+    expect(startRes.status).toBe(200);
+
+    // / は新しいゲーム (2) へ 302。
+    const root = await ctx.deps.app.request("/", { redirect: "manual" });
+    expect(root.status).toBe(302);
+    expect(root.headers.get("location")).toBe("/games/2");
+
+    // 過去のゲーム (1) は閲覧でき、OGP も見られる。
+    const pastIsland = await ctx.deps.app.request("/games/1/islands/1");
+    expect(pastIsland.status).toBe(200);
+    const pastOgp = await ctx.deps.app.request("/games/1/islands/1/ogp.png");
+    expect(pastOgp.status).toBe(200);
+
+    // 過去のゲームへの記帳は 409。
+    const writeRes = await postForm(
+      ctx.deps.app,
+      "/games/1/islands/1/lbbs",
+      { _csrf: owner.csrfToken, message: "感想です" },
+      { cookie: owner.cookie },
+    );
+    expect(writeRes.status).toBe(409);
+
+    // 同じユーザーが新しいゲームで島を作れる (ゲームごとに 1 ユーザー 1 島)。
+    const createRes2 = await postForm(
+      ctx.deps.app,
+      "/games/2/islands",
+      { name: "にばんめのしま", _csrf: owner.csrfToken },
+      { cookie: owner.cookie },
+    );
+    expect(createRes2.status).toBe(200);
+
+    const gamesList = await ctx.deps.app.request("/games");
+    const gamesHtml = await gamesList.text();
+    expect(gamesHtml).toContain('href="/games/1"');
+    expect(gamesHtml).toContain('href="/games/2"');
   });
 });

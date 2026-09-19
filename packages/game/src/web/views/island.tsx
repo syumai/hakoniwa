@@ -23,7 +23,8 @@ export interface IslandPageProps {
  * `origin` は絶対 URL のベース (`config.auth.baseUrl` があればそれ、無ければリクエストのオリジン)。
  */
 export function IslandOgpHead({ vm, origin }: { vm: IslandPageVM; origin: string }) {
-  const pageUrl = `${origin}/islands/${vm.id}`;
+  // tmp/18-games.md「表示」節: og:url もゲーム ID 入りの URL にする。
+  const pageUrl = `${origin}/games/${vm.game.id}/islands/${vm.id}`;
   const imageUrl = `${origin}${vm.ogp.imagePath}`;
   return (
     <>
@@ -47,7 +48,7 @@ export function IslandPage({ vm, config, csrfToken, notice }: IslandPageProps) {
       <p class="big">
         <span class="island-name">「{vm.name}島」</span>へようこそ！！
       </p>
-      <BackLink />
+      <BackLink gameId={vm.game.id} />
 
       <hr />
       <h1>島の様子</h1>
@@ -60,8 +61,11 @@ export function IslandPage({ vm, config, csrfToken, notice }: IslandPageProps) {
         <>
           <hr />
           <LbbsHead islandName={vm.name} />
-          {csrfToken !== undefined ? (
-            <LbbsInput islandId={vm.id} csrfToken={csrfToken} />
+          {/* tmp/18-games.md: 記帳は現在のゲームのみ (過去のゲームは記帳不可)。 */}
+          {!vm.game.isCurrent ? (
+            <p>過去のゲームのため記帳できません。</p>
+          ) : csrfToken !== undefined ? (
+            <LbbsInput islandId={vm.id} gameId={vm.game.id} csrfToken={csrfToken} />
           ) : (
             <p>
               記帳するには<a href="/login">ログイン</a>してください。

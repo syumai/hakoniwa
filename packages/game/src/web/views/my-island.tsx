@@ -32,15 +32,17 @@ function CommandForm({
   config,
   defaults,
   targets,
+  gameId,
   csrfToken,
 }: {
   config: GameConfig;
   defaults: OwnerPageVM["defaults"];
   targets: readonly IslandSelectVM[];
+  gameId: number;
   csrfToken: string;
 }) {
   return (
-    <form action="/my-island/commands" method="post">
+    <form action={`/games/${gameId}/my-island/commands`} method="post">
       <input type="hidden" name="_csrf" value={csrfToken} />
       <input type="submit" value="計画送信" />
       <hr />
@@ -141,14 +143,16 @@ function CommandLine({ index, command }: { index: number; command: FormattedComm
 function NameChangeForm({
   costChangeName,
   unit,
+  gameId,
   csrfToken,
 }: {
   costChangeName: number;
   unit: string;
+  gameId: number;
   csrfToken: string;
 }) {
   return (
-    <form action="/my-island/name" method="post">
+    <form action={`/games/${gameId}/my-island/name`} method="post">
       <input type="hidden" name="_csrf" value={csrfToken} />
       <p>
         (注意)名前の変更には{costChangeName}
@@ -174,6 +178,10 @@ export interface MyIslandPageProps {
 
 /** 開発画面。Perl 版 tempOwner + tempLbbs* + tempRecent(1)。旧 web/views/owner.tsx。 */
 export function MyIslandPage({ vm, config, targets, csrfToken, notice }: MyIslandPageProps) {
+  // tmp/18-games.md「表示」節: 計画登録・コメント・名前変更は現在のゲームかつ進行中のときだけ。
+  const writable = vm.game.isCurrent && vm.season.state !== "finished";
+  // tmp/18-games.md「GameService」節: 記帳は現在のゲームであれば終了後も可、過去のゲームは不可。
+  const lbbsWritable = vm.game.isCurrent;
   return (
     <div class="owner-page">
       {/* 座標選択の補助スクリプト (この画面だけで読み込む)。 */}
@@ -187,7 +195,7 @@ export function MyIslandPage({ vm, config, targets, csrfToken, notice }: MyIslan
         <IslandInfo detail={vm} money={buildMoneyDisplay(vm.money, config, true)} config={config} />
       </div>
 
-      {vm.season.state === "finished" ? <Notice message="ゲームは終了しました。" /> : ""}
+      {!writable ? <Notice message="ゲームは終了しました。" /> : ""}
 
       <hr />
       <h1>開発計画</h1>
@@ -201,12 +209,13 @@ export function MyIslandPage({ vm, config, targets, csrfToken, notice }: MyIslan
             commands={vm.rawCommands}
           />
         </div>
-        {vm.season.state !== "finished" ? (
+        {writable ? (
           <div class="owner-form-col">
             <CommandForm
               config={config}
               defaults={vm.defaults}
               targets={targets}
+              gameId={vm.game.id}
               csrfToken={csrfToken}
             />
           </div>
@@ -220,11 +229,11 @@ export function MyIslandPage({ vm, config, targets, csrfToken, notice }: MyIslan
         </div>
       </div>
 
-      {vm.season.state !== "finished" ? (
+      {writable ? (
         <>
           <hr />
           <h1>コメント更新</h1>
-          <form action="/my-island/comment" method="post">
+          <form action={`/games/${vm.game.id}/my-island/comment`} method="post">
             <input type="hidden" name="_csrf" value={csrfToken} />
             <input type="text" name="message" size={80} placeholder="コメント" />
             <input type="submit" value="コメント更新" />
@@ -235,6 +244,7 @@ export function MyIslandPage({ vm, config, targets, csrfToken, notice }: MyIslan
           <NameChangeForm
             costChangeName={config.costChangeName}
             unit={config.units.money}
+            gameId={vm.game.id}
             csrfToken={csrfToken}
           />
         </>
@@ -246,8 +256,14 @@ export function MyIslandPage({ vm, config, targets, csrfToken, notice }: MyIslan
         <>
           <hr />
           <LbbsHead islandName={vm.name} />
-          <LbbsInput islandId={vm.id} csrfToken={csrfToken} />
-          <LbbsDeleteForm lbbsMax={config.lbbsMax} csrfToken={csrfToken} />
+          {lbbsWritable ? (
+            <>
+              <LbbsInput islandId={vm.id} gameId={vm.game.id} csrfToken={csrfToken} />
+              <LbbsDeleteForm gameId={vm.game.id} lbbsMax={config.lbbsMax} csrfToken={csrfToken} />
+            </>
+          ) : (
+            <p>過去のゲームのため記帳できません。</p>
+          )}
           <div class="table-scroll">
             <LbbsContents posts={vm.lbbs} />
           </div>

@@ -7,6 +7,7 @@ import type { BackupInfo } from "../../app/ports.ts";
 import type { SeasonState } from "../../app/season.ts";
 import { formatDateTime, formatDateTimeLocalValue } from "../../app/timezone.ts";
 import type { IslandSelectVM } from "../../app/view-models.ts";
+import { GamesTable } from "./games.tsx";
 
 /** unix 秒 → ローカル日時文字列。Perl 版 timeToString。 */
 function timeToString(unixSeconds: number): string {
@@ -157,10 +158,11 @@ export interface AdminPageProps {
 }
 
 /**
- * 「新しいデータを作る」フォーム。開始日時 (省略可)、最終ターン数 (省略可)、
- * 1 ターンの長さ (秒) を入力する。
+ * 「新しいゲームを開始」フォーム。tmp/18-games.md「ルート」節: `POST /admin/games`。
+ * 名前 (省略時「第 N 回」)・開始日時 (省略可)・最終ターン数 (省略可)・1 ターンの長さ (秒) を入力する。
+ * 現在のゲームが無いか finished のときだけ表示する (呼び出し側で判定)。
  */
-function InitForm({
+function StartGameForm({
   timezone,
   initDefaults,
   csrfToken,
@@ -170,8 +172,13 @@ function InitForm({
   csrfToken: string;
 }) {
   return (
-    <form action="/admin/init" method="post">
+    <form action="/admin/games" method="post">
       <input type="hidden" name="_csrf" value={csrfToken} />
+      <p>
+        ゲーム名 (省略時:「第 N 回」)
+        <br />
+        <input type="text" name="name" size={32} maxlength={32} />
+      </p>
       <p>
         開始日時 (省略時: 現在時刻を切り下げ。{timezone})
         <br />
@@ -209,7 +216,25 @@ function InitForm({
         />
         分
       </p>
-      <input type="submit" value="新しいデータを作る" />
+      <input type="submit" value="新しいゲームを開始" />
+    </form>
+  );
+}
+
+/**
+ * 「このゲームを終了する」フォーム。tmp/18-games.md「ルート」節: `POST /admin/games/current/finish`。
+ * running のときのみ表示する (呼び出し側で判定)。誤操作防止のため確認チェックボックスを必須にする。
+ */
+function FinishGameForm({ csrfToken }: { csrfToken: string }) {
+  return (
+    <form action="/admin/games/current/finish" method="post">
+      <input type="hidden" name="_csrf" value={csrfToken} />
+      <label>
+        <input type="checkbox" name="confirm" />
+        このゲームを終了してよろしいですか？ (過去のゲームとして読み取り専用で残ります)
+      </label>
+      <br />
+      <input type="submit" value="このゲームを終了する" />
     </form>
   );
 }
@@ -231,6 +256,12 @@ export function AdminPage({
       {status.initialized && status.season !== undefined ? (
         <div class="current-data">
           <h2>現役データ</h2>
+          <p>
+            <b>ゲーム名</b>:{status.gameName}
+          </p>
+          <p>
+            <b>ID</b>:{status.gameId}
+          </p>
           <p>
             <b>ターン{status.turn}</b>
           </p>
@@ -306,13 +337,34 @@ export function AdminPage({
 
           <h3>資金・食料の最大化</h3>
           <MaximizeForm islands={islands} csrfToken={csrfToken} />
+
+          {/* tmp/18-games.md「ルート」節: 現在のゲームが無いか finished のときだけ表示する。 */}
+          <h3>新しいゲームを開始</h3>
+          {status.gameStatus === "finished" ? (
+            <StartGameForm timezone={timezone} initDefaults={initDefaults} csrfToken={csrfToken} />
+          ) : (
+            <p>現在のゲームが終了していません。</p>
+          )}
+
+          <h3>このゲームを終了する</h3>
+          {status.gameStatus === "running" ? (
+            <FinishGameForm csrfToken={csrfToken} />
+          ) : (
+            <p>このゲームは既に終了しています。</p>
+          )}
         </div>
       ) : (
         <div class="current-data">
           <h2>現役データ</h2>
-          <InitForm timezone={timezone} initDefaults={initDefaults} csrfToken={csrfToken} />
+          <p>まだゲームがありません。</p>
+          <h3>新しいゲームを開始</h3>
+          <StartGameForm timezone={timezone} initDefaults={initDefaults} csrfToken={csrfToken} />
         </div>
       )}
+
+      <hr />
+      <h2>ゲーム一覧</h2>
+      <GamesTable games={status.games} currentGameId={status.gameId} timezone={timezone} />
 
       <hr />
       <h2>ログイン方法</h2>
