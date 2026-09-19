@@ -36,6 +36,12 @@ function Footer({ config }: { config: GameConfig }) {
   const hasEmail = email !== "";
   return (
     <p class="footer">
+      {/* tmp/18-games.md「ルート」節: 現在のゲームが無くても表示する。「ナビの並び順」節:
+          ナビには置かず、フッタの先頭行に移した。 */}
+      <a href="/games" class="footer-games">
+        過去のゲーム
+      </a>
+      <br />
       {hasAdminName || hasEmail ? (
         <>
           管理者:{hasAdminName ? adminName : ""}
@@ -75,6 +81,10 @@ function Footer({ config }: { config: GameConfig }) {
 /**
  * ヘッダナビゲーション。タイトルへのリンクと、ログイン状態のリンク群を横並び・
  * 折り返し可能に (Phase 7 モバイル UI)。class 名 "nav*" は Phase 6b からの引き継ぎ。
+ * 「ナビの並び順」節: 利用頻度順に並べる。ログイン中は 自分の島 → アカウント設定 →
+ * 管理 (管理者のみ) の順で並べ、ユーザー名とログアウトは `.nav-user` にまとめて
+ * `margin-left: auto` で右端に寄せる。未ログインは ログインのみ。「過去のゲーム」は
+ * 利用頻度が低いためナビには置かず、フッタ先頭行に移した (Footer 参照)。
  */
 function Nav({
   config,
@@ -91,17 +101,12 @@ function Nav({
         {config.site.title}
       </a>
       <div class="nav-links">
-        {/* tmp/18-games.md「ルート」節: 現在のゲームが無くても表示する。 */}
-        <a href="/games" class="nav-games">
-          過去のゲーム
-        </a>
         {user === undefined ? (
           <a href="/login" class="nav-login">
             ログイン
           </a>
         ) : (
           <>
-            <span class="nav-user">{user.name}さん</span>
             <a href="/my-island" class="nav-my-island">
               自分の島
             </a>
@@ -115,13 +120,20 @@ function Nav({
             ) : (
               ""
             )}
-            <form action="/logout" method="post" class="nav-logout">
-              <input type="hidden" name="_csrf" value={csrfToken ?? ""} />
-              <input type="submit" value="ログアウト" />
-            </form>
           </>
         )}
       </div>
+      {user !== undefined ? (
+        <div class="nav-user">
+          <span class="nav-user-name">{user.name}さん</span>
+          <form action="/logout" method="post" class="nav-logout">
+            <input type="hidden" name="_csrf" value={csrfToken ?? ""} />
+            <input type="submit" value="ログアウト" />
+          </form>
+        </div>
+      ) : (
+        ""
+      )}
     </nav>
   );
 }

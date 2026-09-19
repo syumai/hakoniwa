@@ -48,7 +48,7 @@ describe("GET /games/:gameId (トップ)", () => {
     expect(html).toContain("http://www.bekkoame.ne.jp/~tokuoka/hakoniwa.html");
     expect(html).toContain("箱庭諸島スクリプト配布元");
     expect(html).toContain("<h1>第 1 回</h1>");
-    expect(html).toContain("ターン1");
+    expect(html).toContain("<h2>ターン 1</h2>");
     expect(html).toContain("自分の島へ");
     expect(html).toContain("諸島の状況");
     expect(html).toContain("最近の出来事");
@@ -261,44 +261,58 @@ describe("POST /turn (デバッグ用)", () => {
     );
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain("ターン2");
+    expect(html).toContain("<h2>ターン 2</h2>");
     expect(currentMeta(testApp).turn).toBe(2);
   });
 });
 
 describe("tmp/16-season.md: トップの3状態 (開始前/進行中/終了)", () => {
-  it("進行中: 「ターンN」を見出しにし、最終ターン・次のターン:+残り時間を補足行 (<small>) で表示する", async () => {
+  it("進行中: 見出しは「ターン N / 最終ターン M」、次のターン・ターン間隔は table.turn-info で表示する", async () => {
     const { app } = setupTestApp({ finalTurn: 10 });
     const res = await app.request("/games/1");
     const html = await res.text();
-    expect(html).toContain("<h2>ターン1</h2>");
-    expect(html).toContain("<small>最終ターン10</small>");
-    expect(html).toContain("次のターン:");
-    // 従来の「ターンN / 最終ターンM」の並記はやめた。
-    expect(html).not.toContain("ターン1 / 最終ターン10");
+    expect(html).toContain("<h2>ターン 1 / 10</h2>");
+    expect(html).toContain('<table class="turn-info">');
+    expect(html).toContain("<th>次のターン</th>");
+    // unitTimeSec は既定の 21600 秒 (6時間)、lastTime === startAt === now なので残り時間はちょうど 6時間。
+    expect(html).toContain("(あと 6時間)");
+    expect(html).toContain("<th>ターン間隔</th>");
+    expect(html).toContain("<td>6時間</td>");
     expect(html).not.toContain("結果発表");
-    expect(html).not.toContain("ゲーム開始:");
+    expect(html).not.toContain("<th>ゲーム開始</th>");
     expect(html).not.toContain("このゲームは終了しています。");
   });
 
-  it("tmp/16-season.md: 「1 ターン: …」を meta.unitTimeSec から整形して表示する", async () => {
+  it("最終ターンが無ければ見出しは「ターン N」のみ (「/」を付けない)", async () => {
+    const { app } = setupTestApp();
+    const res = await app.request("/games/1");
+    const html = await res.text();
+    expect(html).toContain("<h2>ターン 1</h2>");
+  });
+
+  it("tmp/16-season.md: 「ターン間隔」を meta.unitTimeSec から整形して表として表示する", async () => {
     const { app } = setupTestApp({ unitTimeSec: 3600 });
     const res = await app.request("/games/1");
     const html = await res.text();
-    expect(html).toContain("1 ターン: 1時間");
+    expect(html).toContain("<th>ターン間隔</th>");
+    expect(html).toContain("<td>1時間</td>");
   });
 
-  it("開始前: 「ゲーム開始: …」を表示し、「次のターン:」は表示しない", async () => {
+  it("開始前: table.turn-info の1行目に「ゲーム開始」+残り時間、2行目に「ターン間隔」を表示し、「次のターン」は表示しない", async () => {
     const futureStart = INITIAL_CLOCK + 10_000;
     const { app } = setupTestApp({ startAt: futureStart, lastTime: futureStart });
     const res = await app.request("/games/1");
     const html = await res.text();
-    expect(html).toContain("ゲーム開始:");
-    expect(html).not.toContain("次のターン:");
+    expect(html).toContain('<table class="turn-info">');
+    expect(html).toContain("<th>ゲーム開始</th>");
+    // 10000秒 = 2時間46分 (0の単位は省略、「あと」の後に半角空白)。
+    expect(html).toContain("(あと 2時間 46分)");
+    expect(html).toContain("<th>ターン間隔</th>");
+    expect(html).not.toContain("<th>次のターン</th>");
     expect(html).not.toContain("結果発表");
   });
 
-  it("終了後 (現在のゲーム): 「結果発表 (ターンM終了時点)」を表示するが「このゲームは終了しています。」は表示しない", async () => {
+  it("終了後 (現在のゲーム): 「結果発表 (ターンM終了時点)」を表示し、table.turn-info は出さない", async () => {
     const testApp = setupTestApp({ finalTurn: 1 });
     const meta = currentMeta(testApp);
     testApp.repo.saveMeta({ ...meta, turn: 2 });
@@ -309,7 +323,7 @@ describe("tmp/16-season.md: トップの3状態 (開始前/進行中/終了)", (
     const html = await res.text();
     expect(html).toContain("結果発表");
     expect(html).toContain("ターン1終了時点");
-    expect(html).not.toContain("次のターン:");
+    expect(html).not.toContain('<table class="turn-info">');
     // 現在のゲーム (isCurrent) が終了しただけなので、過去のゲーム向けの文言は出さない。
     expect(html).not.toContain("このゲームは終了しています。");
     // 終了後も既存の順位表 (諸島の状況) はそのまま表示する。

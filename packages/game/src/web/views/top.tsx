@@ -2,7 +2,7 @@
 // tmp/14-users-auth.md によりパスワード関連フォームを撤去し、ログイン状態で出し分ける。
 import type { GameConfig } from "../../core/config.ts";
 import { monsters } from "../../core/constants.ts";
-import { formatDuration } from "../../app/format.ts";
+import { formatDuration, formatRemaining } from "../../app/format.ts";
 import type { SeasonVM } from "../../app/season.ts";
 import { formatDateTime } from "../../app/timezone.ts";
 import type { GameHeaderVM, IslandRowVM, TopPageVM } from "../../app/view-models.ts";
@@ -176,39 +176,6 @@ function MyIslandSection({ vm, csrfToken }: { vm: TopPageVM; csrfToken: string |
   );
 }
 
-/** 残り時間の表示。「あとN時間M分」。0 秒以下なら「まもなく」。 */
-function formatRemaining(diffSeconds: number): string {
-  if (diffSeconds <= 0) {
-    return "まもなく";
-  }
-  const totalMinutes = Math.floor(diffSeconds / 60);
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return `あと${hours}時間${minutes}分`;
-}
-
-/**
- * 次のターンの予定時刻と残り時間。進行中 (`nextTurnAt` が設定されているとき) のみ表示する。
- * サーバー描画時点の静的表示であり、JavaScript によるカウントダウンは行わない。
- */
-function NextTurnNotice({
-  nextTurnAt,
-  now,
-  timezone,
-}: {
-  nextTurnAt: number;
-  now: number;
-  timezone: string;
-}) {
-  return (
-    <p>
-      <small>
-        次のターン:{formatDateTime(nextTurnAt, timezone)} ({formatRemaining(nextTurnAt - now)})
-      </small>
-    </p>
-  );
-}
-
 /**
  * ゲームの見出し。tmp/18-games.md「表示」節: トップの h1 をゲーム名にする。
  * 過去のゲーム (isCurrent でない) は先頭に「このゲームは終了しています。」を表示する
@@ -225,9 +192,9 @@ function GameHeading({ game }: { game: GameHeaderVM }) {
 
 /**
  * ターン見出し。tmp/16-season.md「表示」節: 開始前/進行中/終了で出し分ける。
- * 「トップと管理画面のターン表示」節: 「ターンN」だけを見出しにし、最終ターン・
- * 1 ターンの長さ・次のターン (または開始日時) は直下の `<p><small>` に分けて表示する
- * (従来の「ターンN / 最終ターンM」の並記はやめた)。
+ * 「トップと管理画面のターン表示」節: 見出しを「ターン N / 最終ターン M」(最終ターン無しなら
+ * 「ターン N」) の 1 行にまとめ、次のターン (または開始日時) の予定・残り時間とターン間隔は
+ * 罫線なしの `table.turn-info` にまとめて表示する。
  * tmp/18-games.md: h1 はゲーム名 (GameHeading) にしたため、こちらは h2 に格下げした。
  */
 function SeasonHeading({
@@ -244,31 +211,34 @@ function SeasonHeading({
   }
   return (
     <>
-      <h2>ターン{season.turn}</h2>
-      {season.finalTurn !== null ? (
-        <p>
-          <small>最終ターン{season.finalTurn}</small>
-        </p>
-      ) : (
-        ""
-      )}
-      <p>
-        <small>1 ターン: {formatDuration(season.unitTimeSec)}</small>
-      </p>
-      {season.state === "before" ? (
-        <p>
-          <small>
-            ゲーム開始:{formatDateTime(season.startAt, timezone)}({timezone})
-          </small>
-        </p>
-      ) : (
-        ""
-      )}
-      {season.nextTurnAt !== null ? (
-        <NextTurnNotice nextTurnAt={season.nextTurnAt} now={now} timezone={timezone} />
-      ) : (
-        ""
-      )}
+      <h2>
+        ターン {season.turn}
+        {season.finalTurn !== null ? ` / ${season.finalTurn}` : ""}
+      </h2>
+      <table class="turn-info">
+        {season.state === "before" ? (
+          <tr>
+            <th>ゲーム開始</th>
+            <td>
+              {formatDateTime(season.startAt, timezone)} ({formatRemaining(season.startAt - now)})
+            </td>
+          </tr>
+        ) : season.nextTurnAt !== null ? (
+          <tr>
+            <th>次のターン</th>
+            <td>
+              {formatDateTime(season.nextTurnAt, timezone)} (
+              {formatRemaining(season.nextTurnAt - now)})
+            </td>
+          </tr>
+        ) : (
+          ""
+        )}
+        <tr>
+          <th>ターン間隔</th>
+          <td>{formatDuration(season.unitTimeSec)}</td>
+        </tr>
+      </table>
     </>
   );
 }

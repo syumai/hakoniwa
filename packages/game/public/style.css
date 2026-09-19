@@ -67,7 +67,17 @@ hr {
   gap: 4px 12px;
 }
 
-.nav-links form.nav-logout {
+/* ユーザー名・ログアウトは右端に寄せる (nav は flex-wrap 済みなので、幅が狭ければ
+   2 行目に折り返される)。 */
+.nav-user {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin-left: auto;
+}
+
+.nav-user form.nav-logout {
   display: inline;
   margin: 0;
 }
@@ -89,6 +99,27 @@ table td {
 /* 幅の広い表 (順位表、島情報、掲示板、管理画面の表) を横スクロール可能にする。 */
 .table-scroll {
   overflow-x: auto;
+}
+
+/* トップのターン情報 (次のターン/ゲーム開始・ターン間隔) の表。罫線・背景なしの小さな
+   2 列表。global な table/th のスタイル (罫線・背景色) を打ち消す。 */
+.turn-info {
+  border-collapse: collapse;
+  font-size: small;
+}
+
+.turn-info th,
+.turn-info td {
+  border: none;
+  background: none;
+  color: inherit;
+  font-weight: normal;
+  padding: 0.1em 0;
+  text-align: left;
+}
+
+.turn-info th {
+  padding-right: 1em;
 }
 
 /* 順位表における見出し (Perl 版 $HtagTH_ / $HbgTitleCell)。 */

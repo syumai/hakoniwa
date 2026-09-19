@@ -164,7 +164,7 @@ describe("packages/server-node 結合テスト (実 DB :memory: + 実 better-aut
     const res = await ctx.deps.app.request("/games/1");
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain("ターン1");
+    expect(html).toContain("<h2>ターン 1</h2>");
     expect(html).toContain("箱庭諸島スクリプト配布元");
   });
 
@@ -382,7 +382,7 @@ describe("packages/server-node 結合テスト (実 DB :memory: + 実 better-aut
   it("ターンを進める: debug=true かつ管理者で POST /turn するとターン2になる", async () => {
     ctx = setup({ debug: true, adminEmails: ["admin@example.com"] });
     const before = await ctx.deps.app.request("/games/1");
-    expect(await before.text()).toContain("ターン1");
+    expect(await before.text()).toContain("<h2>ターン 1</h2>");
 
     const auth = await devLogin(ctx.deps.app, "admin@example.com");
     const res = await postForm(
@@ -394,7 +394,7 @@ describe("packages/server-node 結合テスト (実 DB :memory: + 実 better-aut
       },
     );
     expect(res.status).toBe(200);
-    expect(await res.text()).toContain("ターン2");
+    expect(await res.text()).toContain("<h2>ターン 2</h2>");
   });
 
   it("tmp/18-games.md: ゲーム終了 → 新しいゲーム開始 → 過去のゲームは閲覧できるが書き込みは 409、GET /games に 2 件", async () => {

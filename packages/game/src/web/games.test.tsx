@@ -33,11 +33,11 @@ describe("GET /games (ゲーム一覧)", () => {
     expect(html).toContain('<a href="/games/1">第 1 回</a>(現在)');
   });
 
-  it("ナビゲーションに「過去のゲーム」リンクがある (ゲームが無くても)", async () => {
+  it("フッタに「過去のゲーム」リンクがある (ゲームが無くても)", async () => {
     const { app } = setupTestApp({ skipInit: true });
     const res = await app.request("/");
     const html = await res.text();
-    expect(html).toContain('href="/games"');
+    expect(html).toContain('<a href="/games" class="footer-games">');
     expect(html).toContain("過去のゲーム");
   });
 });

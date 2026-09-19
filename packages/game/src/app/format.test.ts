@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDuration, parseDuration } from "./format.ts";
+import { formatDuration, formatRemaining, parseDuration } from "./format.ts";
 
 describe("formatDuration", () => {
   it("60秒未満は秒表示", () => {
@@ -59,5 +59,29 @@ describe("parseDuration", () => {
     expect(parseDuration("30s")).toBeUndefined();
     expect(parseDuration("-60")).toBeUndefined();
     expect(parseDuration("1m30m")).toBeUndefined();
+  });
+});
+
+describe("formatRemaining", () => {
+  it("1分未満(0以下含む)は「まもなく」", () => {
+    expect(formatRemaining(0)).toBe("まもなく");
+    expect(formatRemaining(-10)).toBe("まもなく");
+    expect(formatRemaining(59)).toBe("まもなく");
+  });
+
+  it("0の単位は省略する", () => {
+    expect(formatRemaining(120)).toBe("あと 2分");
+    expect(formatRemaining(3600)).toBe("あと 1時間");
+  });
+
+  it("時間と分の両方がある場合", () => {
+    expect(formatRemaining(3900)).toBe("あと 1時間 5分");
+  });
+
+  it("日数は24時間以上のときだけ出す", () => {
+    expect(formatRemaining(86700)).toBe("あと 1日 5分");
+    expect(formatRemaining(86400)).toBe("あと 1日");
+    expect(formatRemaining(99000)).toBe("あと 1日 3時間 30分");
+    expect(formatRemaining(86400 + 3600 + 300)).toBe("あと 1日 1時間 5分");
   });
 });

@@ -83,7 +83,7 @@ describe("HakoniwaGame (DO 経由の Hono app)", () => {
 
     const topAfterInit = await stub.fetch("http://example.com/games/1", { headers: { cookie } });
     expect(topAfterInit.status).toBe(200);
-    expect(await topAfterInit.text()).toContain("ターン1");
+    expect(await topAfterInit.text()).toContain("<h2>ターン 1</h2>");
   });
 
   // HAKONIWA_BASE_URL は vitest.config.ts の miniflare.bindings で設定していない
