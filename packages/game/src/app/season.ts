@@ -1,26 +1,37 @@
-// tmp/16-season.md 「定義」「状態判定」節の移植。開始時刻・最終ターンからゲームの状態を判定する。
-import type { GameMeta } from "./ports.ts";
+// tmp/16-season.md 「定義」「状態判定」節 + tmp/18-games.md 「定義」節の移植。
+// 開始時刻・最終ターン・状態列からゲームの状態を判定する。
+import type { GameMeta, GameStatus } from "./ports.ts";
 
-/** 終了状態: 最終ターンが設定されており、かつ turn がそれを超えている。 */
+/**
+ * 終了状態。tmp/18-games.md: 最終ターン到達か手動終了で `status` が 'finished' になる
+ * (従来の `turn > finalTurn` 判定を状態列に昇格させた)。
+ */
 export function isFinished(meta: GameMeta): boolean {
-  return meta.finalTurn !== null && meta.turn > meta.finalTurn;
+  return meta.status === "finished";
 }
 
-/** 開始前: ターン1のまま、まだ開始時刻に達していない。 */
+/** 開始前: ターン1のまま、まだ開始時刻に達していない (終了していないゲームに限る)。 */
 export function isBeforeStart(meta: GameMeta, now: number): boolean {
-  return meta.turn === 1 && now < meta.startAt;
+  return !isFinished(meta) && meta.turn === 1 && now < meta.startAt;
 }
 
 export type SeasonState = "before" | "running" | "finished";
 
-/** トップ/開発/管理画面が共通で使うシーズンの状態。 */
+/** トップ/開発/管理画面が共通で使うシーズンの状態。tmp/18-games.md でゲーム識別情報を追加。 */
 export interface SeasonVM {
+  /** tmp/18-games.md。 */
+  gameId: number;
+  gameName: string;
+  status: GameStatus;
   turn: number;
   finalTurn: number | null;
   state: SeasonState;
   /** ターン1が始まる (始まった) unix 秒。 */
   startAt: number;
-  /** 終了時のみ、終了時点のターン番号 (= finalTurn)。 */
+  /**
+   * 終了時のみ、終了時点のターン番号。最終ターン到達で終了した場合は finalTurn、
+   * 管理者による手動終了の場合は終了時点の turn。
+   */
   finishedAtTurn: number | null;
   /**
    * 次のターンが進む予定の unix 秒。`state === 'running'` のときだけ `lastTime + unitTimeSec`、
@@ -39,6 +50,7 @@ export interface SeasonVM {
  * 設計書との差異: tmp/16-season.md は `buildSeasonVM(meta, now, unitTimeSec)` だったが、
  * 追加要件「ターンの長さも DB に持つ」により `unitTimeSec` は `meta.unitTimeSec` を使うため、
  * 引数からは外した (呼び出し元で `config.unitTimeSec` を渡す必要が無くなった)。
+ * tmp/18-games.md: `gameId`/`gameName`/`status` を追加。
  */
 export function buildSeasonVM(meta: GameMeta, now: number): SeasonVM {
   const finished = isFinished(meta);
@@ -47,12 +59,20 @@ export function buildSeasonVM(meta: GameMeta, now: number): SeasonVM {
     : isBeforeStart(meta, now)
       ? "before"
       : "running";
+  const finishedAtTurn = finished
+    ? meta.finalTurn !== null && meta.turn > meta.finalTurn
+      ? meta.finalTurn
+      : meta.turn
+    : null;
   return {
+    gameId: meta.id,
+    gameName: meta.name,
+    status: meta.status,
     turn: meta.turn,
     finalTurn: meta.finalTurn,
     state,
     startAt: meta.startAt,
-    finishedAtTurn: finished ? meta.finalTurn : null,
+    finishedAtTurn,
     nextTurnAt: state === "running" ? meta.lastTime + meta.unitTimeSec : null,
     unitTimeSec: meta.unitTimeSec,
   };

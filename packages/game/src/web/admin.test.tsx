@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loginAs, postForm, setupTestApp } from "./test-helpers.ts";
+import { currentGameId, currentMeta, loginAs, postForm, setupTestApp } from "./test-helpers.ts";
 import type { TestApp } from "./test-helpers.ts";
 
 const ADMIN_EMAIL = "admin@example.com";
@@ -81,7 +81,7 @@ describe("管理画面 (/admin)", () => {
     );
     expect(res.status).toBe(200);
     expect(testApp.repo.isInitialized()).toBe(true);
-    expect(testApp.repo.getMeta().turn).toBe(1);
+    expect(currentMeta(testApp).turn).toBe(1);
   });
 
   it("POST /admin/turn: ターンを進められる", async () => {
@@ -96,7 +96,7 @@ describe("管理画面 (/admin)", () => {
       },
     );
     expect(res.status).toBe(200);
-    expect(testApp.repo.getMeta().turn).toBe(2);
+    expect(currentMeta(testApp).turn).toBe(2);
   });
 
   it("POST /admin/reset: 現役データを削除できる", async () => {
@@ -124,7 +124,7 @@ describe("管理画面 (/admin)", () => {
       { cookie: admin.cookie },
     );
     expect(res.status).toBe(200);
-    expect(testApp.repo.getMeta().lastTime).toBe(12345);
+    expect(currentMeta(testApp).lastTime).toBe(12345);
   });
 
   it("POST /admin/backups → restore で「復元しました」を表示する", async () => {
@@ -209,7 +209,7 @@ describe("管理画面 (/admin)", () => {
     );
     expect(res.status).toBe(200);
     expect(await res.text()).toContain("資金・食料を最大化しました");
-    const island = testApp.repo.findIsland(1);
+    const island = testApp.repo.findIsland(currentGameId(testApp), 1);
     expect(island?.money).toBe(9999);
     expect(island?.food).toBe(9999);
   });
@@ -237,7 +237,7 @@ describe("tmp/16-season.md: 管理画面の開始時刻・最終ターン", () =
       { cookie: admin.cookie },
     );
     expect(res.status).toBe(200);
-    const meta = testApp.repo.getMeta();
+    const meta = currentMeta(testApp);
     expect(meta.finalTurn).toBe(50);
     expect(meta.turn).toBe(1);
     expect(meta.lastTime).toBe(meta.startAt);
@@ -253,7 +253,7 @@ describe("tmp/16-season.md: 管理画面の開始時刻・最終ターン", () =
       { cookie: admin.cookie },
     );
     expect(res.status).toBe(200);
-    expect(testApp.repo.getMeta().finalTurn).toBeNull();
+    expect(currentMeta(testApp).finalTurn).toBeNull();
   });
 
   it("POST /admin/final-turn: 最終ターン数を変更できる", async () => {
@@ -267,7 +267,7 @@ describe("tmp/16-season.md: 管理画面の開始時刻・最終ターン", () =
     );
     expect(res.status).toBe(200);
     expect(await res.text()).toContain("最終ターン数を変更しました");
-    expect(testApp.repo.getMeta().finalTurn).toBe(30);
+    expect(currentMeta(testApp).finalTurn).toBe(30);
   });
 
   it("POST /admin/final-turn: 空欄なら無期限 (null) に戻せる", async () => {
@@ -280,7 +280,7 @@ describe("tmp/16-season.md: 管理画面の開始時刻・最終ターン", () =
       { cookie: admin.cookie },
     );
     expect(res.status).toBe(200);
-    expect(testApp.repo.getMeta().finalTurn).toBeNull();
+    expect(currentMeta(testApp).finalTurn).toBeNull();
   });
 });
 
@@ -318,7 +318,7 @@ describe("tmp/16-season.md: ターンの長さも DB に持つ (追加要件)", 
       { cookie: admin.cookie },
     );
     expect(res.status).toBe(200);
-    expect(testApp.repo.getMeta().unitTimeSec).toBe(60);
+    expect(currentMeta(testApp).unitTimeSec).toBe(60);
   });
 
   it("POST /admin/init: unit-time を省略すると config.unitTimeSec が使われる", async () => {
@@ -334,13 +334,13 @@ describe("tmp/16-season.md: ターンの長さも DB に持つ (追加要件)", 
       { _csrf: admin.csrfToken },
       { cookie: admin.cookie },
     );
-    expect(testApp.repo.getMeta().unitTimeSec).toBe(3600);
+    expect(currentMeta(testApp).unitTimeSec).toBe(3600);
   });
 
   it("POST /admin/unit-time: 1 ターンの長さを変更できる (lastTime は変わらない)", async () => {
     const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL] });
     const admin = await loginAdmin(testApp);
-    const before = testApp.repo.getMeta();
+    const before = currentMeta(testApp);
     const res = await postForm(
       testApp.app,
       "/admin/unit-time",
@@ -349,7 +349,7 @@ describe("tmp/16-season.md: ターンの長さも DB に持つ (追加要件)", 
     );
     expect(res.status).toBe(200);
     expect(await res.text()).toContain("1 ターンの長さを変更しました");
-    const after = testApp.repo.getMeta();
+    const after = currentMeta(testApp);
     expect(after.unitTimeSec).toBe(120);
     expect(after.lastTime).toBe(before.lastTime);
   });

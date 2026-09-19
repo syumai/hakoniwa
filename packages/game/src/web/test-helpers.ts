@@ -10,6 +10,7 @@ import {
 } from "../app/fake-repository.ts";
 import { GameService } from "../app/game-service.ts";
 import { TurnService } from "../app/turn-service.ts";
+import type { GameMeta } from "../app/ports.ts";
 import { createCsrfToken } from "../bootstrap/csrf.ts";
 import type { AppConfig } from "../bootstrap/config-from-env.ts";
 import { defaultConfig } from "../core/config.ts";
@@ -136,14 +137,16 @@ export function setupTestApp(options: SetupOptions = {}): TestApp {
 
   const repo = new FakeGameRepository();
   if (options.skipInit !== true) {
-    repo.initialize({
-      turn: 1,
-      lastTime: options.lastTime ?? INITIAL_CLOCK,
-      nextIslandId: 1,
-      finalTurn: options.finalTurn ?? null,
-      startAt: options.startAt ?? INITIAL_CLOCK,
-      unitTimeSec: options.unitTimeSec ?? game.unitTimeSec,
-    });
+    const startAt = options.startAt ?? INITIAL_CLOCK;
+    const unitTimeSec = options.unitTimeSec ?? game.unitTimeSec;
+    const gameId = repo.createGame(
+      { name: "第 1 回", startAt, finalTurn: options.finalTurn ?? null, unitTimeSec },
+      INITIAL_CLOCK,
+    );
+    const lastTime = options.lastTime ?? INITIAL_CLOCK;
+    if (lastTime !== startAt) {
+      repo.saveMeta({ ...repo.getMeta(gameId), lastTime });
+    }
   }
   const clock = new FakeClock(INITIAL_CLOCK);
   const rng = createSeededRng(42);
@@ -195,6 +198,20 @@ export function setupTestApp(options: SetupOptions = {}): TestApp {
   const app = createApp(deps);
 
   return { app, repo, clock, config, gameService, turnService, adminService, auth };
+}
+
+/** 現在のゲーム ID。tmp/18-games.md 対応でテストの repo アクセスに gameId が要る箇所用。 */
+export function currentGameId(testApp: TestApp): number {
+  const gameId = testApp.repo.getCurrentGameId();
+  if (gameId === undefined) {
+    throw new Error("currentGameId: no current game");
+  }
+  return gameId;
+}
+
+/** 現在のゲームの `GameMeta`。 */
+export function currentMeta(testApp: TestApp): GameMeta {
+  return testApp.repo.getMeta(currentGameId(testApp));
 }
 
 /**

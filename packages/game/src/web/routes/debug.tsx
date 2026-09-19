@@ -4,6 +4,7 @@ import { Hono } from "hono";
 import { AppError } from "../../app/errors.ts";
 import type { WebDeps } from "../deps.ts";
 import type { AppEnv } from "../env.ts";
+import { requireCurrentGameId } from "./helpers.ts";
 import { renderPage } from "./render.tsx";
 import { TopPage } from "../views/top.tsx";
 
@@ -19,7 +20,8 @@ export function createDebugRoutes(deps: WebDeps): Hono<AppEnv> {
       throw new AppError("forbidden");
     }
     deps.turnService.advanceTurn(deps.clock.now());
-    const vm = deps.gameService.getTopPage(user);
+    const gameId = requireCurrentGameId(deps.gameService);
+    const vm = deps.gameService.getTopPage(user, gameId);
     return renderPage(
       c,
       deps,

@@ -1,4 +1,4 @@
-// tmp/08-turn-trigger-admin-cli.md 「ターン進行トリガー」節の移植。
+// tmp/08-turn-trigger-admin-cli.md 「ターン進行トリガー」節 + tmp/18-games.md (複数ゲーム) の移植。
 // Perl 版 Main.pm readIslandsFile のターン判定 + Turn.pm turnMain の移植。
 import type { BackupStore, GameMeta, GameRepository, Logger } from "./ports.ts";
 import { isFinished } from "./season.ts";
@@ -17,6 +17,8 @@ export interface TurnServiceDeps {
 
 /**
  * ターン進行。08 のアルゴリズムどおり `advanceTurnIfDue`/`advanceTurn` は同期関数として保つ。
+ * tmp/18-games.md「TurnService」節: 現在のゲーム (`repo.getCurrentGameId()`) だけを対象にする。
+ * ゲームが無い、または現在のゲームが `running` でなければ何もしない。
  *
  * 設計書との差異: 08 はバックアップ作成を `advanceTurnIfDue` の同期フロー内に書いているが、
  * `BackupStore` は非同期 (04-database.md) であり、同期関数の中で await することはできない。
@@ -36,8 +38,12 @@ export class TurnService {
     const { repo, config } = this.#deps;
     let count = 0;
     for (let i = 0; i < config.maxCatchUpTurns; i++) {
-      const meta = repo.getMeta();
-      // tmp/16-season.md「ターン進行」節: 終了後はそれ以上進めない。
+      const gameId = repo.getCurrentGameId();
+      if (gameId === undefined) {
+        break;
+      }
+      const meta = repo.getMeta(gameId);
+      // tmp/16-season.md「ターン進行」節 + tmp/18-games.md: 終了後はそれ以上進めない。
       if (isFinished(meta)) {
         break;
       }
@@ -46,7 +52,7 @@ export class TurnService {
       if (now - meta.lastTime < meta.unitTimeSec) {
         break;
       }
-      const advancedTurn = this.#advanceOnce(meta);
+      const advancedTurn = this.#advanceOnce(gameId, meta, now);
       if (advancedTurn === undefined) {
         break;
       }
@@ -55,22 +61,27 @@ export class TurnService {
     return count;
   }
 
-  /** 期限に関係なく 1 ターン進める (デバッグ/管理用)。終了後は何もしない。 */
-  advanceTurn(_now: number): void {
-    // now は将来の拡張 (例: 進行時刻の記録) 用に受け取るのみで、判定には使わない
-    // (Perl の TurnButton / 管理画面の「ターンを進める」と同じく無条件に 1 ターン進める)。
-    const meta = this.#deps.repo.getMeta();
+  /** 期限に関係なく 1 ターン進める (デバッグ/管理用)。現在のゲームが無い/終了後は何もしない。 */
+  advanceTurn(now: number): void {
+    const { repo } = this.#deps;
+    const gameId = repo.getCurrentGameId();
+    if (gameId === undefined) {
+      return;
+    }
+    const meta = repo.getMeta(gameId);
     if (isFinished(meta)) {
       return;
     }
-    this.#advanceOnce(meta);
+    this.#advanceOnce(gameId, meta, now);
   }
 
   /**
    * 1 ターン分の進行を試みる。`tryBumpTurn` の楽観ロックに失敗したら undefined を返す。
    * 成功したら進行後の turn 番号を返す (呼び出し元がバックアップ要否の判定に使う)。
+   * 進行後に `turn > finalTurn` になったら、同じトランザクション内で `finishGame` を呼ぶ
+   * (tmp/18-games.md「TurnService」節)。
    */
-  #advanceOnce(meta: GameMeta): number | undefined {
+  #advanceOnce(gameId: number, meta: GameMeta, now: number): number | undefined {
     const { repo, config, rng } = this.#deps;
     let newTurn: number | undefined;
 
@@ -80,11 +91,11 @@ export class TurnService {
         turn: meta.turn + 1,
         lastTime: meta.lastTime + meta.unitTimeSec,
       };
-      if (!repo.tryBumpTurn(meta.turn, next)) {
+      if (!repo.tryBumpTurn(gameId, meta.turn, next)) {
         return false;
       }
 
-      const islands = repo.loadAllIslands();
+      const islands = repo.loadAllIslands(gameId);
       const world: World = {
         turn: meta.turn,
         lastTime: meta.lastTime,
@@ -98,11 +109,15 @@ export class TurnService {
       const ctx = createTurnContext({ config: turnConfig, rng, turn: meta.turn });
       const result = runTurn(world, ctx);
 
-      repo.replaceAllIslands(result.world.islands);
-      repo.appendLogs(result.logs);
-      repo.appendHistory(result.history);
-      repo.deleteLogsBefore(result.world.turn - config.logKeepTurns + 1);
-      repo.trimHistory(config.historyMax);
+      repo.replaceAllIslands(gameId, result.world.islands);
+      repo.appendLogs(gameId, result.logs);
+      repo.appendHistory(gameId, result.history);
+      repo.deleteLogsBefore(gameId, result.world.turn - config.logKeepTurns + 1);
+      repo.trimHistory(gameId, config.historyMax);
+
+      if (next.finalTurn !== null && next.turn > next.finalTurn) {
+        repo.finishGame(gameId, now);
+      }
 
       newTurn = result.world.turn;
       return true;

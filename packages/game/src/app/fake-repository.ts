@@ -5,8 +5,10 @@ import type {
   BackupInfo,
   BackupStore,
   Clock,
+  CreateGameInput,
   GameMeta,
   GameRepository,
+  GameSummary,
   IslandSummary,
   ListLogsQuery,
   Logger,
@@ -46,18 +48,20 @@ function toSummary(island: Island): IslandSummary {
 }
 
 /**
- * `GameRepository` のインメモリ実装。
+ * `GameRepository` のインメモリ実装。tmp/18-games.md (複数ゲーム) 対応: ゲームごとに
+ * 島・ログ・履歴を独立して保持する (`Map<gameId, ...>`)。
  * `transaction` は同期的に渡された関数をそのまま実行するだけ (実 DB のような
  * ロールバックは行わない。テストでは基本的に例外系は「repo の状態を変更しないまま throw する」
  * ように呼び出し側 (game-service 等) が事前検証してから書き込む設計になっているため問題ない)。
  */
 export class FakeGameRepository implements GameRepository {
-  #meta: GameMeta | undefined;
-  #islands = new Map<number, Island>();
-  /** rank 昇順の island id 一覧。 */
-  #order: number[] = [];
-  #logs: LogEntry[] = [];
-  #history: HistoryEntry[] = [];
+  #games = new Map<number, GameMeta>();
+  #nextGameId = 1;
+  #islands = new Map<number, Map<number, Island>>();
+  /** gameId -> rank 昇順の island id 一覧。 */
+  #order = new Map<number, number[]>();
+  #logs = new Map<number, LogEntry[]>();
+  #history = new Map<number, HistoryEntry[]>();
   #userPrefs = new Map<string, UserPrefs>();
 
   transaction<T>(fn: () => T): T {
@@ -65,44 +69,135 @@ export class FakeGameRepository implements GameRepository {
   }
 
   isInitialized(): boolean {
-    return this.#meta !== undefined;
+    return this.#games.size > 0;
   }
 
-  getMeta(): GameMeta {
-    if (this.#meta === undefined) {
-      throw new Error("FakeGameRepository: not initialized");
+  listGames(): GameSummary[] {
+    return [...this.#games.values()]
+      .sort((a, b) => b.id - a.id)
+      .map((meta) => ({
+        id: meta.id,
+        name: meta.name,
+        status: meta.status,
+        startAt: meta.startAt,
+        finishedAt: meta.finishedAt,
+        turn: meta.turn,
+        finalTurn: meta.finalTurn,
+        islandCount: (this.#order.get(meta.id) ?? []).length,
+      }));
+  }
+
+  getCurrentGameId(): number | undefined {
+    if (this.#games.size === 0) {
+      return undefined;
     }
-    return { ...this.#meta };
+    return Math.max(...this.#games.keys());
+  }
+
+  getMeta(gameId: number): GameMeta {
+    const meta = this.#games.get(gameId);
+    if (meta === undefined) {
+      throw new Error(`FakeGameRepository: game not found: ${gameId}`);
+    }
+    return { ...meta };
   }
 
   saveMeta(meta: GameMeta): void {
-    this.#meta = { ...meta };
+    if (!this.#games.has(meta.id)) {
+      throw new Error(`FakeGameRepository: game not found: ${meta.id}`);
+    }
+    this.#games.set(meta.id, { ...meta });
   }
 
-  tryBumpTurn(expectedTurn: number, next: GameMeta): boolean {
-    if (this.#meta === undefined || this.#meta.turn !== expectedTurn) {
+  createGame(input: CreateGameInput, now: number): number {
+    const id = this.#nextGameId++;
+    const meta: GameMeta = {
+      id,
+      name: input.name,
+      status: "running",
+      turn: 1,
+      lastTime: input.startAt,
+      startAt: input.startAt,
+      finalTurn: input.finalTurn,
+      unitTimeSec: input.unitTimeSec,
+      nextIslandId: 1,
+      createdAt: now,
+      finishedAt: null,
+    };
+    this.#games.set(id, meta);
+    this.#islands.set(id, new Map());
+    this.#order.set(id, []);
+    this.#logs.set(id, []);
+    this.#history.set(id, []);
+    return id;
+  }
+
+  finishGame(gameId: number, now: number): void {
+    const meta = this.getMeta(gameId);
+    this.#games.set(gameId, { ...meta, status: "finished", finishedAt: now });
+  }
+
+  tryBumpTurn(gameId: number, expectedTurn: number, next: GameMeta): boolean {
+    const meta = this.#games.get(gameId);
+    if (meta === undefined || meta.turn !== expectedTurn) {
       return false;
     }
-    this.#meta = { ...next };
+    this.#games.set(gameId, { ...next, id: gameId });
     return true;
   }
 
-  listIslandSummaries(): IslandSummary[] {
-    return this.#order.map((id) => toSummary(this.#mustGet(id)));
+  #islandsOf(gameId: number): Map<number, Island> {
+    let islands = this.#islands.get(gameId);
+    if (islands === undefined) {
+      islands = new Map();
+      this.#islands.set(gameId, islands);
+    }
+    return islands;
   }
 
-  loadAllIslands(): Island[] {
-    return this.#order.map((id) => cloneIsland(this.#mustGet(id)));
+  #orderOf(gameId: number): number[] {
+    let order = this.#order.get(gameId);
+    if (order === undefined) {
+      order = [];
+      this.#order.set(gameId, order);
+    }
+    return order;
   }
 
-  findIsland(id: number): Island | undefined {
-    const island = this.#islands.get(id);
+  #logsOf(gameId: number): LogEntry[] {
+    let logs = this.#logs.get(gameId);
+    if (logs === undefined) {
+      logs = [];
+      this.#logs.set(gameId, logs);
+    }
+    return logs;
+  }
+
+  #historyOf(gameId: number): HistoryEntry[] {
+    let history = this.#history.get(gameId);
+    if (history === undefined) {
+      history = [];
+      this.#history.set(gameId, history);
+    }
+    return history;
+  }
+
+  listIslandSummaries(gameId: number): IslandSummary[] {
+    return this.#orderOf(gameId).map((id) => toSummary(this.#mustGet(gameId, id)));
+  }
+
+  loadAllIslands(gameId: number): Island[] {
+    return this.#orderOf(gameId).map((id) => cloneIsland(this.#mustGet(gameId, id)));
+  }
+
+  findIsland(gameId: number, id: number): Island | undefined {
+    const island = this.#islandsOf(gameId).get(id);
     return island === undefined ? undefined : cloneIsland(island);
   }
 
-  findIslandByName(name: string): IslandSummary | undefined {
-    for (const id of this.#order) {
-      const island = this.#mustGet(id);
+  findIslandByName(gameId: number, name: string): IslandSummary | undefined {
+    for (const id of this.#orderOf(gameId)) {
+      const island = this.#mustGet(gameId, id);
       if (island.name === name) {
         return toSummary(island);
       }
@@ -110,9 +205,9 @@ export class FakeGameRepository implements GameRepository {
     return undefined;
   }
 
-  findIslandByOwner(userId: string): IslandSummary | undefined {
-    for (const id of this.#order) {
-      const island = this.#mustGet(id);
+  findIslandByOwner(gameId: number, userId: string): IslandSummary | undefined {
+    for (const id of this.#orderOf(gameId)) {
+      const island = this.#mustGet(gameId, id);
       if (island.ownerUserId === userId) {
         return toSummary(island);
       }
@@ -120,42 +215,51 @@ export class FakeGameRepository implements GameRepository {
     return undefined;
   }
 
-  insertIsland(island: Island, rank: number): void {
-    this.#islands.set(island.id, cloneIsland(island));
-    const index = Math.max(0, Math.min(rank, this.#order.length));
-    this.#order.splice(index, 0, island.id);
+  insertIsland(gameId: number, island: Island, rank: number): void {
+    this.#islandsOf(gameId).set(island.id, cloneIsland(island));
+    const order = this.#orderOf(gameId);
+    const index = Math.max(0, Math.min(rank, order.length));
+    order.splice(index, 0, island.id);
   }
 
-  updateIsland(island: Island): void {
-    if (!this.#islands.has(island.id)) {
+  updateIsland(gameId: number, island: Island): void {
+    const islands = this.#islandsOf(gameId);
+    if (!islands.has(island.id)) {
       throw new Error(`FakeGameRepository: island not found: ${island.id}`);
     }
-    this.#islands.set(island.id, cloneIsland(island));
+    islands.set(island.id, cloneIsland(island));
   }
 
-  replaceAllIslands(islands: Island[]): void {
-    this.#islands = new Map(islands.map((island) => [island.id, cloneIsland(island)]));
-    this.#order = islands.map((island) => island.id);
+  replaceAllIslands(gameId: number, islands: Island[]): void {
+    this.#islands.set(gameId, new Map(islands.map((island) => [island.id, cloneIsland(island)])));
+    this.#order.set(
+      gameId,
+      islands.map((island) => island.id),
+    );
   }
 
-  deleteIsland(id: number): void {
-    this.#islands.delete(id);
-    this.#order = this.#order.filter((existing) => existing !== id);
+  deleteIsland(gameId: number, id: number): void {
+    this.#islandsOf(gameId).delete(id);
+    this.#order.set(
+      gameId,
+      this.#orderOf(gameId).filter((existing) => existing !== id),
+    );
   }
 
-  replaceLbbs(islandId: number, posts: LbbsPost[]): void {
-    const island = this.#mustGet(islandId);
+  replaceLbbs(gameId: number, islandId: number, posts: LbbsPost[]): void {
+    const island = this.#mustGet(gameId, islandId);
     island.lbbs = posts.map((post) => ({ ...post }));
   }
 
-  appendLogs(entries: LogEntry[]): void {
+  appendLogs(gameId: number, entries: LogEntry[]): void {
+    const logs = this.#logsOf(gameId);
     for (const entry of entries) {
-      this.#logs.push({ ...entry });
+      logs.push({ ...entry });
     }
   }
 
-  listLogs(q: ListLogsQuery): LogEntry[] {
-    return this.#logs
+  listLogs(gameId: number, q: ListLogsQuery): LogEntry[] {
+    return this.#logsOf(gameId)
       .filter((entry) => entry.turn >= q.sinceTurn)
       .filter((entry) => {
         if (q.islandId === undefined) {
@@ -173,37 +277,39 @@ export class FakeGameRepository implements GameRepository {
       .map((entry) => ({ ...entry }));
   }
 
-  deleteLogsBefore(turn: number): void {
-    this.#logs = this.#logs.filter((entry) => entry.turn >= turn);
+  deleteLogsBefore(gameId: number, turn: number): void {
+    this.#logs.set(
+      gameId,
+      this.#logsOf(gameId).filter((entry) => entry.turn >= turn),
+    );
   }
 
-  appendHistory(entries: HistoryEntry[]): void {
+  appendHistory(gameId: number, entries: HistoryEntry[]): void {
+    const history = this.#historyOf(gameId);
     for (const entry of entries) {
-      this.#history.push({ ...entry });
+      history.push({ ...entry });
     }
   }
 
-  listHistory(limit: number): HistoryEntry[] {
-    return [...this.#history]
+  listHistory(gameId: number, limit: number): HistoryEntry[] {
+    return [...this.#historyOf(gameId)]
       .reverse()
       .slice(0, limit)
       .map((entry) => ({ ...entry }));
   }
 
-  trimHistory(keep: number): void {
-    this.#history = this.#history.slice(Math.max(0, this.#history.length - keep));
-  }
-
-  initialize(meta: GameMeta): void {
-    this.#meta = { ...meta };
+  trimHistory(gameId: number, keep: number): void {
+    const history = this.#historyOf(gameId);
+    this.#history.set(gameId, history.slice(Math.max(0, history.length - keep)));
   }
 
   reset(): void {
-    this.#meta = undefined;
+    this.#games = new Map();
+    this.#nextGameId = 1;
     this.#islands = new Map();
-    this.#order = [];
-    this.#logs = [];
-    this.#history = [];
+    this.#order = new Map();
+    this.#logs = new Map();
+    this.#history = new Map();
   }
 
   getUserPrefs(userId: string): UserPrefs | undefined {
@@ -215,8 +321,8 @@ export class FakeGameRepository implements GameRepository {
     this.#userPrefs.set(userId, { ...prefs });
   }
 
-  #mustGet(id: number): Island {
-    const island = this.#islands.get(id);
+  #mustGet(gameId: number, id: number): Island {
+    const island = this.#islandsOf(gameId).get(id);
     if (island === undefined) {
       throw new Error(`FakeGameRepository: island not found: ${id}`);
     }

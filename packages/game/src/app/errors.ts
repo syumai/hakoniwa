@@ -21,8 +21,12 @@ export type AppErrorKind =
   | "no_island"
   /** NG ワードを含む入力 (島名・コメント・掲示板)。15「NG ワード」節。 */
   | "ng_word"
-  /** ゲームが終了している (最終ターンを超えた) 状態での更新系操作。16「ターン進行」節。 */
-  | "game_finished";
+  /** ゲームが終了している (最終ターンを超えた、または手動終了) 状態での更新系操作。16「ターン進行」節。 */
+  | "game_finished"
+  /** 存在しない gameId を指定した。18「複数ゲーム」節。 */
+  | "game_not_found"
+  /** 現在のゲームが終了していない状態で新しいゲームを開始しようとした。18「複数ゲーム」節。 */
+  | "game_running";
 
 /** app 層のユースケースが throw する唯一のエラー型。 */
 export class AppError extends Error {

@@ -1,5 +1,6 @@
 // tmp/06-web-routes-and-views.md 「ユースケース呼び出し」の GameService の実装。
-// tmp/14-users-auth.md (better-auth への置き換え)、tmp/15-ng-words-and-mobile.md (NG ワード) 反映。
+// tmp/14-users-auth.md (better-auth への置き換え)、tmp/15-ng-words-and-mobile.md (NG ワード)、
+// tmp/18-games.md (複数ゲーム) 反映。
 // Perl 版 Map.pm (printIslandMain/ownerMain/commandMain/commentMain/localBbsMain) と
 // Turn.pm (newIslandMain/changeMain) の移植。
 import type { AuthUser } from "./auth.ts";
@@ -12,11 +13,13 @@ import {
   isBadIslandName,
   sanitizeText,
 } from "./sanitize.ts";
-import type { GameRepository, IslandSummary, UserPrefs } from "./ports.ts";
+import type { GameMeta, GameRepository, IslandSummary, UserPrefs } from "./ports.ts";
 import type { Clock } from "./ports.ts";
 import { buildSeasonVM, isFinished } from "./season.ts";
 import { buildIslandOgpVM, buildMoneyDisplay } from "./view-models.ts";
 import type {
+  GameHeaderVM,
+  GameListItemVM,
   IslandDetailVM,
   IslandPageVM,
   NewIslandVM,
@@ -82,7 +85,12 @@ function buildDetailVM(island: Island, rank: number, turn: number): IslandDetail
   };
 }
 
-/** Perl 版 Map.pm / Turn.pm の各 *Main のユースケース化。v2 (better-auth ベースの認可) 版。 */
+/**
+ * Perl 版 Map.pm / Turn.pm の各 *Main のユースケース化。v3 (tmp/18-games.md 複数ゲーム対応) 版。
+ * 各メソッドは対象のゲームを `gameId` で明示的に受け取る (同時に実行できるゲームは 1 つだが、
+ * 過去のゲームは読み取り専用で残るため)。書き込み系は「gameId が現在のゲームかどうか」
+ * および「running かどうか」で可否が分かれる (メソッドごとの規約は各実装のコメント参照)。
+ */
 export class GameService {
   readonly #deps: GameServiceDeps;
 
@@ -91,7 +99,7 @@ export class GameService {
   }
 
   // ----------------------------------------------------------------------
-  // 認可まわりの共通処理 (tmp/14-users-auth.md 「認可ルール」節)
+  // 認可・ゲーム状態まわりの共通処理 (tmp/14-users-auth.md 「認可ルール」節、tmp/18-games.md)
   // ----------------------------------------------------------------------
 
   #requireLogin(actor: AuthUser | undefined): AuthUser {
@@ -101,10 +109,13 @@ export class GameService {
     return actor;
   }
 
-  /** ログイン済みかつ自分の島の IslandSummary を返す。無ければ no_island。 */
-  #requireOwnIsland(actor: AuthUser | undefined): { user: AuthUser; summary: IslandSummary } {
+  /** ログイン済みかつ (指定ゲームで) 自分の島の IslandSummary を返す。無ければ no_island。 */
+  #requireOwnIsland(
+    actor: AuthUser | undefined,
+    gameId: number,
+  ): { user: AuthUser; summary: IslandSummary } {
     const user = this.#requireLogin(actor);
-    const summary = this.#deps.repo.findIslandByOwner(user.id);
+    const summary = this.#deps.repo.findIslandByOwner(gameId, user.id);
     if (summary === undefined) {
       throw new AppError("no_island");
     }
@@ -119,20 +130,52 @@ export class GameService {
     }
   }
 
-  #ensureInitialized(): void {
+  #gameExists(gameId: number): boolean {
+    return this.#deps.repo.listGames().some((g) => g.id === gameId);
+  }
+
+  /** 読み取り専用の画面 (トップ/観光/OGP/開発画面の閲覧) 用: ゲームが存在すればよい (過去でもよい)。 */
+  #requireExistingGame(gameId: number): GameMeta {
     if (!this.#deps.repo.isInitialized()) {
       throw new AppError("not_initialized");
     }
+    if (!this.#gameExists(gameId)) {
+      throw new AppError("game_not_found");
+    }
+    return this.#deps.repo.getMeta(gameId);
   }
 
   /**
-   * tmp/16-season.md「ターン進行」節: ゲーム終了後は更新系操作を拒否する
-   * (createIsland/registerCommand/updateComment/changeName)。掲示板の記帳 (postLbbs) は対象外。
+   * 記帳 (postLbbs/deleteLbbs) 用: tmp/16-season.md「ターン進行」節により、現在のゲームの掲示板は
+   * 終了後も記帳できる (running かどうかは問わない)。tmp/18-games.md「過去のゲームで閲覧できる
+   * もの」により、現在でない (過去の) ゲームの掲示板には記帳できない。
    */
-  #ensureNotFinished(): void {
-    if (isFinished(this.#deps.repo.getMeta())) {
+  #requireCurrentGame(gameId: number): GameMeta {
+    const currentId = this.#deps.repo.getCurrentGameId();
+    if (currentId === undefined) {
+      throw new AppError("not_initialized");
+    }
+    if (gameId !== currentId) {
+      throw new AppError(this.#gameExists(gameId) ? "game_finished" : "game_not_found");
+    }
+    return this.#deps.repo.getMeta(gameId);
+  }
+
+  /**
+   * 更新系 (createIsland/registerCommand/updateComment/changeName) 用: tmp/18-games.md
+   * 「GameService」節: 「gameId が現在のゲーム かつ status running」のときだけ許可する。
+   */
+  #requireWritableGame(gameId: number): GameMeta {
+    const meta = this.#requireCurrentGame(gameId);
+    if (isFinished(meta)) {
       throw new AppError("game_finished");
     }
+    return meta;
+  }
+
+  #buildGameHeader(meta: GameMeta): GameHeaderVM {
+    const currentId = this.#deps.repo.getCurrentGameId();
+    return { id: meta.id, name: meta.name, status: meta.status, isCurrent: meta.id === currentId };
   }
 
   #findRank(id: number, summaries: { id: number }[]): number {
@@ -144,39 +187,40 @@ export class GameService {
   // 画面の組み立て (repo からの読み出し。同期)
   // ----------------------------------------------------------------------
 
-  #buildIslandPageVM(id: number): IslandPageVM {
+  #buildIslandPageVM(gameId: number, id: number): IslandPageVM {
     const { repo, config } = this.#deps;
-    const island = repo.findIsland(id);
+    const island = repo.findIsland(gameId, id);
     if (island === undefined) {
       throw new AppError("island_not_found");
     }
-    const rank = this.#findRank(id, repo.listIslandSummaries());
-    const meta = repo.getMeta();
+    const rank = this.#findRank(id, repo.listIslandSummaries(gameId));
+    const meta = repo.getMeta(gameId);
     const sinceTurn = meta.turn - config.logKeepTurns + 1;
-    const logs = repo.listLogs({ sinceTurn, islandId: id });
+    const logs = repo.listLogs(gameId, { sinceTurn, islandId: id });
     const detail = buildDetailVM(island, rank, meta.turn);
     return {
       ...detail,
       moneyDisplay: buildMoneyDisplay(island.money, config, false),
       lbbs: island.lbbs,
       logs,
-      ogp: buildIslandOgpVM(detail, config),
+      ogp: buildIslandOgpVM(detail, gameId, config),
+      game: this.#buildGameHeader(meta),
     };
   }
 
-  #buildOwnerPageVM(id: number, userId: string): OwnerPageVM {
+  #buildOwnerPageVM(gameId: number, id: number, userId: string): OwnerPageVM {
     const { repo, config } = this.#deps;
-    const island = repo.findIsland(id);
+    const island = repo.findIsland(gameId, id);
     if (island === undefined) {
       throw new AppError("island_not_found");
     }
-    const summaries = repo.listIslandSummaries();
+    const summaries = repo.listIslandSummaries(gameId);
     const rank = this.#findRank(id, summaries);
     const nameById = new Map(summaries.map((s) => [s.id, s.name] as const));
     const resolveIslandName: ResolveIslandName = (targetId) => nameById.get(targetId);
-    const meta = repo.getMeta();
+    const meta = repo.getMeta(gameId);
     const sinceTurn = meta.turn - config.logKeepTurns + 1;
-    const logs = repo.listLogs({ sinceTurn, islandId: id, includeSecretFor: id });
+    const logs = repo.listLogs(gameId, { sinceTurn, islandId: id, includeSecretFor: id });
     const commands = island.commands.map((command, index) =>
       formatCommand(command, index, config, resolveIslandName),
     );
@@ -191,7 +235,23 @@ export class GameService {
       logs,
       defaults,
       season,
+      game: this.#buildGameHeader(meta),
     };
+  }
+
+  // ----------------------------------------------------------------------
+  // ゲーム一覧 (tmp/18-games.md「ルート」節 GET /games)
+  // ----------------------------------------------------------------------
+
+  listGames(): GameListItemVM[] {
+    const { repo } = this.#deps;
+    const currentId = repo.getCurrentGameId();
+    return repo.listGames().map((g) => ({ ...g, isCurrent: g.id === currentId }));
+  }
+
+  /** web 層がゲーム未指定のルート (`/`, `/my-island` 等) を現在のゲームへ解決するために使う。 */
+  getCurrentGameId(): number | undefined {
+    return this.#deps.repo.getCurrentGameId();
   }
 
   // ----------------------------------------------------------------------
@@ -199,11 +259,10 @@ export class GameService {
   // ----------------------------------------------------------------------
 
   /** Perl 版 Top.pm topPageMain の移植。 */
-  getTopPage(actor: AuthUser | undefined): TopPageVM {
-    this.#ensureInitialized();
+  getTopPage(actor: AuthUser | undefined, gameId: number): TopPageVM {
+    const meta = this.#requireExistingGame(gameId);
     const { repo, config } = this.#deps;
-    const meta = repo.getMeta();
-    const summaries = repo.listIslandSummaries();
+    const summaries = repo.listIslandSummaries(gameId);
     const islands = summaries.map((s, index) => ({
       id: s.id,
       name: s.name,
@@ -224,67 +283,70 @@ export class GameService {
       comment: s.comment,
     }));
     const sinceTurn = meta.turn - config.topLogTurns + 1;
-    const logs = repo.listLogs({ sinceTurn });
-    const history = repo.listHistory(config.historyMax);
-    const hasIsland = actor !== undefined && repo.findIslandByOwner(actor.id) !== undefined;
+    const logs = repo.listLogs(gameId, { sinceTurn });
+    const history = repo.listHistory(gameId, config.historyMax);
+    const hasIsland = actor !== undefined && repo.findIslandByOwner(gameId, actor.id) !== undefined;
     const season = buildSeasonVM(meta, this.#deps.clock.now());
+    const game = this.#buildGameHeader(meta);
     return {
       turn: meta.turn,
       islands,
-      canCreate: summaries.length < config.maxIslands,
+      canCreate: game.isCurrent && !isFinished(meta) && summaries.length < config.maxIslands,
       logs,
       history,
       debug: config.debug,
       viewer: { ...(actor !== undefined ? { user: actor } : {}), hasIsland },
       season,
+      game,
     };
   }
 
-  /** Perl 版 Map.pm printIslandMain の移植。誰でも見られる (14「認可ルール」節)。 */
-  getIslandPage(id: number): IslandPageVM {
-    this.#ensureInitialized();
-    return this.#buildIslandPageVM(id);
+  /** Perl 版 Map.pm printIslandMain の移植。誰でも見られる (14「認可ルール」節)。過去のゲームも可。 */
+  getIslandPage(gameId: number, id: number): IslandPageVM {
+    this.#requireExistingGame(gameId);
+    return this.#buildIslandPageVM(gameId, id);
   }
 
   /**
    * OGP 画像 (地図 PNG) 生成用。tmp/17-ogp.md。認証・セッションに依存しない (誰でも同じ画像)。
    * Perl 版には無い (v2 独自の追加)。
    */
-  getIslandOgp(id: number): { island: Island; turn: number } {
-    this.#ensureInitialized();
-    const { repo } = this.#deps;
-    const island = repo.findIsland(id);
+  getIslandOgp(gameId: number, id: number): { island: Island; turn: number } {
+    const meta = this.#requireExistingGame(gameId);
+    const island = this.#deps.repo.findIsland(gameId, id);
     if (island === undefined) {
       throw new AppError("island_not_found");
     }
-    return { island, turn: repo.getMeta().turn };
+    return { island, turn: meta.turn };
   }
 
-  /** Perl 版 Map.pm ownerMain の移植。actor 自身の島を開く (1 ユーザー 1 島)。 */
-  openOwnerPage(actor: AuthUser | undefined): OwnerPageVM {
-    this.#ensureInitialized();
-    const { user, summary } = this.#requireOwnIsland(actor);
-    return this.#buildOwnerPageVM(summary.id, user.id);
+  /**
+   * Perl 版 Map.pm ownerMain の移植。actor 自身の島を開く (ゲームごとに 1 ユーザー 1 島)。
+   * 過去のゲームは読み取り専用 (season.state/game.isCurrent を見て web 層がフォームを隠す)。
+   */
+  openOwnerPage(actor: AuthUser | undefined, gameId: number): OwnerPageVM {
+    this.#requireExistingGame(gameId);
+    const { user, summary } = this.#requireOwnIsland(actor, gameId);
+    return this.#buildOwnerPageVM(gameId, summary.id, user.id);
   }
 
   // ----------------------------------------------------------------------
   // 新規作成
   // ----------------------------------------------------------------------
 
-  /** Perl 版 Turn.pm newIslandMain の移植。ログイン必須、1 ユーザー 1 島。 */
-  createIsland(actor: AuthUser | undefined, name: string): NewIslandVM {
-    this.#ensureInitialized();
-    this.#ensureNotFinished();
+  /** Perl 版 Turn.pm newIslandMain の移植。ログイン必須、ゲームごとに 1 ユーザー 1 島。 */
+  createIsland(actor: AuthUser | undefined, gameId: number, name: string): NewIslandVM {
+    this.#requireWritableGame(gameId);
     const user = this.#requireLogin(actor);
     const { repo, config } = this.#deps;
     const cleanName = sanitizeText(name, MAX_NAME_LEN);
 
     // 事前検証: 1 島制約 → 上限 → 名前空 → 禁止文字/無人 → NG ワード → 重複。
     const validate = (): void => {
-      if (repo.findIslandByOwner(user.id) !== undefined) {
+      if (repo.findIslandByOwner(gameId, user.id) !== undefined) {
         throw new AppError("already_has_island");
       }
-      if (repo.listIslandSummaries().length >= config.maxIslands) {
+      if (repo.listIslandSummaries(gameId).length >= config.maxIslands) {
         throw new AppError("island_full");
       }
       if (cleanName === "") {
@@ -294,7 +356,7 @@ export class GameService {
         throw new AppError("bad_name");
       }
       this.#requireNgWordFree(cleanName);
-      if (repo.findIslandByName(cleanName) !== undefined) {
+      if (repo.findIslandByName(gameId, cleanName) !== undefined) {
         throw new AppError("name_taken");
       }
     };
@@ -304,7 +366,7 @@ export class GameService {
       // トランザクション内で改めて検証する (TOCTOU 対策)。
       validate();
 
-      const meta = repo.getMeta();
+      const meta = repo.getMeta(gameId);
       const island = makeNewIsland(config, this.#deps.rng, {
         id: meta.nextIslandId,
         name: cleanName,
@@ -312,14 +374,14 @@ export class GameService {
       });
       estimate(island);
 
-      const rank = repo.listIslandSummaries().length;
-      repo.insertIsland(island, rank);
+      const rank = repo.listIslandSummaries(gameId).length;
+      repo.insertIsland(gameId, island, rank);
       repo.saveMeta({ ...meta, nextIslandId: meta.nextIslandId + 1 });
 
       const log = new LogCollector(meta.turn);
       messages.logDiscover(log, cleanName);
       const { history } = log.flush();
-      repo.appendHistory(history);
+      repo.appendHistory(gameId, history);
 
       return {
         ...buildDetailVM(island, rank + 1, meta.turn),
@@ -360,17 +422,17 @@ export class GameService {
   /** Perl 版 Map.pm commandMain の移植。actor 自身の島に対してのみ実行できる。 */
   registerCommand(
     actor: AuthUser | undefined,
+    gameId: number,
     input: CommandInput,
   ): OwnerPageVM & { notice: string } {
-    this.#ensureInitialized();
-    this.#ensureNotFinished();
-    const { user, summary } = this.#requireOwnIsland(actor);
+    this.#requireWritableGame(gameId);
+    const { user, summary } = this.#requireOwnIsland(actor, gameId);
     const id = summary.id;
     this.#validateCommandInput(input);
     const { repo, config } = this.#deps;
 
     return repo.transaction(() => {
-      const island = repo.findIsland(id);
+      const island = repo.findIsland(gameId, id);
       if (island === undefined) {
         throw new AppError("island_not_found");
       }
@@ -400,7 +462,7 @@ export class GameService {
         }
       }
 
-      repo.updateIsland(island);
+      repo.updateIsland(gameId, island);
       repo.setUserPrefs(user.id, {
         targetIslandId: input.target,
         pointX: input.x,
@@ -413,7 +475,7 @@ export class GameService {
         input.mode === "delete" || kind === CommandKind.AutoDelete
           ? "コマンドを削除しました。"
           : "コマンドを登録しました。";
-      return { ...this.#buildOwnerPageVM(id, user.id), notice };
+      return { ...this.#buildOwnerPageVM(gameId, id, user.id), notice };
     });
   }
 
@@ -422,22 +484,28 @@ export class GameService {
   // ----------------------------------------------------------------------
 
   /** Perl 版 Map.pm commentMain の移植。actor 自身の島に対してのみ実行できる。 */
-  updateComment(actor: AuthUser | undefined, message: string): OwnerPageVM & { notice: string } {
-    this.#ensureInitialized();
-    this.#ensureNotFinished();
-    const { user, summary } = this.#requireOwnIsland(actor);
+  updateComment(
+    actor: AuthUser | undefined,
+    gameId: number,
+    message: string,
+  ): OwnerPageVM & { notice: string } {
+    this.#requireWritableGame(gameId);
+    const { user, summary } = this.#requireOwnIsland(actor, gameId);
     const { repo } = this.#deps;
     const comment = sanitizeText(message, MAX_COMMENT_LEN);
     this.#requireNgWordFree(comment);
 
     return repo.transaction(() => {
-      const island = repo.findIsland(summary.id);
+      const island = repo.findIsland(gameId, summary.id);
       if (island === undefined) {
         throw new AppError("island_not_found");
       }
       island.comment = comment;
-      repo.updateIsland(island);
-      return { ...this.#buildOwnerPageVM(summary.id, user.id), notice: "コメントを更新しました。" };
+      repo.updateIsland(gameId, island);
+      return {
+        ...this.#buildOwnerPageVM(gameId, summary.id, user.id),
+        notice: "コメントを更新しました。",
+      };
     });
   }
 
@@ -446,10 +514,13 @@ export class GameService {
   // ----------------------------------------------------------------------
 
   /** Perl 版 Turn.pm changeMain の移植。actor 自身の島に対してのみ実行できる。 */
-  changeName(actor: AuthUser | undefined, name: string): OwnerPageVM & { notice: string } {
-    this.#ensureInitialized();
-    this.#ensureNotFinished();
-    const { user, summary } = this.#requireOwnIsland(actor);
+  changeName(
+    actor: AuthUser | undefined,
+    gameId: number,
+    name: string,
+  ): OwnerPageVM & { notice: string } {
+    this.#requireWritableGame(gameId);
+    const { user, summary } = this.#requireOwnIsland(actor, gameId);
     const { repo, config } = this.#deps;
     const cleanName = sanitizeText(name, MAX_NAME_LEN);
 
@@ -462,11 +533,11 @@ export class GameService {
     this.#requireNgWordFree(cleanName);
 
     return repo.transaction(() => {
-      const island = repo.findIsland(summary.id);
+      const island = repo.findIsland(gameId, summary.id);
       if (island === undefined) {
         throw new AppError("island_not_found");
       }
-      if (repo.findIslandByName(cleanName) !== undefined && cleanName !== island.name) {
+      if (repo.findIslandByName(gameId, cleanName) !== undefined && cleanName !== island.name) {
         throw new AppError("name_taken");
       }
       if (island.money < config.costChangeName) {
@@ -474,14 +545,17 @@ export class GameService {
       }
       island.money -= config.costChangeName;
 
-      const log = new LogCollector(repo.getMeta().turn);
+      const log = new LogCollector(repo.getMeta(gameId).turn);
       messages.logChangeName(log, island.name, cleanName);
       const { history } = log.flush();
-      repo.appendHistory(history);
+      repo.appendHistory(gameId, history);
       island.name = cleanName;
-      repo.updateIsland(island);
+      repo.updateIsland(gameId, island);
 
-      return { ...this.#buildOwnerPageVM(summary.id, user.id), notice: "名前を変更しました。" };
+      return {
+        ...this.#buildOwnerPageVM(gameId, summary.id, user.id),
+        notice: "名前を変更しました。",
+      };
     });
   }
 
@@ -489,33 +563,36 @@ export class GameService {
   // ローカル掲示板
   // ----------------------------------------------------------------------
 
-  #pushLbbsPost(id: number, post: LbbsPost): void {
+  #pushLbbsPost(gameId: number, id: number, post: LbbsPost): void {
     const { repo, config } = this.#deps;
-    const island = repo.findIsland(id);
+    const island = repo.findIsland(gameId, id);
     if (island === undefined) {
       throw new AppError("island_not_found");
     }
     const posts = [post, ...island.lbbs].slice(0, config.lbbsMax);
-    repo.replaceLbbs(id, posts);
+    repo.replaceLbbs(gameId, id, posts);
   }
 
   /**
    * Perl 版 Map.pm localBbsMain の移植。記帳はログイン必須 (14「認可ルール」節)。
    * actor 自身の島なら 'owner' として、他人の島なら 'visitor' として記帳する。
    * 表示名は actor.name (フォームで名前を受け取らない)。
+   * tmp/16-season.md により現在のゲームが終了していても記帳できる (running は問わない)。
+   * tmp/18-games.md により過去の (現在でない) ゲームには記帳できない。
    */
   postLbbs(
     actor: AuthUser | undefined,
+    gameId: number,
     islandId: number,
     message: string,
   ): (OwnerPageVM | IslandPageVM) & { notice: string } {
-    this.#ensureInitialized();
+    this.#requireCurrentGame(gameId);
     const { repo, config } = this.#deps;
     if (!config.useLbbs) {
       throw new AppError("lbbs_disabled");
     }
     const user = this.#requireLogin(actor);
-    const island0 = repo.findIsland(islandId);
+    const island0 = repo.findIsland(gameId, islandId);
     if (island0 === undefined) {
       throw new AppError("island_not_found");
     }
@@ -527,8 +604,8 @@ export class GameService {
     const isOwner = island0.ownerUserId === user.id;
 
     return repo.transaction(() => {
-      const meta = repo.getMeta();
-      this.#pushLbbsPost(islandId, {
+      const meta = repo.getMeta(gameId);
+      this.#pushLbbsPost(gameId, islandId, {
         author: isOwner ? "owner" : "visitor",
         userId: user.id,
         name: user.name,
@@ -537,25 +614,32 @@ export class GameService {
       });
       const notice = "記帳を行いました。";
       return isOwner
-        ? { ...this.#buildOwnerPageVM(islandId, user.id), notice }
-        : { ...this.#buildIslandPageVM(islandId), notice };
+        ? { ...this.#buildOwnerPageVM(gameId, islandId, user.id), notice }
+        : { ...this.#buildIslandPageVM(gameId, islandId), notice };
     });
   }
 
-  /** Perl 版 Map.pm localBbsMain (削除モード) の移植。actor 自身の島の記帳のみ削除できる。 */
-  deleteLbbs(actor: AuthUser | undefined, number: number): OwnerPageVM & { notice: string } {
-    this.#ensureInitialized();
+  /**
+   * Perl 版 Map.pm localBbsMain (削除モード) の移植。actor 自身の島の記帳のみ削除できる。
+   * postLbbs と同じく現在のゲームであれば running は問わない。
+   */
+  deleteLbbs(
+    actor: AuthUser | undefined,
+    gameId: number,
+    number: number,
+  ): OwnerPageVM & { notice: string } {
+    this.#requireCurrentGame(gameId);
     const { repo, config } = this.#deps;
     if (!config.useLbbs) {
       throw new AppError("lbbs_disabled");
     }
-    const { user, summary } = this.#requireOwnIsland(actor);
+    const { user, summary } = this.#requireOwnIsland(actor, gameId);
     if (!Number.isInteger(number) || number < 0 || number >= config.lbbsMax) {
       throw new AppError("invalid_input");
     }
 
     return repo.transaction(() => {
-      const island = repo.findIsland(summary.id);
+      const island = repo.findIsland(gameId, summary.id);
       if (island === undefined) {
         throw new AppError("island_not_found");
       }
@@ -563,8 +647,11 @@ export class GameService {
       if (number < posts.length) {
         posts.splice(number, 1);
       }
-      repo.replaceLbbs(summary.id, posts);
-      return { ...this.#buildOwnerPageVM(summary.id, user.id), notice: "記帳内容を削除しました。" };
+      repo.replaceLbbs(gameId, summary.id, posts);
+      return {
+        ...this.#buildOwnerPageVM(gameId, summary.id, user.id),
+        notice: "記帳内容を削除しました。",
+      };
     });
   }
 }

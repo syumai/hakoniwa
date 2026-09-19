@@ -1,30 +1,55 @@
 // Perl 版 hakojima.dat / island.N / hakojima.logN / hakojima.his へのアクセスを抽象化する。
-// tmp/04-database.md の「リポジトリインターフェース」節、tmp/14-users-auth.md の移植。
+// tmp/04-database.md の「リポジトリインターフェース」節、tmp/14-users-auth.md、
+// tmp/16-season.md、tmp/18-games.md (複数ゲーム) の移植。
 // 実装 (SqliteGameRepository 等) は storage 層が持つ。
 import type { HistoryEntry, Island, LbbsPost, LogEntry, Prize } from "../core/types.ts";
 
-/** Perl 版 hakojima.dat 先頭 4 行 (島の数は listIslandSummaries().length で代替)。 */
+/** ゲームの状態。tmp/18-games.md「定義」節。 */
+export type GameStatus = "running" | "finished";
+
+/**
+ * 1 ゲーム (1 シーズン) のメタ情報。Perl 版 hakojima.dat 先頭 4 行相当 +
+ * tmp/18-games.md の `games` 表 1 行。島の数は listIslandSummaries(gameId).length で代替。
+ */
 export interface GameMeta {
+  id: number;
+  /** 省略時 '第 N 回'。 */
+  name: string;
+  status: GameStatus;
   turn: number;
   lastTime: number;
-  nextIslandId: number;
-  /** 最終ターン (tmp/16-season.md)。NULL なら無期限。 */
-  finalTurn: number | null;
   /**
    * ターン1が始まる (始まった) unix 秒。tmp/16-season.md は `last_time` の初期値から逆算する
    * 設計だったが、`unitTimeSec` の変更に弱く分かりにくいため、DB に直接持つ列にした
-   * (設計書との差異)。`initialize` 時に `lastTime` と同じ値で設定され、ターン1の間は
+   * (設計書との差異)。`createGame` 時に `lastTime` と同じ値で設定され、ターン1の間は
    * `setLastTime` (管理画面「最終更新時刻の変更」) が同期して更新する。ターン2以降は不変。
    */
   startAt: number;
+  /** 最終ターン (tmp/16-season.md)。NULL なら無期限。 */
+  finalTurn: number | null;
   /**
    * 1 ターンの長さ (秒)。tmp/16-season.md「ターンの長さも DB に持つ (追加要件)」節。
-   * `initialize` 時に `config.unitTimeSec` (または管理画面/CLI で指定した値) で設定され、
+   * `createGame` 時に `config.unitTimeSec` (または管理画面/CLI で指定した値) で設定され、
    * 以後は管理画面「ゲーム設定」/ CLI `game set-unit-time` でのみ変わる。ターン進行・
    * 次のターン予定・開始時刻の切り下げは以後すべてこの値を使う (`config.unitTimeSec` は
    * 新しいデータを作るときの既定値としてのみ使う)。
    */
   unitTimeSec: number;
+  nextIslandId: number;
+  createdAt: number;
+  finishedAt: number | null;
+}
+
+/** ゲーム一覧 (現在 + 過去) の 1 行。tmp/18-games.md「ルート」節 GET /games の表。 */
+export interface GameSummary {
+  id: number;
+  name: string;
+  status: GameStatus;
+  startAt: number;
+  finishedAt: number | null;
+  turn: number;
+  finalTurn: number | null;
+  islandCount: number;
 }
 
 /** 一覧用の軽量な島情報。地形・コマンド・掲示板を含まない (トップ画面/セレクト用)。 */
@@ -57,7 +82,8 @@ export interface ListLogsQuery {
 
 /**
  * 計画登録フォームの初期値。tmp/14-users-auth.md「データモデル」の `user_prefs` 節。
- * v1 の `hako_defaults` Cookie の置き換え。ログイン中ユーザーごとに 1 件保持する。
+ * v1 の `hako_defaults` Cookie の置き換え。ログイン中ユーザーごとに 1 件保持する
+ * (ゲームに依らない。tmp/18-games.md)。
  */
 export interface UserPrefs {
   targetIslandId?: number;
@@ -66,50 +92,68 @@ export interface UserPrefs {
   kind?: number;
 }
 
+/** `GameRepository.createGame` の入力。tmp/18-games.md「リポジトリ」節。 */
+export interface CreateGameInput {
+  name: string;
+  startAt: number;
+  finalTurn: number | null;
+  unitTimeSec: number;
+}
+
 /**
- * ゲームデータへの読み書きを抽象化するリポジトリ。
+ * ゲームデータへの読み書きを抽象化するリポジトリ。tmp/18-games.md により島・ログ・履歴・
+ * 掲示板の各メソッドは第 1 引数に `gameId` を取る (同時に実行できるゲームは 1 つだが、
+ * 過去のゲームは読み取り専用で残るため)。
  * `transaction` 内では await しない (02-architecture.md 「同時実行とロック」参照)。
  */
 export interface GameRepository {
   /** 同期トランザクション。fn 内では await しない。 */
   transaction<T>(fn: () => T): T;
 
+  /** ゲームが 1 つ以上あるか。 */
   isInitialized(): boolean;
-  getMeta(): GameMeta;
+  /** ゲーム一覧。id 降順 (新しい順)。 */
+  listGames(): GameSummary[];
+  /** 現在のゲーム (MAX(id)) の ID。ゲームが無ければ undefined。 */
+  getCurrentGameId(): number | undefined;
+  getMeta(gameId: number): GameMeta;
+  /** `meta.id` で対象のゲームを特定して更新する。 */
   saveMeta(meta: GameMeta): void;
+  /** 新しいゲームを作る (turn=1, nextIslandId=1, status='running')。新しい ID を返す。 */
+  createGame(input: CreateGameInput, now: number): number;
+  /** ゲームを終了状態にする (status='finished', finished_at=now)。 */
+  finishGame(gameId: number, now: number): void;
   /** 楽観ロック: 現在の turn が expectedTurn のときだけ更新し、成功可否を返す。 */
-  tryBumpTurn(expectedTurn: number, next: GameMeta): boolean;
+  tryBumpTurn(gameId: number, expectedTurn: number, next: GameMeta): boolean;
 
   /** 一覧用: rank 昇順 (0 が 1 位)。 */
-  listIslandSummaries(): IslandSummary[];
+  listIslandSummaries(gameId: number): IslandSummary[];
   /** 全島をフル (地形・コマンド・掲示板) で読み込む。ターン処理用。rank 昇順。 */
-  loadAllIslands(): Island[];
-  findIsland(id: number): Island | undefined;
-  findIslandByName(name: string): IslandSummary | undefined;
-  /** 1 ユーザー 1 島の制約の確認・自分の島の特定に使う。 */
-  findIslandByOwner(userId: string): IslandSummary | undefined;
+  loadAllIslands(gameId: number): Island[];
+  findIsland(gameId: number, id: number): Island | undefined;
+  findIslandByName(gameId: number, name: string): IslandSummary | undefined;
+  /** 1 ユーザー 1 島の制約の確認・自分の島の特定に使う (ゲームごと)。 */
+  findIslandByOwner(gameId: number, userId: string): IslandSummary | undefined;
 
-  insertIsland(island: Island, rank: number): void;
+  insertIsland(gameId: number, island: Island, rank: number): void;
   /** rank 以外の全フィールドを更新する。 */
-  updateIsland(island: Island): void;
+  updateIsland(gameId: number, island: Island): void;
   /** ターン処理後: 渡された順に rank を振り直し、含まれない ID (死滅島) を掲示板ごと削除する。 */
-  replaceAllIslands(islands: Island[]): void;
-  deleteIsland(id: number): void;
+  replaceAllIslands(gameId: number, islands: Island[]): void;
+  deleteIsland(gameId: number, id: number): void;
 
-  replaceLbbs(islandId: number, posts: LbbsPost[]): void;
+  replaceLbbs(gameId: number, islandId: number, posts: LbbsPost[]): void;
 
-  appendLogs(entries: LogEntry[]): void;
-  listLogs(q: ListLogsQuery): LogEntry[];
+  appendLogs(gameId: number, entries: LogEntry[]): void;
+  listLogs(gameId: number, q: ListLogsQuery): LogEntry[];
   /** turn 未満のログをすべて削除する。 */
-  deleteLogsBefore(turn: number): void;
+  deleteLogsBefore(gameId: number, turn: number): void;
 
-  appendHistory(entries: HistoryEntry[]): void;
+  appendHistory(gameId: number, entries: HistoryEntry[]): void;
   /** 新しい順に最大 limit 件。 */
-  listHistory(limit: number): HistoryEntry[];
-  trimHistory(keep: number): void;
+  listHistory(gameId: number, limit: number): HistoryEntry[];
+  trimHistory(gameId: number, keep: number): void;
 
-  /** 空 DB に game 行を作る (既存データがあれば上書き)。 */
-  initialize(meta: GameMeta): void;
   /** 全テーブルの行を削除する (管理用)。better-auth の 4 表・user_prefs は対象外。 */
   reset(): void;
 

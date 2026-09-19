@@ -155,8 +155,10 @@ async function runDb(
       if (!status.initialized) {
         io.stdout("状態: 未初期化");
       } else {
-        const islandCount = node.repo.listIslandSummaries().length;
+        const islandCount =
+          status.gameId !== undefined ? node.repo.listIslandSummaries(status.gameId).length : 0;
         io.stdout(`状態: 初期化済み`);
+        io.stdout(`ゲーム: ${status.gameName} (id=${status.gameId}, ${status.gameStatus})`);
         io.stdout(`ターン: ${status.turn}`);
         io.stdout(`最終更新時間: ${formatTimestamp(status.lastTime ?? 0)}`);
         io.stdout(`島数: ${islandCount}`);

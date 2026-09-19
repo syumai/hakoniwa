@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loginAs, postForm, setupTestApp } from "./test-helpers.ts";
+import { currentGameId, currentMeta, loginAs, postForm, setupTestApp } from "./test-helpers.ts";
 import type { TestApp } from "./test-helpers.ts";
 
 async function createIsland(testApp: TestApp, name = "てすとじま") {
@@ -305,8 +305,10 @@ describe("POST /my-island/* は他人の島には効かない (actor 自身の�
 describe("tmp/16-season.md: ゲーム終了後", () => {
   async function createFinishedIsland(testApp: TestApp) {
     const { auth } = await createIsland(testApp);
-    const meta = testApp.repo.getMeta();
+    const meta = currentMeta(testApp);
     testApp.repo.saveMeta({ ...meta, turn: 2, finalTurn: 1 });
+    // tmp/18-games.md: 終了判定は status 列に昇格したため、明示的に finishGame を呼ぶ。
+    testApp.repo.finishGame(currentGameId(testApp), meta.lastTime);
     return auth;
   }
 

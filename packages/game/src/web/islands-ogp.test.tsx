@@ -80,8 +80,10 @@ describe("GET /islands/:id の OGP メタタグ", () => {
       `<meta property="og:title" content="てすとじま島 - ${defaultConfig.site.title}"/>`,
     );
     expect(html).toContain("ターン1 / 人口");
+    // tmp/18-games.md: OGP の imagePath はゲーム ID 入りの URL になった (実ルートの
+    // マウント先はまだ /islands/:id/ogp.png のままで、URL 変更は第 2 段階)。
     expect(html).toContain(
-      '<meta property="og:image" content="http://localhost:5173/islands/1/ogp.png?turn=1"/>',
+      '<meta property="og:image" content="http://localhost:5173/games/1/islands/1/ogp.png?turn=1"/>',
     );
     expect(html).toContain('<meta property="og:image:width" content="800"/>');
     expect(html).toContain('<meta property="og:image:height" content="420"/>');
@@ -96,7 +98,7 @@ describe("GET /islands/:id の OGP メタタグ", () => {
     testApp.config.auth = authWithoutBaseUrl;
     const res = await testApp.app.request("https://example.com/islands/1");
     const html = await res.text();
-    expect(html).toContain('content="https://example.com/islands/1/ogp.png?turn=1"');
+    expect(html).toContain('content="https://example.com/games/1/islands/1/ogp.png?turn=1"');
     expect(html).toContain('content="https://example.com/islands/1"');
   });
 });

@@ -7,6 +7,7 @@ import type { Command, Island, LbbsAuthor, LbbsPost, Prize } from "../core/types
 
 /** `SELECT * FROM islands` 1 行分。 */
 export interface IslandRow {
+  game_id: number;
   id: number;
   rank: number;
   name: string;
@@ -31,6 +32,7 @@ export interface IslandRow {
 
 /** `SELECT * FROM lbbs_posts` 1 行分。 */
 export interface LbbsRow {
+  game_id: number;
   island_id: number;
   position: number;
   author: string;

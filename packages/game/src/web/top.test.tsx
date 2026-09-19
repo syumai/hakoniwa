@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { defaultConfig } from "../core/config.ts";
-import { INITIAL_CLOCK, loginAs, postForm, setupTestApp } from "./test-helpers.ts";
+import {
+  INITIAL_CLOCK,
+  currentGameId,
+  currentMeta,
+  loginAs,
+  postForm,
+  setupTestApp,
+} from "./test-helpers.ts";
 
 describe("GET /", () => {
   it("200 で配布元リンク、ターン数、各見出しを含む (未ログイン)", async () => {
@@ -81,11 +88,11 @@ describe("GET /", () => {
         cookie: auth.cookie,
       },
     );
-    const island = testApp.repo.findIsland(1);
+    const island = testApp.repo.findIsland(currentGameId(testApp), 1);
     if (island === undefined) {
       throw new Error("island not found");
     }
-    testApp.repo.updateIsland({ ...island, absent: 0 });
+    testApp.repo.updateIsland(currentGameId(testApp), { ...island, absent: 0 });
 
     const res = await testApp.app.request("/");
     const html = await res.text();
@@ -104,11 +111,11 @@ describe("GET /", () => {
         cookie: auth.cookie,
       },
     );
-    const island = testApp.repo.findIsland(1);
+    const island = testApp.repo.findIsland(currentGameId(testApp), 1);
     if (island === undefined) {
       throw new Error("island not found");
     }
-    testApp.repo.updateIsland({ ...island, absent: 25 });
+    testApp.repo.updateIsland(currentGameId(testApp), { ...island, absent: 25 });
 
     const res = await testApp.app.request("/");
     const html = await res.text();
@@ -224,7 +231,7 @@ describe("POST /turn (デバッグ用)", () => {
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain("ターン2");
-    expect(testApp.repo.getMeta().turn).toBe(2);
+    expect(currentMeta(testApp).turn).toBe(2);
   });
 });
 
@@ -261,8 +268,10 @@ describe("tmp/16-season.md: トップの3状態 (開始前/進行中/終了)", (
 
   it("終了後: 「結果発表 (ターンM終了時点)」を表示し、「次のターン:」は表示しない", async () => {
     const testApp = setupTestApp({ finalTurn: 1 });
-    const meta = testApp.repo.getMeta();
+    const meta = currentMeta(testApp);
     testApp.repo.saveMeta({ ...meta, turn: 2 });
+    // tmp/18-games.md: 終了判定は status 列に昇格したため、明示的に finishGame を呼ぶ。
+    testApp.repo.finishGame(currentGameId(testApp), meta.lastTime);
 
     const res = await testApp.app.request("/");
     const html = await res.text();

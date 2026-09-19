@@ -60,6 +60,11 @@ export function errorMessage(kind: AppErrorKind): string {
     // tmp/16-season.md「ターン進行」節。
     case "game_finished":
       return "ゲームは終了しました。";
+    // tmp/18-games.md「複数ゲーム」節。
+    case "game_not_found":
+      return "そのゲームは見つかりませんでした。";
+    case "game_running":
+      return "現在のゲームが終了していません。";
     default: {
       const exhaustive: never = kind;
       return exhaustive;
@@ -97,6 +102,11 @@ export function errorStatus(kind: AppErrorKind): 400 | 401 | 403 | 404 | 409 | 5
       return 409;
     // tmp/16-season.md「ターン進行」節。
     case "game_finished":
+      return 409;
+    // tmp/18-games.md「複数ゲーム」節。
+    case "game_not_found":
+      return 404;
+    case "game_running":
       return 409;
     default: {
       const exhaustive: never = kind;

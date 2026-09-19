@@ -72,7 +72,11 @@ describe("Cache-Control (Workers Cache が従う応答ヘッダ)", () => {
 
     const pageRes = await stub.fetch("http://example.com/islands/1", { headers: { cookie } });
     expect(pageRes.headers.get("cache-control")).toBe("private, no-store");
-    expect(await pageRes.text()).toContain('content="http://example.com/islands/1/ogp.png?turn=1"');
+    // tmp/18-games.md: OGP の imagePath はゲーム ID 入りの URL になった (実ルートのマウント先は
+    // まだ /islands/:id/ogp.png のままで、URL 変更は第 2 段階)。
+    expect(await pageRes.text()).toContain(
+      'content="http://example.com/games/1/islands/1/ogp.png?turn=1"',
+    );
   });
 
   it("/api/auth/get-session はキャッシュされない (better-auth 自身が no-store を付ける)", async () => {

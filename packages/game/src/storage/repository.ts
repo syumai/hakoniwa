@@ -1,8 +1,11 @@
-// tmp/04-database.md 「リポジトリインターフェース」の実 SQLite 実装。
+// tmp/04-database.md 「リポジトリインターフェース」+ tmp/18-games.md (複数ゲーム) の実 SQLite 実装。
 // 意味論は packages/game/src/app/fake-repository.ts (テスト用インメモリ実装) と揃える。
 import type {
+  CreateGameInput,
   GameMeta,
   GameRepository,
+  GameStatus,
+  GameSummary,
   IslandSummary,
   ListLogsQuery,
   UserPrefs,
@@ -13,12 +16,17 @@ import { IslandMapper } from "./mapper.ts";
 import type { IslandRow, LbbsRow } from "./mapper.ts";
 
 interface GameRow {
+  id: number;
+  name: string;
+  status: GameStatus;
   turn: number;
   last_time: number;
-  next_island_id: number;
-  final_turn: number | null;
   start_at: number;
+  final_turn: number | null;
   unit_time_sec: number;
+  next_island_id: number;
+  created_at: number;
+  finished_at: number | null;
 }
 
 interface LogRow {
@@ -64,6 +72,22 @@ function columnValuesToParams(v: ReturnType<IslandMapper["islandToColumnValues"]
   ];
 }
 
+function rowToMeta(row: GameRow): GameMeta {
+  return {
+    id: row.id,
+    name: row.name,
+    status: row.status,
+    turn: row.turn,
+    lastTime: row.last_time,
+    startAt: row.start_at,
+    finalTurn: row.final_turn,
+    unitTimeSec: row.unit_time_sec,
+    nextIslandId: row.next_island_id,
+    createdAt: row.created_at,
+    finishedAt: row.finished_at,
+  };
+}
+
 export interface SqliteGameRepositoryConfig {
   islandSize: number;
   commandMax: number;
@@ -84,109 +108,184 @@ export class SqliteGameRepository implements GameRepository {
   }
 
   isInitialized(): boolean {
-    return this.#driver.get("SELECT id FROM game WHERE id = 1") !== undefined;
+    return this.getCurrentGameId() !== undefined;
   }
 
-  getMeta(): GameMeta {
+  listGames(): GameSummary[] {
+    const rows = this.#driver.all<GameRow & { island_count: number }>(
+      `SELECT g.id, g.name, g.status, g.turn, g.last_time, g.start_at, g.final_turn,
+              g.unit_time_sec, g.next_island_id, g.created_at, g.finished_at,
+              (SELECT COUNT(*) FROM islands i WHERE i.game_id = g.id) AS island_count
+       FROM games g
+       ORDER BY g.id DESC`,
+    );
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      status: row.status,
+      startAt: row.start_at,
+      finishedAt: row.finished_at,
+      turn: row.turn,
+      finalTurn: row.final_turn,
+      islandCount: row.island_count,
+    }));
+  }
+
+  getCurrentGameId(): number | undefined {
+    const row = this.#driver.get<{ id: number | null }>("SELECT MAX(id) AS id FROM games");
+    return row?.id ?? undefined;
+  }
+
+  getMeta(gameId: number): GameMeta {
     const row = this.#driver.get<GameRow>(
-      "SELECT turn, last_time, next_island_id, final_turn, start_at, unit_time_sec FROM game WHERE id = 1",
+      `SELECT id, name, status, turn, last_time, start_at, final_turn, unit_time_sec,
+              next_island_id, created_at, finished_at
+       FROM games WHERE id = ?`,
+      gameId,
     );
     if (row === undefined) {
-      throw new Error("SqliteGameRepository: not initialized");
+      throw new Error(`SqliteGameRepository: game not found: ${gameId}`);
     }
-    return {
-      turn: row.turn,
-      lastTime: row.last_time,
-      nextIslandId: row.next_island_id,
-      finalTurn: row.final_turn,
-      startAt: row.start_at,
-      unitTimeSec: row.unit_time_sec,
-    };
+    return rowToMeta(row);
   }
 
   saveMeta(meta: GameMeta): void {
     this.#driver.run(
-      `UPDATE game SET turn = ?, last_time = ?, next_island_id = ?, final_turn = ?, start_at = ?,
-       unit_time_sec = ? WHERE id = 1`,
+      `UPDATE games SET name = ?, status = ?, turn = ?, last_time = ?, start_at = ?,
+       final_turn = ?, unit_time_sec = ?, next_island_id = ?, finished_at = ? WHERE id = ?`,
+      meta.name,
+      meta.status,
       meta.turn,
       meta.lastTime,
-      meta.nextIslandId,
-      meta.finalTurn,
       meta.startAt,
+      meta.finalTurn,
       meta.unitTimeSec,
+      meta.nextIslandId,
+      meta.finishedAt,
+      meta.id,
     );
   }
 
-  tryBumpTurn(expectedTurn: number, next: GameMeta): boolean {
+  createGame(input: CreateGameInput, now: number): number {
+    const row = this.#driver.get<{ id: number }>(
+      `INSERT INTO games (
+         name, status, turn, last_time, start_at, final_turn, unit_time_sec, next_island_id,
+         created_at, finished_at
+       ) VALUES (?, 'running', 1, ?, ?, ?, ?, 1, ?, NULL)
+       RETURNING id`,
+      input.name,
+      input.startAt,
+      input.startAt,
+      input.finalTurn,
+      input.unitTimeSec,
+      now,
+    );
+    if (row === undefined) {
+      throw new Error("SqliteGameRepository: createGame failed");
+    }
+    return row.id;
+  }
+
+  finishGame(gameId: number, now: number): void {
     this.#driver.run(
-      `UPDATE game SET turn = ?, last_time = ?, next_island_id = ?, final_turn = ?, start_at = ?,
-       unit_time_sec = ? WHERE id = 1 AND turn = ?`,
+      "UPDATE games SET status = 'finished', finished_at = ? WHERE id = ?",
+      now,
+      gameId,
+    );
+  }
+
+  tryBumpTurn(gameId: number, expectedTurn: number, next: GameMeta): boolean {
+    this.#driver.run(
+      `UPDATE games SET name = ?, status = ?, turn = ?, last_time = ?, start_at = ?,
+       final_turn = ?, unit_time_sec = ?, next_island_id = ?, finished_at = ?
+       WHERE id = ? AND turn = ?`,
+      next.name,
+      next.status,
       next.turn,
       next.lastTime,
-      next.nextIslandId,
-      next.finalTurn,
       next.startAt,
+      next.finalTurn,
       next.unitTimeSec,
+      next.nextIslandId,
+      next.finishedAt,
+      gameId,
       expectedTurn,
     );
     const row = this.#driver.get<{ n: number }>("SELECT changes() AS n");
     return (row?.n ?? 0) > 0;
   }
 
-  listIslandSummaries(): IslandSummary[] {
-    const rows = this.#driver.all<IslandRow>("SELECT * FROM islands ORDER BY rank ASC");
+  listIslandSummaries(gameId: number): IslandSummary[] {
+    const rows = this.#driver.all<IslandRow>(
+      "SELECT * FROM islands WHERE game_id = ? ORDER BY rank ASC",
+      gameId,
+    );
     return rows.map((row) => this.#mapper.rowToSummary(row));
   }
 
-  loadAllIslands(): Island[] {
-    const rows = this.#driver.all<IslandRow>("SELECT * FROM islands ORDER BY rank ASC");
-    return rows.map((row) => this.#toIsland(row));
+  loadAllIslands(gameId: number): Island[] {
+    const rows = this.#driver.all<IslandRow>(
+      "SELECT * FROM islands WHERE game_id = ? ORDER BY rank ASC",
+      gameId,
+    );
+    return rows.map((row) => this.#toIsland(gameId, row));
   }
 
-  findIsland(id: number): Island | undefined {
-    const row = this.#driver.get<IslandRow>("SELECT * FROM islands WHERE id = ?", id);
-    return row === undefined ? undefined : this.#toIsland(row);
+  findIsland(gameId: number, id: number): Island | undefined {
+    const row = this.#driver.get<IslandRow>(
+      "SELECT * FROM islands WHERE game_id = ? AND id = ?",
+      gameId,
+      id,
+    );
+    return row === undefined ? undefined : this.#toIsland(gameId, row);
   }
 
-  findIslandByName(name: string): IslandSummary | undefined {
-    const row = this.#driver.get<IslandRow>("SELECT * FROM islands WHERE name = ?", name);
+  findIslandByName(gameId: number, name: string): IslandSummary | undefined {
+    const row = this.#driver.get<IslandRow>(
+      "SELECT * FROM islands WHERE game_id = ? AND name = ?",
+      gameId,
+      name,
+    );
     return row === undefined ? undefined : this.#mapper.rowToSummary(row);
   }
 
-  findIslandByOwner(userId: string): IslandSummary | undefined {
+  findIslandByOwner(gameId: number, userId: string): IslandSummary | undefined {
     const row = this.#driver.get<IslandRow>(
-      "SELECT * FROM islands WHERE owner_user_id = ?",
+      "SELECT * FROM islands WHERE game_id = ? AND owner_user_id = ?",
+      gameId,
       userId,
     );
     return row === undefined ? undefined : this.#mapper.rowToSummary(row);
   }
 
-  #toIsland(row: IslandRow): Island {
-    const lbbsRows = this.#lbbsRows(row.id);
+  #toIsland(gameId: number, row: IslandRow): Island {
+    const lbbsRows = this.#lbbsRows(gameId, row.id);
     return this.#mapper.rowToIsland(row, lbbsRows);
   }
 
-  #lbbsRows(islandId: number): LbbsRow[] {
+  #lbbsRows(gameId: number, islandId: number): LbbsRow[] {
     return this.#driver.all<LbbsRow>(
-      "SELECT * FROM lbbs_posts WHERE island_id = ? ORDER BY position ASC",
+      "SELECT * FROM lbbs_posts WHERE game_id = ? AND island_id = ? ORDER BY position ASC",
+      gameId,
       islandId,
     );
   }
 
-  #currentTurn(): number {
-    const row = this.#driver.get<{ turn: number }>("SELECT turn FROM game WHERE id = 1");
+  #currentTurn(gameId: number): number {
+    const row = this.#driver.get<{ turn: number }>("SELECT turn FROM games WHERE id = ?", gameId);
     return row?.turn ?? 0;
   }
 
-  insertIsland(island: Island, rank: number): void {
+  insertIsland(gameId: number, island: Island, rank: number): void {
     const v = this.#mapper.islandToColumnValues(island);
-    const createdTurn = this.#currentTurn();
+    const createdTurn = this.#currentTurn(gameId);
     this.#driver.run(
       `INSERT INTO islands (
-         id, rank, name, owner_user_id, comment, score, absent, money, food,
+         game_id, id, rank, name, owner_user_id, comment, score, absent, money, food,
          pop, area, farm, factory, mountain,
          prize_flags, prize_monsters, prize_turns, terrain, commands, created_turn
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      gameId,
       v.id,
       rank,
       v.name,
@@ -208,58 +307,69 @@ export class SqliteGameRepository implements GameRepository {
       v.commands,
       createdTurn,
     );
-    this.#syncLbbs(island.id, island.lbbs);
+    this.#syncLbbs(gameId, island.id, island.lbbs);
   }
 
   /** rank 以外の全列 + lbbs (replaceLbbs 相当) を更新する。fake-repository.ts の updateIsland と同じ意味論。 */
-  updateIsland(island: Island): void {
+  updateIsland(gameId: number, island: Island): void {
     const v = this.#mapper.islandToColumnValues(island);
     this.#driver.run(
-      `UPDATE islands SET ${ISLAND_UPDATE_COLUMNS_SQL} WHERE id = ?`,
+      `UPDATE islands SET ${ISLAND_UPDATE_COLUMNS_SQL} WHERE game_id = ? AND id = ?`,
       ...columnValuesToParams(v),
+      gameId,
       v.id,
     );
-    this.#syncLbbs(island.id, island.lbbs);
+    this.#syncLbbs(gameId, island.id, island.lbbs);
   }
 
   /**
    * ターン処理後: 渡された順に rank を振り直し、含まれない ID (死滅島) を掲示板ごと削除する。
-   * rank は UNIQUE 制約があるため 2 パスで行う: 全行を負値へ退避 → 各島を確定した rank で UPDATE。
-   * 最後まで負値のまま残った行 (= 渡された配列に無かった既存島) を削除する。
+   * rank は (game_id, rank) UNIQUE 制約があるため 2 パスで行う: 対象ゲームの全行を負値へ退避 →
+   * 各島を確定した rank で UPDATE。最後まで負値のまま残った行 (= 渡された配列に無かった既存島)
+   * を削除する。
    */
-  replaceAllIslands(islands: Island[]): void {
-    this.#driver.exec("UPDATE islands SET rank = -rank - 1");
+  replaceAllIslands(gameId: number, islands: Island[]): void {
+    this.#driver.run("UPDATE islands SET rank = -rank - 1 WHERE game_id = ?", gameId);
     islands.forEach((island, index) => {
       const v = this.#mapper.islandToColumnValues(island);
       this.#driver.run(
-        `UPDATE islands SET rank = ?, ${ISLAND_UPDATE_COLUMNS_SQL} WHERE id = ?`,
+        `UPDATE islands SET rank = ?, ${ISLAND_UPDATE_COLUMNS_SQL} WHERE game_id = ? AND id = ?`,
         index,
         ...columnValuesToParams(v),
+        gameId,
         v.id,
       );
-      this.#syncLbbs(island.id, island.lbbs);
+      this.#syncLbbs(gameId, island.id, island.lbbs);
     });
     this.#driver.run(
-      "DELETE FROM lbbs_posts WHERE island_id IN (SELECT id FROM islands WHERE rank < 0)",
+      `DELETE FROM lbbs_posts WHERE game_id = ? AND island_id IN
+       (SELECT id FROM islands WHERE game_id = ? AND rank < 0)`,
+      gameId,
+      gameId,
     );
-    this.#driver.run("DELETE FROM islands WHERE rank < 0");
+    this.#driver.run("DELETE FROM islands WHERE game_id = ? AND rank < 0", gameId);
   }
 
-  deleteIsland(id: number): void {
-    this.#driver.run("DELETE FROM lbbs_posts WHERE island_id = ?", id);
-    this.#driver.run("DELETE FROM islands WHERE id = ?", id);
+  deleteIsland(gameId: number, id: number): void {
+    this.#driver.run("DELETE FROM lbbs_posts WHERE game_id = ? AND island_id = ?", gameId, id);
+    this.#driver.run("DELETE FROM islands WHERE game_id = ? AND id = ?", gameId, id);
   }
 
-  replaceLbbs(islandId: number, posts: LbbsPost[]): void {
-    this.#syncLbbs(islandId, posts);
+  replaceLbbs(gameId: number, islandId: number, posts: LbbsPost[]): void {
+    this.#syncLbbs(gameId, islandId, posts);
   }
 
-  #syncLbbs(islandId: number, posts: LbbsPost[]): void {
-    this.#driver.run("DELETE FROM lbbs_posts WHERE island_id = ?", islandId);
+  #syncLbbs(gameId: number, islandId: number, posts: LbbsPost[]): void {
+    this.#driver.run(
+      "DELETE FROM lbbs_posts WHERE game_id = ? AND island_id = ?",
+      gameId,
+      islandId,
+    );
     posts.forEach((post, position) => {
       this.#driver.run(
-        `INSERT INTO lbbs_posts (island_id, position, author, user_id, name, message, turn)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO lbbs_posts (game_id, island_id, position, author, user_id, name, message, turn)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        gameId,
         islandId,
         position,
         post.author,
@@ -271,10 +381,11 @@ export class SqliteGameRepository implements GameRepository {
     });
   }
 
-  appendLogs(entries: LogEntry[]): void {
+  appendLogs(gameId: number, entries: LogEntry[]): void {
     for (const entry of entries) {
       this.#driver.run(
-        "INSERT INTO logs (turn, seq, secret, island_id, target_id, html) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO logs (game_id, turn, seq, secret, island_id, target_id, html) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        gameId,
         entry.turn,
         entry.seq,
         entry.secret ? 1 : 0,
@@ -286,9 +397,9 @@ export class SqliteGameRepository implements GameRepository {
   }
 
   /** 04-database.md 「ログの取得ルール」節の SQL 化。 */
-  listLogs(q: ListLogsQuery): LogEntry[] {
-    const conditions: string[] = ["turn >= ?"];
-    const params: SqlParam[] = [q.sinceTurn];
+  listLogs(gameId: number, q: ListLogsQuery): LogEntry[] {
+    const conditions: string[] = ["game_id = ?", "turn >= ?"];
+    const params: SqlParam[] = [gameId, q.sinceTurn];
 
     if (q.islandId !== undefined) {
       conditions.push("(island_id = ? OR target_id = ?)");
@@ -316,45 +427,37 @@ export class SqliteGameRepository implements GameRepository {
     }));
   }
 
-  deleteLogsBefore(turn: number): void {
-    this.#driver.run("DELETE FROM logs WHERE turn < ?", turn);
+  deleteLogsBefore(gameId: number, turn: number): void {
+    this.#driver.run("DELETE FROM logs WHERE game_id = ? AND turn < ?", gameId, turn);
   }
 
-  appendHistory(entries: HistoryEntry[]): void {
+  appendHistory(gameId: number, entries: HistoryEntry[]): void {
     for (const entry of entries) {
-      this.#driver.run("INSERT INTO history (turn, html) VALUES (?, ?)", entry.turn, entry.html);
+      this.#driver.run(
+        "INSERT INTO history (game_id, turn, html) VALUES (?, ?, ?)",
+        gameId,
+        entry.turn,
+        entry.html,
+      );
     }
   }
 
-  listHistory(limit: number): HistoryEntry[] {
+  listHistory(gameId: number, limit: number): HistoryEntry[] {
     const rows = this.#driver.all<HistoryRow>(
-      "SELECT turn, html FROM history ORDER BY id DESC LIMIT ?",
+      "SELECT turn, html FROM history WHERE game_id = ? ORDER BY id DESC LIMIT ?",
+      gameId,
       limit,
     );
     return rows.map((row) => ({ turn: row.turn, html: row.html }));
   }
 
-  trimHistory(keep: number): void {
+  trimHistory(gameId: number, keep: number): void {
     this.#driver.run(
-      "DELETE FROM history WHERE id NOT IN (SELECT id FROM history ORDER BY id DESC LIMIT ?)",
+      `DELETE FROM history WHERE game_id = ? AND id NOT IN
+       (SELECT id FROM history WHERE game_id = ? ORDER BY id DESC LIMIT ?)`,
+      gameId,
+      gameId,
       keep,
-    );
-  }
-
-  initialize(meta: GameMeta): void {
-    this.#driver.run(
-      `INSERT INTO game (id, turn, last_time, next_island_id, final_turn, start_at, unit_time_sec)
-       VALUES (1, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT (id) DO UPDATE SET
-         turn = excluded.turn, last_time = excluded.last_time, next_island_id = excluded.next_island_id,
-         final_turn = excluded.final_turn, start_at = excluded.start_at,
-         unit_time_sec = excluded.unit_time_sec`,
-      meta.turn,
-      meta.lastTime,
-      meta.nextIslandId,
-      meta.finalTurn,
-      meta.startAt,
-      meta.unitTimeSec,
     );
   }
 
@@ -364,7 +467,7 @@ export class SqliteGameRepository implements GameRepository {
        DELETE FROM islands;
        DELETE FROM logs;
        DELETE FROM history;
-       DELETE FROM game;
+       DELETE FROM games;
        DELETE FROM backups;`,
     );
   }

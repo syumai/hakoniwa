@@ -10,7 +10,7 @@ import {
   parseLbbsDeleteForm,
   parseNameForm,
 } from "../forms/island-forms.ts";
-import { listIslandSelectOptions } from "./helpers.ts";
+import { listIslandSelectOptions, requireCurrentGameId } from "./helpers.ts";
 import { renderPage } from "./render.tsx";
 import { MyIslandPage } from "../views/my-island.tsx";
 
@@ -18,7 +18,8 @@ export function createMyIslandRoutes(deps: WebDeps): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
 
   app.get("/my-island", (c) => {
-    const vm = deps.gameService.openOwnerPage(c.get("user"));
+    const gameId = requireCurrentGameId(deps.gameService);
+    const vm = deps.gameService.openOwnerPage(c.get("user"), gameId);
     const targets = listIslandSelectOptions(deps.gameService);
     return renderPage(
       c,
@@ -33,9 +34,10 @@ export function createMyIslandRoutes(deps: WebDeps): Hono<AppEnv> {
   });
 
   app.post("/my-island/commands", async (c) => {
+    const gameId = requireCurrentGameId(deps.gameService);
     const body = await parseStringBody(c);
     const form = parseCommandForm(body);
-    const result = deps.gameService.registerCommand(c.get("user"), form.input);
+    const result = deps.gameService.registerCommand(c.get("user"), gameId, form.input);
     const targets = listIslandSelectOptions(deps.gameService);
     return renderPage(
       c,
@@ -51,9 +53,10 @@ export function createMyIslandRoutes(deps: WebDeps): Hono<AppEnv> {
   });
 
   app.post("/my-island/comment", async (c) => {
+    const gameId = requireCurrentGameId(deps.gameService);
     const body = await parseStringBody(c);
     const form = parseCommentForm(body);
-    const result = deps.gameService.updateComment(c.get("user"), form.message);
+    const result = deps.gameService.updateComment(c.get("user"), gameId, form.message);
     const targets = listIslandSelectOptions(deps.gameService);
     return renderPage(
       c,
@@ -69,9 +72,10 @@ export function createMyIslandRoutes(deps: WebDeps): Hono<AppEnv> {
   });
 
   app.post("/my-island/name", async (c) => {
+    const gameId = requireCurrentGameId(deps.gameService);
     const body = await parseStringBody(c);
     const form = parseNameForm(body);
-    const result = deps.gameService.changeName(c.get("user"), form.name);
+    const result = deps.gameService.changeName(c.get("user"), gameId, form.name);
     const targets = listIslandSelectOptions(deps.gameService);
     return renderPage(
       c,
@@ -87,9 +91,10 @@ export function createMyIslandRoutes(deps: WebDeps): Hono<AppEnv> {
   });
 
   app.post("/my-island/lbbs/delete", async (c) => {
+    const gameId = requireCurrentGameId(deps.gameService);
     const body = await parseStringBody(c);
     const form = parseLbbsDeleteForm(body);
-    const result = deps.gameService.deleteLbbs(c.get("user"), form.number);
+    const result = deps.gameService.deleteLbbs(c.get("user"), gameId, form.number);
     const targets = listIslandSelectOptions(deps.gameService);
     return renderPage(
       c,

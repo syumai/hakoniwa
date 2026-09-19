@@ -1,4 +1,5 @@
-// tmp/04-database.md 「スキーマ」節 + tmp/14-users-auth.md 「データモデル」節 (v2) の DDL。
+// tmp/04-database.md 「スキーマ」節 + tmp/14-users-auth.md 「データモデル」節 (v2) +
+// tmp/18-games.md 「データ (スキーマ v5)」節の DDL。
 // 設計書との差異: 設計書は `packages/game/schema.sql` を正としてここへ文字列として埋め込む
 // 想定だが、schema.sql (人が読むためのコピー) と schema.ts (実際に読まれる文字列) の二重管理を
 // 避けるため、schema.sql は置かず本ファイルのみを正とする (Vite の `?raw` import は
@@ -12,34 +13,41 @@
  * このファイルが適用するスキーマのバージョン。v1 (パスワード認証) からの自動移行は提供しない。
  * v3: tmp/16-season.md。`game.final_turn` (最終ターン、NULL 可) を追加した。
  * v4: tmp/16-season.md「ターンの長さも DB に持つ (追加要件)」節。`game.unit_time_sec` を追加した。
+ * v5: tmp/18-games.md。`game` (単一行) を廃止し `games` (複数ゲーム) に置き換えた。`islands` の
+ *     主キーを `(game_id, id)` に変更し、`lbbs_posts`/`logs`/`history` に `game_id` を追加した。
  */
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export const schemaSql = `
 CREATE TABLE schema_version (
   version INTEGER NOT NULL
 ) STRICT;
 
--- Perl: hakojima.dat 先頭 4 行。常に 1 行
--- v3: final_turn (最終ターン。NULL なら無期限)、start_at (ターン1が始まる unix 秒) を追加。
--- v4: unit_time_sec (1 ターンの長さ、秒) を追加。tmp/16-season.md。
-CREATE TABLE game (
-  id              INTEGER PRIMARY KEY CHECK (id = 1),
+-- Perl: hakojima.dat 先頭 4 行の複数ゲーム版。tmp/18-games.md「データ (スキーマ v5)」。
+-- 現在のゲームは MAX(id) の行。ゲームが終了したら status='finished' になり、次のゲームを開始できる。
+CREATE TABLE games (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  name            TEXT    NOT NULL,
+  status          TEXT    NOT NULL CHECK (status IN ('running', 'finished')),
   turn            INTEGER NOT NULL,
   last_time       INTEGER NOT NULL,
-  next_island_id  INTEGER NOT NULL,
-  final_turn      INTEGER,
   start_at        INTEGER NOT NULL,
-  unit_time_sec   INTEGER NOT NULL
+  final_turn      INTEGER,
+  unit_time_sec   INTEGER NOT NULL,
+  next_island_id  INTEGER NOT NULL,
+  created_at      INTEGER NOT NULL,
+  finished_at     INTEGER
 ) STRICT;
 
 -- Perl: hakojima.dat の島ブロック + island.N
 -- v2: password_hash を削除し、owner_user_id (better-auth "user".id, 1 ユーザー 1 島) を追加。
+-- v5: 主キーを (game_id, id) に変更 (島 ID はゲーム内で 1 から採番)。tmp/18-games.md。
 CREATE TABLE islands (
-  id              INTEGER PRIMARY KEY,
-  rank            INTEGER NOT NULL UNIQUE,
-  name            TEXT    NOT NULL UNIQUE,
-  owner_user_id   TEXT    NOT NULL UNIQUE,
+  game_id         INTEGER NOT NULL,
+  id              INTEGER NOT NULL,
+  rank            INTEGER NOT NULL,
+  name            TEXT    NOT NULL,
+  owner_user_id   TEXT    NOT NULL,
   comment         TEXT    NOT NULL DEFAULT '',
   score           INTEGER NOT NULL DEFAULT 0,
   absent          INTEGER NOT NULL DEFAULT 0,
@@ -55,13 +63,23 @@ CREATE TABLE islands (
   prize_turns     TEXT    NOT NULL DEFAULT '[]',
   terrain         TEXT    NOT NULL,
   commands        TEXT    NOT NULL,
-  created_turn    INTEGER NOT NULL
+  created_turn    INTEGER NOT NULL,
+  PRIMARY KEY (game_id, id)
 ) STRICT;
+CREATE UNIQUE INDEX islands_game_rank  ON islands(game_id, rank);
+CREATE UNIQUE INDEX islands_game_name  ON islands(game_id, name);
+CREATE UNIQUE INDEX islands_game_owner ON islands(game_id, owner_user_id);
 
 -- Perl: island.N 末尾の lbbs 行。position 0 が最新
 -- 外部キーは張らない (DO の PRAGMA 制限を避け、削除はリポジトリが明示的に行う)
 -- v2: user_id (投稿者の better-auth "user".id) を追加。
+-- v5: game_id を追加し、主キーを (game_id, island_id, position) に変更。
+-- 設計書 (04/18) は "ALTER TABLE ... ADD COLUMN game_id DEFAULT 1" のみを指示しているが、
+-- island_id はゲームごとに 1 から再採番されるため、旧主キー (island_id, position) のままでは
+-- 別のゲームの同じ island_id の投稿と衝突する。実際に動く形にするため、islands と同様
+-- 新表作成 → INSERT SELECT → DROP → RENAME で主キーに game_id を含めている (設計書との差異)。
 CREATE TABLE lbbs_posts (
+  game_id     INTEGER NOT NULL DEFAULT 1,
   island_id   INTEGER NOT NULL,
   position    INTEGER NOT NULL,
   author      TEXT    NOT NULL CHECK (author IN ('visitor', 'owner')),
@@ -69,29 +87,34 @@ CREATE TABLE lbbs_posts (
   name        TEXT    NOT NULL,
   message     TEXT    NOT NULL,
   turn        INTEGER NOT NULL,
-  PRIMARY KEY (island_id, position)
+  PRIMARY KEY (game_id, island_id, position)
 ) STRICT;
 
 -- Perl: hakojima.logN (N = 何ターン前か)。turn 列で代替
+-- v5: game_id を追加 (tmp/18-games.md)。
 CREATE TABLE logs (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  game_id     INTEGER NOT NULL DEFAULT 1,
   turn        INTEGER NOT NULL,
-  seq         INTEGER NOT NULL,
+  seq         INTEGER NOT NULL,     -- 同一ターン内の表示順 (logFlush の出力順)
   secret      INTEGER NOT NULL DEFAULT 0,
   island_id   INTEGER NOT NULL DEFAULT 0,
   target_id   INTEGER NOT NULL DEFAULT 0,
   html        TEXT    NOT NULL
 ) STRICT;
-CREATE INDEX logs_turn_seq ON logs(turn, seq);
-CREATE INDEX logs_island   ON logs(island_id, turn);
-CREATE INDEX logs_target   ON logs(target_id, turn);
+CREATE INDEX logs_game_turn_seq ON logs(game_id, turn, seq);
+CREATE INDEX logs_game_island   ON logs(game_id, island_id, turn);
+CREATE INDEX logs_game_target   ON logs(game_id, target_id, turn);
 
 -- Perl: hakojima.his
+-- v5: game_id を追加 (tmp/18-games.md)。
 CREATE TABLE history (
   id      INTEGER PRIMARY KEY AUTOINCREMENT,
+  game_id INTEGER NOT NULL DEFAULT 1,
   turn    INTEGER NOT NULL,
   html    TEXT    NOT NULL
 ) STRICT;
+CREATE INDEX history_game ON history(game_id, id);
 
 -- Workers 版のみ使用 (PITR ブックマークの台帳)。Node 版では空のまま
 CREATE TABLE backups (
@@ -160,7 +183,7 @@ CREATE TABLE verification (
 ) STRICT;
 CREATE INDEX verification_identifier ON verification(identifier);
 
--- アプリ側: 計画登録フォームの初期値 (v1 の hako_defaults Cookie の置き換え)。
+-- アプリ側: 計画登録フォームの初期値 (v1 の hako_defaults Cookie の置き換え)。ゲームに依らない。
 CREATE TABLE user_prefs (
   user_id TEXT NOT NULL PRIMARY KEY,
   prefs   TEXT NOT NULL

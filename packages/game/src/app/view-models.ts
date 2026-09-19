@@ -2,7 +2,7 @@
 // tmp/06-web-routes-and-views.md 「画面」節、Perl 版 Top.pm / Map.pm の各 temp* 関数が
 // 表示していた情報を構造化したもの。
 import type { AuthUser } from "./auth.ts";
-import type { UserPrefs } from "./ports.ts";
+import type { GameStatus, GameSummary, UserPrefs } from "./ports.ts";
 import type { SeasonVM } from "./season.ts";
 import type { GameConfig } from "../core/config.ts";
 import type { FormattedCommand } from "../core/commands/format.ts";
@@ -77,11 +77,23 @@ export interface ViewerVM {
   hasIsland: boolean;
 }
 
+/**
+ * 画面に表示するゲームの識別情報。tmp/18-games.md「GameService」節:
+ * TopPageVM/OwnerPageVM/IslandPageVM に含める `game` フィールド。
+ */
+export interface GameHeaderVM {
+  id: number;
+  name: string;
+  status: GameStatus;
+  /** 現在のゲーム (`repo.getCurrentGameId()`) と一致するか。過去のゲームなら false。 */
+  isCurrent: boolean;
+}
+
 /** トップ画面全体。 */
 export interface TopPageVM {
   turn: number;
   islands: IslandRowVM[];
-  /** 島の数が上限未満か (新規作成フォームを出すかどうか)。 */
+  /** 島の数が上限未満か (新規作成フォームを出すかどうか)。現在のゲーム以外は常に false。 */
   canCreate: boolean;
   logs: LogEntry[];
   history: HistoryEntry[];
@@ -89,6 +101,8 @@ export interface TopPageVM {
   viewer: ViewerVM;
   /** 開始時刻・最終ターン・状態 (開始前/進行中/終了)。tmp/16-season.md。 */
   season: SeasonVM;
+  /** tmp/18-games.md。 */
+  game: GameHeaderVM;
 }
 
 /** 観光/開発/新規発見画面で共通の島情報。Perl 版 islandInfo + islandMap の情報部分。 */
@@ -117,7 +131,10 @@ export interface IslandOgpVM {
   title: string;
   /** og:description。「ターンN / 人口 X人・面積 Y万坪・順位 Z位」。 */
   description: string;
-  /** `/islands/:id/ogp.png?turn=N` (相対パス)。絶対 URL 化は web 層 (views/island.tsx) が行う。 */
+  /**
+   * `/games/:gameId/islands/:id/ogp.png?turn=N` (相対パス)。tmp/18-games.md「ルート」節。
+   * 絶対 URL 化は web 層 (views/island.tsx) が行う。
+   */
   imagePath: string;
   width: number;
   height: number;
@@ -126,6 +143,7 @@ export interface IslandOgpVM {
 /** IslandDetailVM から IslandOgpVM を組み立てる。 */
 export function buildIslandOgpVM(
   detail: Pick<IslandDetailVM, "id" | "name" | "rank" | "turn" | "pop" | "area">,
+  gameId: number,
   config: GameConfig,
 ): IslandOgpVM {
   return {
@@ -133,7 +151,7 @@ export function buildIslandOgpVM(
     description:
       `ターン${detail.turn} / 人口 ${detail.pop}${config.units.pop}・` +
       `面積 ${detail.area}${config.units.area}・順位 ${detail.rank}位`,
-    imagePath: `/islands/${detail.id}/ogp.png?turn=${detail.turn}`,
+    imagePath: `/games/${gameId}/islands/${detail.id}/ogp.png?turn=${detail.turn}`,
     width: OGP_WIDTH,
     height: OGP_HEIGHT,
   };
@@ -147,6 +165,8 @@ export interface IslandPageVM extends IslandDetailVM {
   logs: LogEntry[];
   /** tmp/17-ogp.md。GET /islands/:id の OGP メタタグ用。 */
   ogp: IslandOgpVM;
+  /** tmp/18-games.md。 */
+  game: GameHeaderVM;
 }
 
 /** 開発画面。Perl 版 ownerMain。島主本人向けなので資金は実値。 */
@@ -165,6 +185,8 @@ export interface OwnerPageVM extends IslandDetailVM {
   defaults: UserPrefs;
   /** 開始時刻・最終ターン・状態 (開始前/進行中/終了)。tmp/16-season.md。終了後はフォームを隠す。 */
   season: SeasonVM;
+  /** tmp/18-games.md。過去のゲーム (isCurrent=false) は読み取り専用として扱う。 */
+  game: GameHeaderVM;
 }
 
 /** 新規発見画面。Perl 版 newIslandMain (tempNewIslandHead + islandInfo + islandMap(owner))。 */
@@ -176,4 +198,9 @@ export interface NewIslandVM extends IslandDetailVM {
 export interface IslandSelectVM {
   id: number;
   name: string;
+}
+
+/** GET /games (ゲーム一覧) の 1 行。tmp/18-games.md「表示」節: 名前/開始/終了/ターン数/島数/状態。 */
+export interface GameListItemVM extends GameSummary {
+  isCurrent: boolean;
 }

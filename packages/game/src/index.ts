@@ -120,6 +120,9 @@ export { runTurn, createTurnContext } from "./core/turn/index.ts";
 
 export type {
   GameMeta,
+  GameStatus,
+  GameSummary,
+  CreateGameInput,
   IslandSummary,
   ListLogsQuery,
   GameRepository,
@@ -157,6 +160,7 @@ export type {
   PrizeVM,
   IslandRowVM,
   ViewerVM,
+  GameHeaderVM,
   TopPageVM,
   IslandDetailVM,
   IslandPageVM,
@@ -164,6 +168,7 @@ export type {
   OwnerPageVM,
   NewIslandVM,
   IslandSelectVM,
+  GameListItemVM,
 } from "./app/view-models.ts";
 export { aboutMoney, buildMoneyDisplay, buildIslandOgpVM } from "./app/view-models.ts";
 
@@ -177,6 +182,7 @@ export type {
   AdminStatus,
   AdminServiceDeps,
   AdminInitializeOptions,
+  StartGameOptions,
   AuthMethodsVM,
 } from "./app/admin-service.ts";
 export { AdminService } from "./app/admin-service.ts";

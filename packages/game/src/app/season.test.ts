@@ -1,31 +1,38 @@
-// tmp/16-season.md 「状態判定」節のテスト。
+// tmp/16-season.md 「状態判定」節 + tmp/18-games.md 「定義」節のテスト。
 import { describe, expect, it } from "vitest";
 import type { GameMeta } from "./ports.ts";
 import { buildSeasonVM, isBeforeStart, isFinished } from "./season.ts";
 
 function meta(overrides: Partial<GameMeta> = {}): GameMeta {
   return {
+    id: 1,
+    name: "第 1 回",
+    status: "running",
     turn: 1,
     lastTime: 1000,
     nextIslandId: 1,
     finalTurn: null,
     startAt: 1000,
     unitTimeSec: 21600,
+    createdAt: 1000,
+    finishedAt: null,
     ...overrides,
   };
 }
 
 describe("isFinished", () => {
-  it("finalTurn が null なら常に false", () => {
-    expect(isFinished(meta({ turn: 9999, finalTurn: null }))).toBe(false);
+  it("status='running' なら false", () => {
+    expect(isFinished(meta({ status: "running", turn: 9999, finalTurn: null }))).toBe(false);
   });
 
-  it("turn が finalTurn 以下なら false", () => {
-    expect(isFinished(meta({ turn: 5, finalTurn: 5 }))).toBe(false);
+  it("status='running' で turn が finalTurn を超えていても、status を明示的に更新するまでは false", () => {
+    expect(isFinished(meta({ status: "running", turn: 6, finalTurn: 5 }))).toBe(false);
   });
 
-  it("turn が finalTurn を超えたら true", () => {
-    expect(isFinished(meta({ turn: 6, finalTurn: 5 }))).toBe(true);
+  it("status='finished' なら true (tmp/18-games.md: 終了判定は状態列に昇格した)", () => {
+    expect(isFinished(meta({ status: "finished", turn: 6, finalTurn: 5, finishedAt: 6000 }))).toBe(
+      true,
+    );
   });
 });
 
@@ -41,6 +48,12 @@ describe("isBeforeStart", () => {
   it("turn が1でなければ false", () => {
     expect(isBeforeStart(meta({ turn: 2, startAt: 1000 }), 0)).toBe(false);
   });
+
+  it("終了済みなら turn===1 でも false", () => {
+    expect(
+      isBeforeStart(meta({ turn: 1, startAt: 1000, status: "finished", finishedAt: 0 }), 0),
+    ).toBe(false);
+  });
 });
 
 describe("buildSeasonVM", () => {
@@ -49,6 +62,9 @@ describe("buildSeasonVM", () => {
   it("開始前: state='before'、nextTurnAt は null", () => {
     const vm = buildSeasonVM(meta({ turn: 1, startAt: 1000, finalTurn: null, unitTimeSec }), 500);
     expect(vm).toEqual({
+      gameId: 1,
+      gameName: "第 1 回",
+      status: "running",
       turn: 1,
       finalTurn: null,
       state: "before",
@@ -65,6 +81,9 @@ describe("buildSeasonVM", () => {
       5000,
     );
     expect(vm).toEqual({
+      gameId: 1,
+      gameName: "第 1 回",
+      status: "running",
       turn: 3,
       finalTurn: 10,
       state: "running",
@@ -84,9 +103,22 @@ describe("buildSeasonVM", () => {
     expect(vm.unitTimeSec).toBe(60);
   });
 
-  it("終了後: state='finished'、finishedAtTurn は finalTurn、nextTurnAt は null", () => {
-    const vm = buildSeasonVM(meta({ turn: 11, startAt: 1000, finalTurn: 10, unitTimeSec }), 999999);
+  it("終了後 (最終ターン到達): state='finished'、finishedAtTurn は finalTurn、nextTurnAt は null", () => {
+    const vm = buildSeasonVM(
+      meta({
+        turn: 11,
+        startAt: 1000,
+        finalTurn: 10,
+        unitTimeSec,
+        status: "finished",
+        finishedAt: 999999,
+      }),
+      999999,
+    );
     expect(vm).toEqual({
+      gameId: 1,
+      gameName: "第 1 回",
+      status: "finished",
       turn: 11,
       finalTurn: 10,
       state: "finished",
@@ -95,5 +127,22 @@ describe("buildSeasonVM", () => {
       nextTurnAt: null,
       unitTimeSec,
     });
+  });
+
+  it("終了後 (手動終了。turn が finalTurn 以下): finishedAtTurn は現在の turn", () => {
+    const vm = buildSeasonVM(
+      meta({
+        turn: 4,
+        startAt: 1000,
+        finalTurn: 10,
+        unitTimeSec,
+        status: "finished",
+        finishedAt: 6000,
+      }),
+      6000,
+    );
+    expect(vm.state).toBe("finished");
+    expect(vm.finishedAtTurn).toBe(4);
+    expect(vm.nextTurnAt).toBeNull();
   });
 });
