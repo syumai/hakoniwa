@@ -17,12 +17,21 @@ export interface GameMeta {
   name: string;
   status: GameStatus;
   turn: number;
+  /**
+   * ゲーム開始直後のターン番号。tmp/16-season.md「開始前の状態 = ターン 0 (改訂 2026-09-20)」節。
+   * 新方式のゲームは 0 (`createGame` が設定する)。スキーマ v7 移行前から動いていた旧方式の
+   * ゲームは 1 のまま変わらない (番号・ログ・終了時刻を変えないため)。実行済みの処理回数は
+   * `turn - firstTurn`。終了判定 (`next.turn - firstTurn >= finalTurn`) と `finishedAtTurn` の
+   * 計算にのみ使う。
+   */
+  firstTurn: number;
   lastTime: number;
   /**
-   * ターン1が始まる (始まった) unix 秒。tmp/16-season.md は `last_time` の初期値から逆算する
-   * 設計だったが、`unitTimeSec` の変更に弱く分かりにくいため、DB に直接持つ列にした
-   * (設計書との差異)。`createGame` 時に `lastTime` と同じ値で設定され、ターン1の間は
-   * `setLastTime` (管理画面「最終更新時刻の変更」) が同期して更新する。ターン2以降は不変。
+   * ターン1の処理 (ゲーム開始) が実行される (実行された) unix 秒。tmp/16-season.md は
+   * `last_time` の初期値から逆算する設計だったが、`unitTimeSec` の変更に弱く分かりにくいため、
+   * DB に直接持つ列にした (設計書との差異)。`createGame` 時に `lastTime` と同じ値で設定され、
+   * 開始前 (turn=0) の間は `setLastTime` (管理画面「最終更新時刻の変更」) が同期して更新する
+   * (tmp/16-season.md「開始前の状態 = ターン 0」節)。turn>=1 になった後は不変。
    */
   startAt: number;
   /** 最終ターン (tmp/16-season.md)。NULL なら無期限。 */
@@ -121,7 +130,10 @@ export interface GameRepository {
   getMeta(gameId: number): GameMeta;
   /** `meta.id` で対象のゲームを特定して更新する。 */
   saveMeta(meta: GameMeta): void;
-  /** 新しいゲームを作る (turn=1, nextIslandId=1, status='running')。新しい ID を返す。 */
+  /**
+   * 新しいゲームを作る (turn=0, firstTurn=0, nextIslandId=1, status='running')。新しい ID を返す。
+   * tmp/16-season.md「開始前の状態 = ターン 0 (改訂 2026-09-20)」節: turn=0 が開始前を表す。
+   */
   createGame(input: CreateGameInput, now: number): number;
   /** ゲームを終了状態にする (status='finished', finished_at=now)。 */
   finishGame(gameId: number, now: number): void;

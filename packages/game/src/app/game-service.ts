@@ -225,7 +225,7 @@ export class GameService {
       formatCommand(command, index, config, resolveIslandName),
     );
     const defaults: UserPrefs = repo.getUserPrefs(userId) ?? {};
-    const season = buildSeasonVM(meta, this.#deps.clock.now());
+    const season = buildSeasonVM(meta);
     const abandonCount = repo.countAbandonments(gameId, userId);
     return {
       ...buildDetailVM(island, rank, meta.turn),
@@ -289,7 +289,7 @@ export class GameService {
     const logs = repo.listLogs(gameId, { sinceTurn });
     const history = repo.listHistory(gameId, config.historyMax);
     const hasIsland = actor !== undefined && repo.findIslandByOwner(gameId, actor.id) !== undefined;
-    const season = buildSeasonVM(meta, this.#deps.clock.now());
+    const season = buildSeasonVM(meta);
     const game = this.#buildGameHeader(meta);
     return {
       turn: meta.turn,
@@ -426,8 +426,8 @@ export class GameService {
    * Perl 版 Map.pm commandMain の移植。actor 自身の島に対してのみ実行できる。
    * tmp/16-season.md「開始前の状態 (追加要件)」節の当初案では開始前の計画登録を拒否していたが、
    * コーディネーターの追加指示によりこの制限を撤回した (設計書との差異)。計画登録は島の作成・
-   * コメント・名前変更・掲示板と同じく開始前でも行える (開始前に登録した計画はターン1終了時に
-   * 実行される)。
+   * コメント・名前変更・掲示板と同じく開始前でも行える (開始前に登録した計画は、ゲーム開始時刻
+   * に実行される最初のターン処理 (tmp/16-season.md「開始前の状態 = ターン 0」節) で実行される)。
    */
   registerCommand(
     actor: AuthUser | undefined,

@@ -1,7 +1,7 @@
 // tmp/08-turn-trigger-admin-cli.md 「ターン進行トリガー」節 + tmp/18-games.md (複数ゲーム) の移植。
 // Perl 版 Main.pm readIslandsFile のターン判定 + Turn.pm turnMain の移植。
 import type { BackupStore, GameMeta, GameRepository, Logger } from "./ports.ts";
-import { isBeforeStart, isFinished } from "./season.ts";
+import { isFinished } from "./season.ts";
 import type { GameConfig } from "../core/config.ts";
 import type { Rng } from "../core/rng.ts";
 import type { World } from "../core/types.ts";
@@ -47,15 +47,16 @@ export class TurnService {
       if (isFinished(meta)) {
         break;
       }
-      // tmp/16-season.md「開始前の状態 (追加要件)」節: `now < startAt` を明示的に判定する
-      // (通常は `lastTime === startAt` のため下の期限判定で自然に満たされないが、
-      // `setLastTime` で過去にずらした場合にも整合させるため明示的に判定する)。
-      if (isBeforeStart(meta, now)) {
-        break;
-      }
-      // tmp/16-season.md「ターンの長さも DB に持つ」節: 期限判定は config ではなく meta.unitTimeSec
-      // (管理画面「ゲーム設定」/ CLI `game set-unit-time` で変更された値) を使う。
-      if (now - meta.lastTime < meta.unitTimeSec) {
+      // tmp/16-season.md「開始前の状態 = ターン 0 (改訂 2026-09-20)」節「進行判定」:
+      // turn===0 (開始前) は `now >= startAt` で期限到来とみなす (lastTime は見ない)。
+      // turn>=1 は従来どおり `now - lastTime >= unitTimeSec` (下の判定)。
+      if (meta.turn === 0) {
+        if (now < meta.startAt) {
+          break;
+        }
+      } else if (now - meta.lastTime < meta.unitTimeSec) {
+        // tmp/16-season.md「ターンの長さも DB に持つ」節: 期限判定は config ではなく
+        // meta.unitTimeSec (管理画面「ゲーム設定」/ CLI `game set-unit-time` で変更された値) を使う。
         break;
       }
       const advancedTurn = this.#advanceOnce(gameId, meta, now);
@@ -78,8 +79,9 @@ export class TurnService {
     if (isFinished(meta)) {
       return;
     }
-    // tmp/16-season.md「開始前の状態 (追加要件)」節: 管理者の手動進行も開始前は進めない。
-    if (isBeforeStart(meta, now)) {
+    // tmp/16-season.md「開始前の状態 = ターン 0 (改訂 2026-09-20)」節「進行判定」:
+    // 管理者の手動進行も、開始前 (turn===0) で `now < startAt` のときは進めない。
+    if (meta.turn === 0 && now < meta.startAt) {
       return;
     }
     this.#advanceOnce(gameId, meta, now);
@@ -88,8 +90,8 @@ export class TurnService {
   /**
    * 1 ターン分の進行を試みる。`tryBumpTurn` の楽観ロックに失敗したら undefined を返す。
    * 成功したら進行後の turn 番号を返す (呼び出し元がバックアップ要否の判定に使う)。
-   * 進行後に `turn > finalTurn` になったら、同じトランザクション内で `finishGame` を呼ぶ
-   * (tmp/18-games.md「TurnService」節)。
+   * 進行後に最終ターンへ達したら、同じトランザクション内で `finishGame` を呼ぶ
+   * (tmp/18-games.md「TurnService」節、tmp/16-season.md「開始前の状態 = ターン 0」節)。
    */
   #advanceOnce(gameId: number, meta: GameMeta, now: number): number | undefined {
     const { repo, config, rng } = this.#deps;
@@ -99,7 +101,10 @@ export class TurnService {
       const next: GameMeta = {
         ...meta,
         turn: meta.turn + 1,
-        lastTime: meta.lastTime + meta.unitTimeSec,
+        // tmp/16-season.md「開始前の状態 = ターン 0」節「進行判定」: turn===0 (開始前) の
+        // 処理では lastTime を startAt に据え置く (以降の期限は startAt + k * unitTimeSec)。
+        // turn>=1 は従来どおり unitTimeSec を加算する。
+        lastTime: meta.turn === 0 ? meta.startAt : meta.lastTime + meta.unitTimeSec,
       };
       if (!repo.tryBumpTurn(gameId, meta.turn, next)) {
         return false;
@@ -125,7 +130,9 @@ export class TurnService {
       repo.deleteLogsBefore(gameId, result.world.turn - config.logKeepTurns + 1);
       repo.trimHistory(gameId, config.historyMax);
 
-      if (next.finalTurn !== null && next.turn > next.finalTurn) {
+      // tmp/16-season.md「開始前の状態 = ターン 0」節「既存ゲームとの互換」: 実行済みの処理回数は
+      // `turn - firstTurn`。旧方式 (firstTurn=1) では従来の `turn > finalTurn` と同値になる。
+      if (next.finalTurn !== null && next.turn - next.firstTurn >= next.finalTurn) {
         repo.finishGame(gameId, now);
       }
 

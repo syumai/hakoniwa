@@ -262,8 +262,7 @@ export function MyIslandPage({
           <div class="owner-form-col">
             {vm.season.state === "before" ? (
               <p class="small">
-                ゲーム開始 ({formatDateTime(vm.season.startAt, timezone)})
-                後、ターン1の終了時に実行されます。
+                ゲーム開始 ({formatDateTime(vm.season.startAt, timezone)}) 時に実行されます。
               </p>
             ) : (
               ""

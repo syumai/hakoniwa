@@ -519,7 +519,7 @@ describe("tmp/16-season.md: ゲーム開始前 (now < startAt)", () => {
     });
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain("ターン1の終了時に実行されます");
+    expect(html).toContain("時に実行されます");
     expect(html).toContain('action="/games/1/my-island/commands"');
     expect(html).toContain('action="/games/1/my-island/comment"');
     expect(html).toContain('action="/games/1/my-island/name"');

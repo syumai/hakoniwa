@@ -18,8 +18,11 @@
  * v6: tmp/19-abandon.md (島の放棄)。`islands.abandoned_at` を追加し、所有の一意性を
  *     「放棄されていない島だけ」に絞った部分インデックスに変更した。放棄回数を記録する
  *     `abandonments` 表を追加した。
+ * v7: tmp/16-season.md「開始前の状態 = ターン 0 (改訂 2026-09-20)」節。`games.first_turn` を
+ *     追加した。ゲーム開始直後のターン番号 (新方式 = 0、旧方式 = 1)。新規ゲームは
+ *     `turn = 0, first_turn = 0` で作られ、開始時刻に最初のターン処理が行われて `turn = 1` になる。
  */
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 export const schemaSql = `
 CREATE TABLE schema_version (
@@ -28,11 +31,14 @@ CREATE TABLE schema_version (
 
 -- Perl: hakojima.dat 先頭 4 行の複数ゲーム版。tmp/18-games.md「データ (スキーマ v5)」。
 -- 現在のゲームは MAX(id) の行。ゲームが終了したら status='finished' になり、次のゲームを開始できる。
+-- v7: first_turn (tmp/16-season.md「開始前の状態 = ターン 0」節)。ゲーム開始直後のターン番号
+-- (新方式 = 0、旧方式 = 1)。実行済みの処理回数は turn - first_turn。
 CREATE TABLE games (
   id              INTEGER PRIMARY KEY AUTOINCREMENT,
   name            TEXT    NOT NULL,
   status          TEXT    NOT NULL CHECK (status IN ('running', 'finished')),
   turn            INTEGER NOT NULL,
+  first_turn      INTEGER NOT NULL,
   last_time       INTEGER NOT NULL,
   start_at        INTEGER NOT NULL,
   final_turn      INTEGER,

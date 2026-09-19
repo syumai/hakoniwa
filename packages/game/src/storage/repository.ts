@@ -20,6 +20,7 @@ interface GameRow {
   name: string;
   status: GameStatus;
   turn: number;
+  first_turn: number;
   last_time: number;
   start_at: number;
   final_turn: number | null;
@@ -79,6 +80,7 @@ function rowToMeta(row: GameRow): GameMeta {
     name: row.name,
     status: row.status,
     turn: row.turn,
+    firstTurn: row.first_turn,
     lastTime: row.last_time,
     startAt: row.start_at,
     finalTurn: row.final_turn,
@@ -139,7 +141,7 @@ export class SqliteGameRepository implements GameRepository {
 
   getMeta(gameId: number): GameMeta {
     const row = this.#driver.get<GameRow>(
-      `SELECT id, name, status, turn, last_time, start_at, final_turn, unit_time_sec,
+      `SELECT id, name, status, turn, first_turn, last_time, start_at, final_turn, unit_time_sec,
               next_island_id, created_at, finished_at
        FROM games WHERE id = ?`,
       gameId,
@@ -152,11 +154,12 @@ export class SqliteGameRepository implements GameRepository {
 
   saveMeta(meta: GameMeta): void {
     this.#driver.run(
-      `UPDATE games SET name = ?, status = ?, turn = ?, last_time = ?, start_at = ?,
+      `UPDATE games SET name = ?, status = ?, turn = ?, first_turn = ?, last_time = ?, start_at = ?,
        final_turn = ?, unit_time_sec = ?, next_island_id = ?, finished_at = ? WHERE id = ?`,
       meta.name,
       meta.status,
       meta.turn,
+      meta.firstTurn,
       meta.lastTime,
       meta.startAt,
       meta.finalTurn,
@@ -168,11 +171,13 @@ export class SqliteGameRepository implements GameRepository {
   }
 
   createGame(input: CreateGameInput, now: number): number {
+    // tmp/16-season.md「開始前の状態 = ターン 0 (改訂 2026-09-20)」節: 新規ゲームは
+    // turn=0, first_turn=0 で作る (開始前)。startAt に最初のターン処理が行われて turn=1 になる。
     const row = this.#driver.get<{ id: number }>(
       `INSERT INTO games (
-         name, status, turn, last_time, start_at, final_turn, unit_time_sec, next_island_id,
-         created_at, finished_at
-       ) VALUES (?, 'running', 1, ?, ?, ?, ?, 1, ?, NULL)
+         name, status, turn, first_turn, last_time, start_at, final_turn, unit_time_sec,
+         next_island_id, created_at, finished_at
+       ) VALUES (?, 'running', 0, 0, ?, ?, ?, ?, 1, ?, NULL)
        RETURNING id`,
       input.name,
       input.startAt,
@@ -197,12 +202,13 @@ export class SqliteGameRepository implements GameRepository {
 
   tryBumpTurn(gameId: number, expectedTurn: number, next: GameMeta): boolean {
     this.#driver.run(
-      `UPDATE games SET name = ?, status = ?, turn = ?, last_time = ?, start_at = ?,
+      `UPDATE games SET name = ?, status = ?, turn = ?, first_turn = ?, last_time = ?, start_at = ?,
        final_turn = ?, unit_time_sec = ?, next_island_id = ?, finished_at = ?
        WHERE id = ? AND turn = ?`,
       next.name,
       next.status,
       next.turn,
+      next.firstTurn,
       next.lastTime,
       next.startAt,
       next.finalTurn,

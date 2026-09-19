@@ -55,7 +55,8 @@ describe("FileBackupStore", () => {
     await store.restore("turn-1");
 
     // restore は driver.reopen() 済みなので、同じ driver 経由でそのまま読める。
-    expect(repo.getMeta(gameId).turn).toBe(1);
+    // tmp/16-season.md「開始前の状態 = ターン 0」節: バックアップ取得時点は turn=0 (開始前)。
+    expect(repo.getMeta(gameId).turn).toBe(0);
     expect(existsSync(`${dbPath}.before-restore`)).toBe(true);
   });
 

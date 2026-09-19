@@ -86,7 +86,8 @@ describe("管理画面 (/admin)", () => {
     expect(res.status).toBe(200);
     expect(await res.text()).toContain("新しいゲームを開始しました");
     expect(testApp.repo.isInitialized()).toBe(true);
-    expect(currentMeta(testApp).turn).toBe(1);
+    // tmp/16-season.md「開始前の状態 = ターン 0 (改訂 2026-09-20)」節: 新しいゲームは turn=0。
+    expect(currentMeta(testApp).turn).toBe(0);
     expect(currentMeta(testApp).name).toBe("第 1 回");
   });
 
@@ -180,7 +181,9 @@ describe("管理画面 (/admin)", () => {
       },
     );
     expect(res.status).toBe(200);
-    expect(currentMeta(testApp).turn).toBe(2);
+    // tmp/16-season.md「開始前の状態 = ターン 0」節: setupTestApp の既定ゲームは turn=0 (開始前)、
+    // startAt=INITIAL_CLOCK=clock.now() で作られるため、1 ターン進めると turn=1 になる。
+    expect(currentMeta(testApp).turn).toBe(1);
   });
 
   it("POST /admin/reset: 現役データを削除できる", async () => {
@@ -323,7 +326,8 @@ describe("tmp/16-season.md: 管理画面の開始時刻・最終ターン", () =
     expect(res.status).toBe(200);
     const meta = currentMeta(testApp);
     expect(meta.finalTurn).toBe(50);
-    expect(meta.turn).toBe(1);
+    // tmp/16-season.md「開始前の状態 = ターン 0」節: 開始日時が未来 (2026-10-01) なので turn=0 (開始前)。
+    expect(meta.turn).toBe(0);
     expect(meta.lastTime).toBe(meta.startAt);
   });
 

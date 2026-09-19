@@ -8,6 +8,7 @@ import { createTerrain } from "../core/terrain.ts";
 import type { Island } from "../core/types.ts";
 import { FakeBackupStore, FakeGameRepository, FakeLogger } from "./fake-repository.ts";
 import type { GameMeta } from "./ports.ts";
+import { buildSeasonVM } from "./season.ts";
 import { TurnService } from "./turn-service.ts";
 
 /** テスト用の島を作る。alive: false なら地形を全面海にして人口0にする。 */
@@ -33,6 +34,11 @@ function setupGame(
   repo: FakeGameRepository,
   overrides: {
     turn?: number;
+    /**
+     * tmp/16-season.md「開始前の状態 = ターン 0」節「既存ゲームとの互換」用。省略時は
+     * `repo.createGame` の既定 (0、新方式)。1 を指定すると旧方式 (firstTurn=1) のゲームを模せる。
+     */
+    firstTurn?: number;
     lastTime?: number;
     nextIslandId?: number;
     finalTurn?: number | null;
@@ -49,6 +55,7 @@ function setupGame(
   const meta = repo.getMeta(gameId);
   const patch: Partial<GameMeta> = {};
   if (overrides.turn !== undefined) patch.turn = overrides.turn;
+  if (overrides.firstTurn !== undefined) patch.firstTurn = overrides.firstTurn;
   if (overrides.lastTime !== undefined) patch.lastTime = overrides.lastTime;
   if (overrides.nextIslandId !== undefined) patch.nextIslandId = overrides.nextIslandId;
   if (Object.keys(patch).length > 0) {
@@ -83,13 +90,14 @@ describe("TurnService.advanceTurnIfDue", () => {
     expect(repo.getMeta(gameId).turn).toBe(1);
   });
 
-  // tmp/16-season.md「開始前の状態 (追加要件)」節: `setLastTime` で lastTime を startAt より
-  // 過去にずらしても (期限判定だけなら満たしてしまう状況でも)、`now < startAt` なら進まない。
-  it("開始前 (now < startAt): 期限判定は満たしていても 0 を返し、meta は変わらない", () => {
+  // tmp/16-season.md「開始前の状態 = ターン 0 (改訂 2026-09-20)」節: turn===0 (開始前) は
+  // `now >= startAt` で期限到来とみなす (lastTime は見ない)。
+  it("開始前 (turn===0): now < startAt なら 0 を返し、meta は変わらない (lastTime は見ない)", () => {
     const repo = new FakeGameRepository();
     const gameId = setupGame(repo, {
-      turn: 1,
+      turn: 0,
       startAt: 2000,
+      // lastTime を意図的に startAt と異なる値にしても、turn===0 の期限判定は lastTime を見ない。
       lastTime: 500,
       unitTimeSec: 100,
       nextIslandId: 2,
@@ -103,12 +111,12 @@ describe("TurnService.advanceTurnIfDue", () => {
       logger: new FakeLogger(),
     });
 
-    // now(700) - lastTime(500) = 200 >= unitTimeSec(100) なので期限判定だけなら満たすが、
-    // now(700) < startAt(2000) なので進まない。
+    // now(700) - lastTime(500) = 200 >= unitTimeSec(100) なので lastTime 基準の期限判定だけなら
+    // 満たすが、turn===0 の判定は now(700) < startAt(2000) を見るので進まない。
     const advanced = turnService.advanceTurnIfDue(700);
 
     expect(advanced).toBe(0);
-    expect(repo.getMeta(gameId).turn).toBe(1);
+    expect(repo.getMeta(gameId).turn).toBe(0);
   });
 
   it("期限後なら 1 ターン進め、meta が更新される", () => {
@@ -317,10 +325,10 @@ describe("TurnService.advanceTurn", () => {
 
   // tmp/16-season.md「開始前の状態 (追加要件)」節: 管理者の手動進行 (advanceTurn) も
   // 開始前 (now < startAt) は進めない。
-  it("開始前 (now < startAt) は何もしない", () => {
+  it("開始前 (turn===0、now < startAt) は何もしない", () => {
     const repo = new FakeGameRepository();
     const gameId = setupGame(repo, {
-      turn: 1,
+      turn: 0,
       startAt: 2000,
       lastTime: 2000,
       nextIslandId: 2,
@@ -336,7 +344,7 @@ describe("TurnService.advanceTurn", () => {
 
     turnService.advanceTurn(1000);
 
-    expect(repo.getMeta(gameId).turn).toBe(1);
+    expect(repo.getMeta(gameId).turn).toBe(0);
   });
 
   it("tmp/18-games.md: ゲームが1つも無ければ何もしない (例外にならない)", () => {
@@ -397,7 +405,9 @@ describe("TurnService.advanceTurnIfDue (終了後)", () => {
   it("tmp/18-games.md: 最終ターン到達で TurnService が status を 'finished' にし finishedAt を記録する", () => {
     const config = { ...defaultConfig, maxCatchUpTurns: 5 };
     const repo = new FakeGameRepository();
-    const gameId = setupGame(repo, { turn: 4, lastTime: 0, nextIslandId: 2, finalTurn: 5 });
+    // tmp/16-season.md「開始前の状態 = ターン 0」節: 新方式 (firstTurn=0) では実行済みの処理回数は
+    // turn そのもの。finalTurn=5 なら turn=5 に達した時点 (5 回目の処理) で終了する。
+    const gameId = setupGame(repo, { turn: 3, lastTime: 0, nextIslandId: 2, finalTurn: 5 });
     repo.insertIsland(gameId, makeIsland(config, createSeededRng(1), 1), 0);
     const turnService = new TurnService({
       repo,
@@ -407,19 +417,124 @@ describe("TurnService.advanceTurnIfDue (終了後)", () => {
       logger: new FakeLogger(),
     });
 
-    // maxCatchUpTurns=5 分の期限が来ていても、finalTurn=5 を超えた時点 (turn=6) で止まる。
+    // maxCatchUpTurns=5 分の期限が来ていても、finalTurn=5 に達した時点 (turn=5) で止まる。
     const now = config.unitTimeSec * 100;
     const advanced = turnService.advanceTurnIfDue(now);
 
     expect(advanced).toBe(2);
     const meta = repo.getMeta(gameId);
-    expect(meta.turn).toBe(6);
+    expect(meta.turn).toBe(5);
     expect(meta.status).toBe("finished");
     expect(meta.finishedAt).not.toBeNull();
 
     // 終了後にさらに advanceTurnIfDue/advanceTurn を呼んでも進まない。
     expect(turnService.advanceTurnIfDue(now + config.unitTimeSec * 10)).toBe(0);
     turnService.advanceTurn(now);
-    expect(repo.getMeta(gameId).turn).toBe(6);
+    expect(repo.getMeta(gameId).turn).toBe(5);
+  });
+});
+
+// tmp/16-season.md「開始前の状態 = ターン 0 (改訂 2026-09-20)」節。design のテスト項目
+// (a)〜(d) を `repo.createGame` から直接組み立てるエンドツーエンドのシナリオとして確認する。
+describe("tmp/16-season.md: 開始前の状態 = ターン 0", () => {
+  it("(a) 新しいゲームは turn=0 で作られ、startAt 前は advanceTurnIfDue が 0 を返す", () => {
+    const repo = new FakeGameRepository();
+    const gameId = repo.createGame(
+      { name: "第 1 回", startAt: 1000, finalTurn: null, unitTimeSec: 100 },
+      1000,
+    );
+    repo.insertIsland(gameId, makeIsland(defaultConfig, createSeededRng(1), 1), 0);
+    const turnService = new TurnService({
+      repo,
+      config: defaultConfig,
+      rng: createSeededRng(2),
+      backupStore: new FakeBackupStore(),
+      logger: new FakeLogger(),
+    });
+
+    expect(repo.getMeta(gameId).turn).toBe(0);
+    expect(repo.getMeta(gameId).firstTurn).toBe(0);
+    expect(turnService.advanceTurnIfDue(999)).toBe(0);
+    expect(repo.getMeta(gameId).turn).toBe(0);
+  });
+
+  it("(b) now >= startAt で 0→1 になり、lastTime は startAt のまま、ログが「ターン1」で記録される", () => {
+    const repo = new FakeGameRepository();
+    const gameId = repo.createGame(
+      { name: "第 1 回", startAt: 1000, finalTurn: null, unitTimeSec: 100 },
+      1000,
+    );
+    repo.insertIsland(gameId, makeIsland(defaultConfig, createSeededRng(1), 1), 0);
+    const turnService = new TurnService({
+      repo,
+      config: defaultConfig,
+      rng: createSeededRng(2),
+      backupStore: new FakeBackupStore(),
+      logger: new FakeLogger(),
+    });
+
+    const advanced = turnService.advanceTurnIfDue(1000);
+
+    expect(advanced).toBe(1);
+    const meta = repo.getMeta(gameId);
+    expect(meta.turn).toBe(1);
+    expect(meta.lastTime).toBe(1000);
+    const logs = repo.listLogs(gameId, { sinceTurn: 0 });
+    expect(logs.every((log) => log.turn === 1)).toBe(true);
+  });
+
+  it("(c) finalTurn=3 なら 3 回の処理で finished になり、finishedAtTurn === 3", () => {
+    const repo = new FakeGameRepository();
+    const gameId = repo.createGame(
+      { name: "第 1 回", startAt: 0, finalTurn: 3, unitTimeSec: 100 },
+      0,
+    );
+    repo.insertIsland(gameId, makeIsland(defaultConfig, createSeededRng(1), 1), 0);
+    const turnService = new TurnService({
+      repo,
+      config: { ...defaultConfig, maxCatchUpTurns: 10 },
+      rng: createSeededRng(2),
+      backupStore: new FakeBackupStore(),
+      logger: new FakeLogger(),
+    });
+
+    const advanced = turnService.advanceTurnIfDue(1000);
+
+    expect(advanced).toBe(3);
+    const meta = repo.getMeta(gameId);
+    expect(meta.turn).toBe(3);
+    expect(meta.status).toBe("finished");
+    expect(buildSeasonVM(meta).finishedAtTurn).toBe(3);
+  });
+
+  // tmp/16-season.md「既存ゲームとの互換」節: firstTurn=1 の旧方式ゲームは番号・終了時刻を
+  // 変えない (`turn > finalTurn` になった時点で終了する従来挙動のまま)。
+  it("(d) firstTurn=1 の旧方式ゲームは turn > finalTurn で終了する (従来挙動)", () => {
+    const repo = new FakeGameRepository();
+    const gameId = setupGame(repo, {
+      turn: 4,
+      firstTurn: 1,
+      lastTime: 0,
+      finalTurn: 5,
+      nextIslandId: 2,
+    });
+    repo.insertIsland(gameId, makeIsland(defaultConfig, createSeededRng(1), 1), 0);
+    const turnService = new TurnService({
+      repo,
+      config: { ...defaultConfig, maxCatchUpTurns: 10 },
+      rng: createSeededRng(2),
+      backupStore: new FakeBackupStore(),
+      logger: new FakeLogger(),
+    });
+
+    // turn=4 → 5 (5 > 5 は false、続行) → 6 (6 > 5 で終了)。
+    const advanced = turnService.advanceTurnIfDue(defaultConfig.unitTimeSec * 100);
+
+    expect(advanced).toBe(2);
+    const meta = repo.getMeta(gameId);
+    expect(meta.turn).toBe(6);
+    expect(meta.firstTurn).toBe(1);
+    expect(meta.status).toBe("finished");
+    expect(buildSeasonVM(meta).finishedAtTurn).toBe(5);
   });
 });

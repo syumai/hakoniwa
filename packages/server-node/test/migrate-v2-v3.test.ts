@@ -687,7 +687,6 @@ describe("migrate: v5 → v6 (tmp/19-abandon.md)", () => {
 
     const versionRow = driver.get<{ version: number }>("SELECT version FROM schema_version");
     expect(versionRow?.version).toBe(SCHEMA_VERSION);
-    expect(versionRow?.version).toBe(6);
 
     const islandCols = driver
       .all<{ name: string }>("PRAGMA table_info(islands)")
@@ -779,5 +778,235 @@ describe("migrate: v5 → v6 (tmp/19-abandon.md)", () => {
     expect(
       driver.get("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'abandonments'"),
     ).toBeDefined();
+  });
+});
+
+/**
+ * v6 時点 (tmp/19-abandon.md まで、`games` に `first_turn` が無い) の DDL スナップショット。
+ * tmp/16-season.md「開始前の状態 = ターン 0 (改訂 2026-09-20)」節 (スキーマ v7) 以前の形。
+ */
+const V6_SCHEMA_SQL = `
+CREATE TABLE schema_version (
+  version INTEGER NOT NULL
+) STRICT;
+
+CREATE TABLE games (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  name            TEXT    NOT NULL,
+  status          TEXT    NOT NULL CHECK (status IN ('running', 'finished')),
+  turn            INTEGER NOT NULL,
+  last_time       INTEGER NOT NULL,
+  start_at        INTEGER NOT NULL,
+  final_turn      INTEGER,
+  unit_time_sec   INTEGER NOT NULL,
+  next_island_id  INTEGER NOT NULL,
+  created_at      INTEGER NOT NULL,
+  finished_at     INTEGER
+) STRICT;
+
+CREATE TABLE islands (
+  game_id         INTEGER NOT NULL,
+  id              INTEGER NOT NULL,
+  rank            INTEGER NOT NULL,
+  name            TEXT    NOT NULL,
+  owner_user_id   TEXT    NOT NULL,
+  comment         TEXT    NOT NULL DEFAULT '',
+  score           INTEGER NOT NULL DEFAULT 0,
+  absent          INTEGER NOT NULL DEFAULT 0,
+  money           INTEGER NOT NULL,
+  food            INTEGER NOT NULL,
+  pop             INTEGER NOT NULL DEFAULT 0,
+  area            INTEGER NOT NULL DEFAULT 0,
+  farm            INTEGER NOT NULL DEFAULT 0,
+  factory         INTEGER NOT NULL DEFAULT 0,
+  mountain        INTEGER NOT NULL DEFAULT 0,
+  prize_flags     INTEGER NOT NULL DEFAULT 0,
+  prize_monsters  INTEGER NOT NULL DEFAULT 0,
+  prize_turns     TEXT    NOT NULL DEFAULT '[]',
+  terrain         TEXT    NOT NULL,
+  commands        TEXT    NOT NULL,
+  created_turn    INTEGER NOT NULL,
+  abandoned_at    INTEGER,
+  PRIMARY KEY (game_id, id)
+) STRICT;
+CREATE UNIQUE INDEX islands_game_rank  ON islands(game_id, rank);
+CREATE UNIQUE INDEX islands_game_name  ON islands(game_id, name);
+CREATE UNIQUE INDEX islands_owner_active ON islands(game_id, owner_user_id) WHERE abandoned_at IS NULL;
+
+CREATE TABLE abandonments (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  game_id      INTEGER NOT NULL,
+  user_id      TEXT    NOT NULL,
+  island_id    INTEGER NOT NULL,
+  island_name  TEXT    NOT NULL,
+  abandoned_at INTEGER NOT NULL
+) STRICT;
+CREATE INDEX abandonments_game_user ON abandonments(game_id, user_id);
+
+CREATE TABLE lbbs_posts (
+  game_id     INTEGER NOT NULL DEFAULT 1,
+  island_id   INTEGER NOT NULL,
+  position    INTEGER NOT NULL,
+  author      TEXT    NOT NULL CHECK (author IN ('visitor', 'owner')),
+  user_id     TEXT    NOT NULL,
+  name        TEXT    NOT NULL,
+  message     TEXT    NOT NULL,
+  turn        INTEGER NOT NULL,
+  PRIMARY KEY (game_id, island_id, position)
+) STRICT;
+
+CREATE TABLE logs (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  game_id     INTEGER NOT NULL DEFAULT 1,
+  turn        INTEGER NOT NULL,
+  seq         INTEGER NOT NULL,
+  secret      INTEGER NOT NULL DEFAULT 0,
+  island_id   INTEGER NOT NULL DEFAULT 0,
+  target_id   INTEGER NOT NULL DEFAULT 0,
+  html        TEXT    NOT NULL
+) STRICT;
+
+CREATE TABLE history (
+  id      INTEGER PRIMARY KEY AUTOINCREMENT,
+  game_id INTEGER NOT NULL DEFAULT 1,
+  turn    INTEGER NOT NULL,
+  html    TEXT    NOT NULL
+) STRICT;
+
+CREATE TABLE backups (
+  label       TEXT    PRIMARY KEY,
+  bookmark    TEXT    NOT NULL,
+  turn        INTEGER NOT NULL,
+  created_at  INTEGER NOT NULL
+) STRICT;
+`;
+
+function createV6Driver(
+  gameOverrides: { turn?: number; status?: "running" | "finished" } = {},
+): NodeSqliteDriver {
+  const driver = new NodeSqliteDriver(":memory:");
+  driver.exec(V6_SCHEMA_SQL);
+  driver.run("INSERT INTO schema_version (version) VALUES (6)");
+  const turn = gameOverrides.turn ?? 1;
+  const status = gameOverrides.status ?? "running";
+  driver.run(
+    `INSERT INTO games (
+       id, name, status, turn, last_time, start_at, final_turn, unit_time_sec,
+       next_island_id, created_at, finished_at
+     ) VALUES (1, '第 1 回', ?, ?, 1000, 1000, NULL, 21600, 1, 1000, ?)`,
+    status,
+    turn,
+    status === "finished" ? 2000 : null,
+  );
+  return driver;
+}
+
+// tmp/16-season.md「開始前の状態 = ターン 0 (改訂 2026-09-20)」節「既存ゲームとの互換」。
+describe("migrate: v6 → v7 (tmp/16-season.md「開始前の状態 = ターン 0」)", () => {
+  it("schema_version が v7 になり、games.first_turn 列が追加される", async () => {
+    const driver = createV6Driver();
+
+    migrate(driver);
+
+    const versionRow = driver.get<{ version: number }>("SELECT version FROM schema_version");
+    expect(versionRow?.version).toBe(SCHEMA_VERSION);
+
+    const gameCols = driver.all<{ name: string }>("PRAGMA table_info(games)").map((c) => c.name);
+    expect(gameCols).toContain("first_turn");
+  });
+
+  it("turn=1 の running なゲーム (まだ1回も処理していない旧方式) は turn=0, first_turn=0 に変換される", async () => {
+    const driver = createV6Driver({ turn: 1, status: "running" });
+
+    migrate(driver);
+
+    const row = driver.get<{ turn: number; first_turn: number }>(
+      "SELECT turn, first_turn FROM games WHERE id = 1",
+    );
+    expect(row?.turn).toBe(0);
+    expect(row?.first_turn).toBe(0);
+  });
+
+  it("turn>=2 の running なゲーム (旧方式で既に処理済み) は turn・first_turn=1 のまま変わらない", async () => {
+    const driver = createV6Driver({ turn: 5, status: "running" });
+
+    migrate(driver);
+
+    const row = driver.get<{ turn: number; first_turn: number }>(
+      "SELECT turn, first_turn FROM games WHERE id = 1",
+    );
+    expect(row?.turn).toBe(5);
+    expect(row?.first_turn).toBe(1);
+  });
+
+  it("turn=1 の finished なゲームは対象外 (turn・first_turn=1 のまま変わらない)", async () => {
+    const driver = createV6Driver({ turn: 1, status: "finished" });
+
+    migrate(driver);
+
+    const row = driver.get<{ turn: number; first_turn: number; status: string }>(
+      "SELECT turn, first_turn, status FROM games WHERE id = 1",
+    );
+    expect(row?.turn).toBe(1);
+    expect(row?.first_turn).toBe(1);
+    expect(row?.status).toBe("finished");
+  });
+
+  it("既存の islands/abandonments はそのまま保たれる", async () => {
+    const driver = createV6Driver();
+    driver.run(
+      `INSERT INTO islands (
+         game_id, id, rank, name, owner_user_id, money, food, terrain, commands, created_turn
+       ) VALUES (1, 1, 0, '島1', 'u1', 100, 100, '[]', '[]', 1)`,
+    );
+    driver.run(
+      `INSERT INTO abandonments (game_id, user_id, island_id, island_name, abandoned_at)
+       VALUES (1, 'u2', 2, '島2', 999)`,
+    );
+
+    migrate(driver);
+
+    const repo = new SqliteGameRepository(driver, {
+      islandSize: defaultConfig.islandSize,
+      commandMax: defaultConfig.commandMax,
+    });
+    expect(repo.listIslandSummaries(1).map((s) => s.id)).toEqual([1]);
+    expect(repo.countAbandonments(1, "u2")).toBe(1);
+  });
+
+  it("再度 migrate を呼んでも何も起きない (べき等)", async () => {
+    const driver = createV6Driver({ turn: 1, status: "running" });
+
+    migrate(driver);
+    migrate(driver);
+
+    const versionRow = driver.get<{ version: number }>("SELECT version FROM schema_version");
+    expect(versionRow?.version).toBe(SCHEMA_VERSION);
+    const row = driver.get<{ turn: number; first_turn: number }>(
+      "SELECT turn, first_turn FROM games WHERE id = 1",
+    );
+    expect(row?.turn).toBe(0);
+    expect(row?.first_turn).toBe(0);
+  });
+
+  it("新規 DB は最初から games.first_turn を持ち、新しいゲームは turn=0, first_turn=0 で作られる", async () => {
+    const driver = new NodeSqliteDriver(":memory:");
+
+    migrate(driver);
+
+    const gameCols = driver.all<{ name: string }>("PRAGMA table_info(games)").map((c) => c.name);
+    expect(gameCols).toContain("first_turn");
+
+    const repo = new SqliteGameRepository(driver, {
+      islandSize: defaultConfig.islandSize,
+      commandMax: defaultConfig.commandMax,
+    });
+    const gameId = repo.createGame(
+      { name: "第 1 回", startAt: 1000, finalTurn: null, unitTimeSec: 21600 },
+      1000,
+    );
+    const meta = repo.getMeta(gameId);
+    expect(meta.turn).toBe(0);
+    expect(meta.firstTurn).toBe(0);
   });
 });

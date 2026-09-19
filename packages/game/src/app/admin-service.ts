@@ -96,7 +96,7 @@ export class AdminService {
   }
 
   async status(): Promise<AdminStatus> {
-    const { repo, backupStore, clock } = this.#deps;
+    const { repo, backupStore } = this.#deps;
     const backups = await backupStore.list();
     const games = repo.listGames();
     const gameId = repo.getCurrentGameId();
@@ -104,7 +104,7 @@ export class AdminService {
       return { initialized: false, backups, games };
     }
     const meta = repo.getMeta(gameId);
-    const season = buildSeasonVM(meta, clock.now());
+    const season = buildSeasonVM(meta);
     return {
       initialized: true,
       gameId: meta.id,
@@ -121,7 +121,8 @@ export class AdminService {
   /**
    * 新しいゲームを開始する。tmp/18-games.md「AdminService」節: 現在のゲームが無い、または
    * `finished` のときだけ成功する。それ以外は `AppError('game_running')` (409)。
-   * Perl 版 Maintenance.pm newMode の移植: turn=1, nextIslandId=1。
+   * Perl 版 Maintenance.pm newMode の移植: turn=0 (開始前。tmp/16-season.md「開始前の状態 =
+   * ターン 0」節), nextIslandId=1。
    */
   startGame(input: StartGameOptions, now: number): number {
     const { repo, config } = this.#deps;
@@ -134,7 +135,8 @@ export class AdminService {
         }
       }
       const unitTimeSec = input.unitTimeSec ?? config.unitTimeSec;
-      // startAt はターン1の lastTime と同じ値で初期化する (16「開始時刻」の定義)。
+      // startAt は開始前 (turn=0) の lastTime と同じ値で初期化する (16「開始時刻」の定義、
+      // tmp/16-season.md「開始前の状態 = ターン 0」節)。
       const startAt = input.startAt ?? now - (now % unitTimeSec);
       const finalTurn = input.finalTurn ?? null;
       const nextId = (currentId ?? 0) + 1;
@@ -180,15 +182,16 @@ export class AdminService {
 
   /**
    * Perl 版 Maintenance.pm timeMode/stimeMode の移植。unix 秒を直接設定する (現在のゲームに対して)。
-   * tmp/16-season.md「設定の入口」節: ターン1の間は最終更新時刻の変更が開始時刻の変更と同義なので
-   * `startAt` も追従させる。ターン2以降は `startAt` を変えない (開始済みの記録として固定する)。
+   * tmp/16-season.md「開始前の状態 = ターン 0 (改訂 2026-09-20)」節「管理操作」: turn===0 (開始前)
+   * の間は最終更新時刻の変更が開始時刻の変更と同義なので `startAt` も追従させる (開始前 → 進行中の
+   * 切替に使う)。turn>=1 は `lastTime` のみ変える (`startAt` は開始済みの記録として固定する)。
    */
   setLastTime(unix: number): void {
     const { repo } = this.#deps;
     repo.transaction(() => {
       const gameId = this.#requireCurrentGameId();
       const meta = repo.getMeta(gameId);
-      const startAt = meta.turn === 1 ? unix : meta.startAt;
+      const startAt = meta.turn === 0 ? unix : meta.startAt;
       repo.saveMeta({ ...meta, lastTime: unix, startAt });
     });
   }

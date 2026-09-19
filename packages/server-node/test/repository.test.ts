@@ -59,7 +59,9 @@ describe("SqliteGameRepository", () => {
     expect(repo.isInitialized()).toBe(true);
     expect(repo.getCurrentGameId()).toBe(gameId);
     const meta = repo.getMeta(gameId);
-    expect(meta.turn).toBe(1);
+    // tmp/16-season.md「開始前の状態 = ターン 0 (改訂 2026-09-20)」節: 新しいゲームは turn=0。
+    expect(meta.turn).toBe(0);
+    expect(meta.firstTurn).toBe(0);
     expect(meta.lastTime).toBe(0);
     expect(meta.nextIslandId).toBe(1);
     expect(meta.finalTurn).toBeNull();
@@ -73,11 +75,12 @@ describe("SqliteGameRepository", () => {
   it("tryBumpTurn は expectedTurn が一致する時のみ成功する", () => {
     gameId = repo.createGame(newGameInput(), 0);
     const meta = repo.getMeta(gameId);
-    expect(repo.tryBumpTurn(gameId, 2, { ...meta, turn: 3, lastTime: 100 })).toBe(false);
-    expect(repo.getMeta(gameId).turn).toBe(1);
-    expect(repo.tryBumpTurn(gameId, 1, { ...meta, turn: 2, lastTime: 100 })).toBe(true);
+    // 新しいゲームは turn=0 (tmp/16-season.md「開始前の状態 = ターン 0」節) で作られる。
+    expect(repo.tryBumpTurn(gameId, 1, { ...meta, turn: 2, lastTime: 100 })).toBe(false);
+    expect(repo.getMeta(gameId).turn).toBe(0);
+    expect(repo.tryBumpTurn(gameId, 0, { ...meta, turn: 1, lastTime: 100 })).toBe(true);
     const updated = repo.getMeta(gameId);
-    expect(updated.turn).toBe(2);
+    expect(updated.turn).toBe(1);
     expect(updated.lastTime).toBe(100);
   });
 

@@ -136,7 +136,7 @@ export interface SetupOptions {
   finalTurn?: number | null;
   /** tmp/16-season.md のテスト用。省略時は INITIAL_CLOCK (開始済み)。 */
   startAt?: number;
-  /** 省略時は INITIAL_CLOCK (turn=1 の meta.lastTime)。開始前状態のテストに使う。 */
+  /** 省略時は INITIAL_CLOCK (turn=0 の meta.lastTime)。開始前状態のテストに使う。 */
   lastTime?: number;
   /** tmp/16-season.md「ターンの長さも DB に持つ」節のテスト用。省略時は config.unitTimeSec。 */
   unitTimeSec?: number;

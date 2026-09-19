@@ -36,7 +36,8 @@ const HELP_TEXT = `hakoniwa CLI
 コマンド:
   db init                ゲームが無いときだけ新しいゲームを開始する (game new のエイリアス。
                           既にゲームがあれば running/finished を問わず失敗する)
-    --start-at <ISO8601>    開始日時 (省略時: HAKONIWA_START_AT、それも無ければ現在時刻を切り下げ)
+    --start-at <ISO8601>    ターン 1 の処理が実行される時刻 (ゲーム開始。
+                             省略時: HAKONIWA_START_AT、それも無ければ現在時刻を切り下げ)
     --final-turn <N>        最終ターン数 (省略時: HAKONIWA_FINAL_TURN、それも無ければ無期限)
     --unit-time <値>        1 ターンの長さ (省略時: HAKONIWA_UNIT_TIME_SEC。
                              "6h"/"90m"/"1h30m"/"3600" (数字のみは秒) を受け付ける)
@@ -50,7 +51,7 @@ const HELP_TEXT = `hakoniwa CLI
   time set <unix|ISO8601> 最終更新時間を変更する
   game new               新しいゲームを開始する (現在のゲームが running なら失敗、終了コード 1)
     --name <名前>            省略時「第 N 回」
-    --start-at <ISO8601>     省略時: 現在時刻を切り下げ
+    --start-at <ISO8601>     ターン 1 の処理が実行される時刻 (ゲーム開始。省略時: 現在時刻を切り下げ)
     --final-turn <N>         省略時: 無期限
     --unit-time <値>         省略時: HAKONIWA_UNIT_TIME_SEC。
                              "6h"/"90m"/"1h30m"/"3600" (数字のみは秒) を受け付ける

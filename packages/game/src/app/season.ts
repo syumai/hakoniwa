@@ -11,14 +11,15 @@ export function isFinished(meta: GameMeta): boolean {
 }
 
 /**
- * 開始前: まだ開始時刻に達していない (終了していないゲームに限る)。
- * 設計書との差異: tmp/16-season.md「開始前の状態 (追加要件)」節により、`turn === 1` かどうかは
- * 問わず `now < startAt` だけで判定する (以前は `turn === 1 &&` も条件にしていたが、
- * `startAt` はターン1の間しか動かせないため実質的な挙動は変わらない。判定の意図を
- * `now < startAt` 単独で表せるよう明示的に外した)。
+ * 開始前: ゲーム開始直後 (まだ 1 回もターン処理をしていない)、終了していないゲームに限る。
+ * tmp/16-season.md「開始前の状態 = ターン 0 (改訂 2026-09-20、ユーザー確認済み)」節: 新方式の
+ * ゲームは `turn = 0` が開始前を表す (`now < startAt` は見ない。`turn === 0` で `now >= startAt`
+ * の瞬間は、次のトリガーで処理されるまで「開始前」のまま)。旧方式 (firstTurn = 1) のゲームは
+ * 既に turn >= 1 で作られているため、この関数は常に false を返す (旧方式の「開始前」は
+ * スキーマ v7 マイグレーションで turn=0 に変換済み)。
  */
-export function isBeforeStart(meta: GameMeta, now: number): boolean {
-  return !isFinished(meta) && now < meta.startAt;
+export function isBeforeStart(meta: GameMeta): boolean {
+  return !isFinished(meta) && meta.turn === 0;
 }
 
 export type SeasonState = "before" | "running" | "finished";
@@ -32,7 +33,7 @@ export interface SeasonVM {
   turn: number;
   finalTurn: number | null;
   state: SeasonState;
-  /** ターン1が始まる (始まった) unix 秒。 */
+  /** ターン 1 の処理 (ゲーム開始) が実行される (実行された) unix 秒。 */
   startAt: number;
   /**
    * 終了時のみ、終了時点のターン番号。最終ターン到達で終了した場合は finalTurn、
@@ -57,16 +58,16 @@ export interface SeasonVM {
  * 追加要件「ターンの長さも DB に持つ」により `unitTimeSec` は `meta.unitTimeSec` を使うため、
  * 引数からは外した (呼び出し元で `config.unitTimeSec` を渡す必要が無くなった)。
  * tmp/18-games.md: `gameId`/`gameName`/`status` を追加。
+ * tmp/16-season.md「開始前の状態 = ターン 0 (改訂 2026-09-20)」節: `isBeforeStart` が `now` を
+ * 使わなくなった (`turn === 0` だけで判定) ため、`now` 引数も不要になり外した。
  */
-export function buildSeasonVM(meta: GameMeta, now: number): SeasonVM {
+export function buildSeasonVM(meta: GameMeta): SeasonVM {
   const finished = isFinished(meta);
-  const state: SeasonState = finished
-    ? "finished"
-    : isBeforeStart(meta, now)
-      ? "before"
-      : "running";
+  const state: SeasonState = finished ? "finished" : isBeforeStart(meta) ? "before" : "running";
+  // tmp/16-season.md「開始前の状態 = ターン 0」節「状態判定」: 終了判定は `firstTurn` を使う
+  // (`turn - firstTurn >= finalTurn`。旧方式 `firstTurn=1` では従来の `turn > finalTurn` と同値)。
   const finishedAtTurn = finished
-    ? meta.finalTurn !== null && meta.turn > meta.finalTurn
+    ? meta.finalTurn !== null && meta.turn - meta.firstTurn >= meta.finalTurn
       ? meta.finalTurn
       : meta.turn
     : null;

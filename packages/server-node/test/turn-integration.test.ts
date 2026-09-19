@@ -15,7 +15,10 @@ function user(id: string): AuthUser {
   return { id, name: `user-${id}`, email: `${id}@example.com`, isAdmin: false };
 }
 
-function setup(overrides: Partial<typeof defaultConfig> = {}) {
+function setup(
+  overrides: Partial<typeof defaultConfig> = {},
+  initOptions: { startAt?: number } = {},
+) {
   const driver = new NodeSqliteDriver(":memory:");
   migrate(driver);
   const clock = new FakeClock(0);
@@ -41,7 +44,7 @@ function setup(overrides: Partial<typeof defaultConfig> = {}) {
     config,
     rng: createSeededRng(42),
   });
-  deps.adminService.initialize(clock.now());
+  deps.adminService.initialize(clock.now(), initOptions);
   const gameId = deps.repo.getCurrentGameId();
   if (gameId === undefined) {
     throw new Error("unreachable: game not created");
@@ -64,32 +67,40 @@ describe("turn-integration (実 DB)", () => {
     expect(created1.id).toBe(1);
     expect(created2.id).toBe(2);
 
+    // tmp/16-season.md「開始前の状態 = ターン 0」節: 新しいゲームは turn=0 (開始前) で作られる。
     const before = driver.get<{ turn: number }>("SELECT turn FROM games WHERE id = ?", gameId);
-    expect(before?.turn).toBe(1);
+    expect(before?.turn).toBe(0);
 
     turnService.advanceTurn(ctx.clock.now());
     turnService.advanceTurn(ctx.clock.now());
     turnService.advanceTurn(ctx.clock.now());
 
     const after = driver.get<{ turn: number }>("SELECT turn FROM games WHERE id = ?", gameId);
-    expect(after?.turn).toBe(4);
+    expect(after?.turn).toBe(3);
 
     const top = gameService.getTopPage(undefined, gameId);
-    expect(top.turn).toBe(4);
+    expect(top.turn).toBe(3);
     expect(top.islands.map((i) => i.name).sort()).toEqual(["島1", "島2"]);
   });
 
   it("advanceTurnIfDue は期限が来るまで進まず、期限が来ると maxCatchUpTurns まで進む", () => {
-    const { turnService, clock, driver, gameId } = ctx;
-    // unitTimeSec 経過前は進まない。
+    // tmp/16-season.md「開始前の状態 = ターン 0」節: turn=0 の期限判定は `now >= startAt` のみで
+    // 判定する (省略時の startAt は現在時刻の切り下げなので即座に期限到来してしまう)。
+    // 「期限前は進まない」を確かめるため、startAt を明示的に未来にする。
+    const startAt = defaultConfig.unitTimeSec;
+    const localCtx = setup({}, { startAt });
+    const { turnService, clock, driver, gameId } = localCtx;
+
+    // startAt 前は進まない。
     expect(turnService.advanceTurnIfDue(clock.now())).toBe(0);
 
-    clock.advance(defaultConfig.unitTimeSec * 3);
+    // startAt 到達 (turn 0→1) 後、さらに 2 ターン分の期限が来ている状態にする。
+    clock.advance(startAt + defaultConfig.unitTimeSec * 2);
     const advanced = turnService.advanceTurnIfDue(clock.now());
     expect(advanced).toBe(3);
 
     const meta = driver.get<{ turn: number }>("SELECT turn FROM games WHERE id = ?", gameId);
-    expect(meta?.turn).toBe(4);
+    expect(meta?.turn).toBe(3);
   });
 
   it("発見時の history はターン処理をまたいでも読み出せる (repo 経由の永続化確認)", () => {
@@ -127,17 +138,19 @@ describe("turn-integration (実 DB)", () => {
     const gameId = deps.repo.getCurrentGameId();
     if (gameId === undefined) throw new Error("unreachable");
 
+    // tmp/16-season.md「開始前の状態 = ターン 0」節: 新しいゲームは turn=0 で始まるため、
+    // finalTurn=2 は 2 回の処理 (turn=2) で終了する。
     deps.turnService.advanceTurn(clock.now());
     expect(deps.repo.getMeta(gameId).status).toBe("running");
     deps.turnService.advanceTurn(clock.now());
     const meta = deps.repo.getMeta(gameId);
-    expect(meta.turn).toBe(3);
+    expect(meta.turn).toBe(2);
     expect(meta.status).toBe("finished");
     expect(meta.finishedAt).not.toBeNull();
 
     // それ以降は進まない。
     deps.turnService.advanceTurn(clock.now());
-    expect(deps.repo.getMeta(gameId).turn).toBe(3);
+    expect(deps.repo.getMeta(gameId).turn).toBe(2);
     expect(deps.turnService.advanceTurnIfDue(clock.now() + 100000)).toBe(0);
   });
 });

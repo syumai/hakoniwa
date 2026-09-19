@@ -38,7 +38,10 @@ describe("FakeGameRepository", () => {
     expect(repo.isInitialized()).toBe(true);
     expect(gameId).toBe(1);
     const meta = repo.getMeta(gameId);
-    expect(meta.turn).toBe(1);
+    // tmp/16-season.md「開始前の状態 = ターン 0 (改訂 2026-09-20)」節: 新しいゲームは
+    // turn=0 (開始前)、firstTurn=0 で作られる。
+    expect(meta.turn).toBe(0);
+    expect(meta.firstTurn).toBe(0);
     expect(meta.nextIslandId).toBe(1);
     expect(meta.status).toBe("running");
   });
@@ -100,21 +103,23 @@ describe("FakeGameRepository", () => {
     const gameId = repo.createGame(gameInput(), 0);
     const meta = repo.getMeta(gameId);
 
-    expect(
-      repo.tryBumpTurn(gameId, 2, {
-        ...meta,
-        turn: 3,
-        lastTime: 100,
-      }),
-    ).toBe(false);
+    // 新しいゲームは turn=0 (tmp/16-season.md「開始前の状態 = ターン 0」節) で作られるため、
+    // expectedTurn が一致しない 1 は失敗する。
     expect(
       repo.tryBumpTurn(gameId, 1, {
         ...meta,
         turn: 2,
         lastTime: 100,
       }),
+    ).toBe(false);
+    expect(
+      repo.tryBumpTurn(gameId, 0, {
+        ...meta,
+        turn: 1,
+        lastTime: 100,
+      }),
     ).toBe(true);
-    expect(repo.getMeta(gameId).turn).toBe(2);
+    expect(repo.getMeta(gameId).turn).toBe(1);
   });
 
   it("listLogs は sinceTurn / islandId / includeSecretFor で絞り込む", () => {

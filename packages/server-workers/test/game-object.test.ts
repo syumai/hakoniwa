@@ -61,15 +61,18 @@ describe("HakoniwaGame (DO 経由の Hono app)", () => {
     expect(csrfMatch).not.toBeNull();
     const csrfToken = csrfMatch?.[1] ?? "";
 
+    // tmp/16-season.md「開始前の状態 = ターン 0 (改訂 2026-09-20)」節: 新しいゲームは turn=0 で
+    // 作られ、startAt 省略時は現在時刻の切り下げになり即座に期限到来してしまうため、
+    // 「期限前」を確かめるには start-at を明示的に未来にする必要がある。
     const startRes = await stub.fetch("http://example.com/admin/games", {
       method: "POST",
       headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
-      body: `_csrf=${encodeURIComponent(csrfToken)}`,
+      body: `_csrf=${encodeURIComponent(csrfToken)}&start-at=2099-01-01T00%3A00`,
     });
     expect(startRes.status).toBe(200);
     expect(await startRes.text()).toContain("新しいゲームを開始しました");
 
-    // 初期化直後は last_time が現在時刻なので、Cron (checkTurn) は期限前として 0 を返す。
+    // 開始前 (turn=0、startAt が未来) なので、Cron (checkTurn) は期限前として 0 を返す。
     const advanced = await stub.checkTurn();
     expect(advanced).toBe(0);
 
@@ -83,7 +86,8 @@ describe("HakoniwaGame (DO 経由の Hono app)", () => {
 
     const topAfterInit = await stub.fetch("http://example.com/games/1", { headers: { cookie } });
     expect(topAfterInit.status).toBe(200);
-    expect(await topAfterInit.text()).toContain("<h2>ターン 1</h2>");
+    // 開始前 (turn=0) なので見出しは「開始前」になる (tmp/16-season.md「表示」節)。
+    expect(await topAfterInit.text()).toContain("<h2>開始前</h2>");
   });
 
   // HAKONIWA_BASE_URL は vitest.config.ts の miniflare.bindings で設定していない

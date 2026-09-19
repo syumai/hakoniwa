@@ -529,8 +529,11 @@ describe("GameService.getTopPage / getIslandPage", () => {
   });
 
   it("tmp/16-season.md: getTopPage/getIslandPage は season を含む", () => {
-    const { service, gameId } = setup();
+    const { service, repo, gameId } = setup();
     const created = service.createIsland(user("u1"), gameId, "島1");
+    // tmp/16-season.md「開始前の状態 = ターン 0」節: TurnService を通していないので turn=0 (開始前)
+    // のまま。ターン処理済みの `running` 状態を確かめるため、1 ターン進んだことにする。
+    repo.saveMeta({ ...repo.getMeta(gameId), turn: 1 });
     const top = service.getTopPage(undefined, gameId);
     expect(top.season).toMatchObject({ turn: 1, finalTurn: null, state: "running" });
     const owner = service.openOwnerPage(user("u1"), gameId);
@@ -582,7 +585,9 @@ describe("GameService 終了後 (game_finished)", () => {
   function setupFinished() {
     const s = setup({ config: { ...defaultConfig, useLbbs: true } });
     const created = s.service.createIsland(user("u1"), s.gameId, "テスト島");
-    s.repo.saveMeta({ ...s.repo.getMeta(s.gameId), finalTurn: 1 });
+    // tmp/16-season.md「開始前の状態 = ターン 0」節: 最終ターン (1) まで実際に処理が
+    // 進んだ状態にしてから終了させる (turn=1, firstTurn=0 → 実行済み回数 1)。
+    s.repo.saveMeta({ ...s.repo.getMeta(s.gameId), turn: 1, finalTurn: 1 });
     s.repo.finishGame(s.gameId, 2_000_000);
     return { ...s, islandId: created.id };
   }

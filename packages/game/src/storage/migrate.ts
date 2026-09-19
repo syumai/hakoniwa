@@ -244,6 +244,17 @@ const MIGRATION_STEPS: Record<number, MigrationStep> = {
     `);
     driver.exec("CREATE INDEX abandonments_game_user ON abandonments(game_id, user_id)");
   },
+
+  // v6 → v7: tmp/16-season.md「開始前の状態 = ターン 0 (改訂 2026-09-20)」節。
+  // 「今動いているゲームはこのままにしたい」(ユーザー指示) ため、既に 1 ターン以上処理された
+  // ゲームは番号・ログ・終了時刻を一切変えない (first_turn=1 の旧方式のまま)。まだ 1 回も
+  // 処理していない running なゲーム (turn=1) だけを turn=0/first_turn=0 の新方式に変換する
+  // (lastTime は createGame 時点で startAt と同じ値のはずなのでそのまま。既に now >= startAt
+  // なら次のトリガーで即ターン1が処理される)。
+  6: (driver) => {
+    driver.exec("ALTER TABLE games ADD COLUMN first_turn INTEGER NOT NULL DEFAULT 1");
+    driver.exec("UPDATE games SET turn = 0, first_turn = 0 WHERE turn = 1 AND status = 'running'");
+  },
 };
 
 /**

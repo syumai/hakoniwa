@@ -62,7 +62,9 @@ function appErrorKind(fn: () => unknown): string | undefined {
 }
 
 describe("AdminService.initialize", () => {
-  it("turn=1, nextIslandId=1、lastTime は unitTimeSec で切り下げる", () => {
+  // tmp/16-season.md「開始前の状態 = ターン 0 (改訂 2026-09-20)」節: 新しいゲームは
+  // turn=0 (開始前)、firstTurn=0 で作られる。
+  it("turn=0, firstTurn=0, nextIslandId=1、lastTime は unitTimeSec で切り下げる", () => {
     const { repo, admin } = setup();
     const now = defaultConfig.unitTimeSec * 3 + 123;
 
@@ -70,7 +72,8 @@ describe("AdminService.initialize", () => {
 
     expect(repo.isInitialized()).toBe(true);
     const meta = currentMeta(repo);
-    expect(meta.turn).toBe(1);
+    expect(meta.turn).toBe(0);
+    expect(meta.firstTurn).toBe(0);
     expect(meta.nextIslandId).toBe(1);
     expect(meta.lastTime).toBe(defaultConfig.unitTimeSec * 3);
   });
@@ -262,7 +265,9 @@ describe("AdminService.reset", () => {
 });
 
 describe("AdminService.setLastTime", () => {
-  it("lastTime だけを更新する", () => {
+  // tmp/16-season.md「開始前の状態 = ターン 0」節「管理操作」: turn===0 (開始前) の間は
+  // lastTime の変更が startAt にも追従する (開始前 → 進行中の切替に使う)。
+  it("開始前 (turn===0): lastTime と一緒に startAt も更新される", () => {
     const { repo, admin } = setup();
     admin.initialize(0);
 
@@ -270,6 +275,22 @@ describe("AdminService.setLastTime", () => {
 
     const meta = currentMeta(repo);
     expect(meta.lastTime).toBe(123456);
+    expect(meta.startAt).toBe(123456);
+    expect(meta.turn).toBe(0);
+  });
+
+  it("進行中 (turn>=1): lastTime だけを更新し、startAt は変えない", () => {
+    const { repo, admin } = setup();
+    admin.initialize(0);
+    admin.advanceTurn(0);
+    const before = currentMeta(repo);
+    expect(before.turn).toBe(1);
+
+    admin.setLastTime(123456);
+
+    const meta = currentMeta(repo);
+    expect(meta.lastTime).toBe(123456);
+    expect(meta.startAt).toBe(before.startAt);
     expect(meta.turn).toBe(1);
   });
 });
@@ -288,7 +309,7 @@ describe("AdminService.status", () => {
     const gameId = admin.startGame({ name: "第 1 回" }, 0);
     const status = await admin.status();
     expect(status.initialized).toBe(true);
-    expect(status.turn).toBe(1);
+    expect(status.turn).toBe(0);
     expect(status.gameId).toBe(gameId);
     expect(status.gameName).toBe("第 1 回");
     expect(status.gameStatus).toBe("running");
@@ -336,7 +357,7 @@ describe("AdminService.advanceTurn", () => {
 
     admin.advanceTurn(0);
 
-    expect(currentMeta(repo).turn).toBe(2);
+    expect(currentMeta(repo).turn).toBe(1);
   });
 });
 

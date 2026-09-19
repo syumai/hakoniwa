@@ -84,7 +84,8 @@ describe("cli", () => {
     expect(await runCli(["db", "status"], env, status1IO)).toBe(0);
     const status1 = status1IO.lines.join("\n");
     expect(status1).toContain("初期化済み");
-    expect(status1).toContain("ターン: 1");
+    // tmp/16-season.md「開始前の状態 = ターン 0 (改訂 2026-09-20)」節: 新しいゲームは turn=0 (開始前)。
+    expect(status1).toContain("ターン: 0");
     expect(status1).toContain("島数: 0");
 
     const advanceIO = createIO();
@@ -93,7 +94,7 @@ describe("cli", () => {
 
     const status2IO = createIO();
     expect(await runCli(["db", "status"], env, status2IO)).toBe(0);
-    expect(status2IO.lines.join("\n")).toContain("ターン: 2");
+    expect(status2IO.lines.join("\n")).toContain("ターン: 1");
 
     const backupCreateIO = createIO();
     expect(await runCli(["backup", "create", "x"], env, backupCreateIO)).toBe(0);
@@ -105,7 +106,10 @@ describe("cli", () => {
   });
 
   it("turn check は期限が来ていなければ 0 ターンと表示する", async () => {
-    await runCli(["db", "init"], env, createIO());
+    // tmp/16-season.md「開始前の状態 = ターン 0」節: 開始日時省略時は現在時刻の切り下げになり
+    // 即座に期限到来してしまうため、「期限が来ていない」状況を作るには --start-at を明示的に
+    // 未来にする必要がある。
+    await runCli(["db", "init", "--start-at", "2099-01-01T00:00:00Z"], env, createIO());
     const io = createIO();
     expect(await runCli(["turn", "check"], env, io)).toBe(0);
     expect(io.lines.join("\n")).toContain("0 ターン進めました");
@@ -234,7 +238,9 @@ describe("cli (tmp/16-season.md: 開始時刻・最終ターン)", () => {
     await runCli(["turn", "advance"], env, advanceIO);
     const statusAfterIO = createIO();
     await runCli(["db", "status"], env, statusAfterIO);
-    expect(statusAfterIO.lines.join("\n")).toContain("ターン: 2");
+    // tmp/16-season.md「開始前の状態 = ターン 0」節: 新しいゲームは turn=0 で始まるため、
+    // finalTurn=1 は最初の 1 回の処理 (turn=1) で終了する。
+    expect(statusAfterIO.lines.join("\n")).toContain("ターン: 1");
   });
 });
 
