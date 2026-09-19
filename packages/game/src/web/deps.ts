@@ -19,4 +19,10 @@ export interface WebDeps {
   auth: ReturnType<typeof createAuth>;
   /** better-auth の APIError 等、想定内だがログに残したいエラーの記録先。 */
   logger: Logger;
+  /**
+   * リクエスト時に turn-check ミドルウェア (`advanceTurnIfDue`) を登録するか。`false` の場合、
+   * `createApp` は turn-check ミドルウェアを一切登録しない (Cloudflare Workers 版: Cron Trigger の
+   * `checkTurn()` だけがターン進行を担う)。
+   */
+  turnCheckOnRequest: boolean;
 }

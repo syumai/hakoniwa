@@ -1,6 +1,10 @@
 // tmp/12-workers-adapter.md 「Worker エントリ (worker.ts, game-object.ts) の骨子」節の実装。
 // 1 インスタンス = ゲーム世界 1 つ。DO の SQLite ストレージに Node 版と同じスキーマを構築し、
 // @hakoniwa/game の buildDeps で組み立てた Hono app にそのまま委譲する。
+//
+// ターン進行は Cron Trigger に限定する: `buildDeps` に `turnCheckOnRequest: false` を渡し、
+// リクエスト時の turn-check ミドルウェアを登録しない。ターン進行のトリガーは `checkTurn()`
+// (worker.ts の `scheduled` ハンドラ、`wrangler.jsonc` の Cron 設定) だけになる。
 import { DurableObject } from "cloudflare:workers";
 import { buildDeps, loadConfigFromEnv, migrate } from "@hakoniwa/game";
 import type { BuiltDeps } from "@hakoniwa/game";
@@ -28,7 +32,7 @@ export class HakoniwaGame extends DurableObject<Env> {
       migrate(driver, { defaultUnitTimeSec: config.game.unitTimeSec });
       const backupStore = new BookmarkBackupStore(ctx);
       const clock = { now: () => Math.floor(Date.now() / 1000) };
-      this.#deps = buildDeps({ driver, backupStore, clock, config });
+      this.#deps = buildDeps({ driver, backupStore, clock, config, turnCheckOnRequest: false });
     });
   }
 
