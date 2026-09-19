@@ -86,8 +86,8 @@ describe("HakoniwaGame (DO 経由の Hono app)", () => {
 
     const topAfterInit = await stub.fetch("http://example.com/games/1", { headers: { cookie } });
     expect(topAfterInit.status).toBe(200);
-    // 開始前 (turn=0) なので見出しは「開始前」になる (tmp/16-season.md「表示」節)。
-    expect(await topAfterInit.text()).toContain("<h2>開始前</h2>");
+    // 開始前 (turn=0) なので見出しは「ゲーム開始前」になる (tmp/16-season.md「表示」節「表記の原則」)。
+    expect(await topAfterInit.text()).toContain("<h2>ゲーム開始前</h2>");
   });
 
   // HAKONIWA_BASE_URL は vitest.config.ts の miniflare.bindings で設定していない

@@ -2,7 +2,7 @@
 // tmp/14-users-auth.md によりパスワード関連フォームを撤去し、ログイン状態で出し分ける。
 import type { GameConfig } from "../../core/config.ts";
 import { monsters } from "../../core/constants.ts";
-import { formatDuration, formatRemaining } from "../../app/format.ts";
+import { formatDuration, formatRemaining, GAME_NOT_STARTED_LABEL } from "../../app/format.ts";
 import type { SeasonVM } from "../../app/season.ts";
 import { formatDateTime } from "../../app/timezone.ts";
 import type { GameHeaderVM, IslandRowVM, TopPageVM } from "../../app/view-models.ts";
@@ -233,15 +233,21 @@ function SeasonHeading({
   timezone: string;
 }) {
   if (season.state === "finished") {
-    return <h2>結果発表 (ターン{season.finishedAtTurn}終了時点)</h2>;
+    // tmp/16-season.md「表記の原則 (ユーザー指示 2026-09-20)」: finishedAtTurn が 0 (ゲーム開始前に
+    // 終了した) なら「ターン 0」を出さず「ゲーム開始前に終了」と表記する。
+    const finishedLabel =
+      season.finishedAtTurn === 0
+        ? `${GAME_NOT_STARTED_LABEL}に終了`
+        : `ターン${season.finishedAtTurn}終了時点`;
+    return <h2>結果発表 ({finishedLabel})</h2>;
   }
-  // tmp/16-season.md「開始前の状態 (追加要件)」節: 開始前は見出しを「開始前」にし、
+  // tmp/16-season.md「開始前の状態 (追加要件)」節: 開始前は見出しを「ゲーム開始前」にし、
   // 「ターン 1」は出さない。
   return (
     <>
       <h2>
         {season.state === "before" ? (
-          "開始前"
+          GAME_NOT_STARTED_LABEL
         ) : (
           <>
             ターン {season.turn}

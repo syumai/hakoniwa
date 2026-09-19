@@ -329,12 +329,12 @@ describe("tmp/16-season.md: トップの3状態 (開始前/進行中/終了)", (
     expect(html).toContain("<td>1時間</td>");
   });
 
-  it("開始前: 見出しは「開始前」(「ターン 1」は出さない)、table.turn-info の1行目に「ゲーム開始」+残り時間、2行目に「ターン間隔」を表示し、「次のターン」は表示しない", async () => {
+  it("開始前: 見出しは「ゲーム開始前」(「ターン 1」は出さない)、table.turn-info の1行目に「ゲーム開始」+残り時間、2行目に「ターン間隔」を表示し、「次のターン」は表示しない", async () => {
     const futureStart = INITIAL_CLOCK + 10_000;
     const { app } = setupTestApp({ startAt: futureStart, lastTime: futureStart });
     const res = await app.request("/games/1");
     const html = await res.text();
-    expect(html).toContain("<h2>開始前</h2>");
+    expect(html).toContain("<h2>ゲーム開始前</h2>");
     expect(html).not.toContain("ターン 1");
     expect(html).toContain('<table class="turn-info">');
     expect(html).toContain("<th>ゲーム開始</th>");

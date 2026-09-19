@@ -2,7 +2,7 @@
 // tmp/14-users-auth.md によりパスワード欄を撤去し (`_csrf` で保護)、
 // ログイン方法のトグルと資金・食料最大化フォームを追加した。
 import type { AdminStatus, AuthMethodsVM } from "../../app/admin-service.ts";
-import { formatDuration } from "../../app/format.ts";
+import { formatDuration, formatTurnLabel, GAME_NOT_STARTED_LABEL } from "../../app/format.ts";
 import type { BackupInfo } from "../../app/ports.ts";
 import type { SeasonState } from "../../app/season.ts";
 import { formatDateTime, formatDateTimeLocalValue } from "../../app/timezone.ts";
@@ -24,7 +24,7 @@ function splitHoursMinutes(totalSeconds: number): { hours: number; minutes: numb
 function seasonStateLabel(state: SeasonState): string {
   switch (state) {
     case "before":
-      return "開始前";
+      return GAME_NOT_STARTED_LABEL;
     case "running":
       return "進行中";
     case "finished":
@@ -37,7 +37,7 @@ function BackupRow({ backup, csrfToken }: { backup: BackupInfo; csrfToken: strin
     <div class="backup-row">
       <h3>バックアップ: {backup.label}</h3>
       <p>
-        <b>ターン{backup.turn}</b>
+        <b>{formatTurnLabel(backup.turn)}</b>
       </p>
       <p>
         <b>作成時刻</b>:{timeToString(backup.createdAt)}
@@ -263,7 +263,7 @@ export function AdminPage({
             <b>ID</b>:{status.gameId}
           </p>
           <p>
-            <b>ターン{status.turn}</b>
+            <b>{status.turn !== undefined ? formatTurnLabel(status.turn) : ""}</b>
           </p>
           <p>
             <b>最終更新時間</b>:{status.lastTime !== undefined ? timeToString(status.lastTime) : ""}

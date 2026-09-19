@@ -1,6 +1,7 @@
 // Perl 版 Map.pm tempLbbsHead/tempLbbsInput/tempLbbsContents の移植。
 // tmp/14-users-auth.md により記帳はログイン必須になり、表示名は actor.name (フォームでは
 // 受け取らない) になったため、フォームは message + _csrf だけになった。
+import { GAME_NOT_STARTED_LABEL } from "../../app/format.ts";
 import type { LbbsPost } from "../../core/types.ts";
 
 export function LbbsHead({ islandName }: { islandName: string }) {
@@ -72,7 +73,7 @@ export function LbbsContents({ posts }: { posts: readonly LbbsPost[] }) {
         <tr key={index}>
           <td class="rank-cell">{index + 1}</td>
           <td class={post.author === "visitor" ? "lbbs-visitor" : "lbbs-owner"}>
-            {post.turn}：{post.name} &gt; {post.message}
+            {post.turn === 0 ? GAME_NOT_STARTED_LABEL : post.turn}：{post.name} &gt; {post.message}
           </td>
         </tr>
       ))}

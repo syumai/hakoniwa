@@ -1,4 +1,5 @@
 // tmp/18-games.md「ルート」節 GET /games、「表示」節 (ゲーム一覧: 名前/開始/終了/ターン数/島数/状態)。
+import { GAME_NOT_STARTED_LABEL } from "../../app/format.ts";
 import { formatDateTime } from "../../app/timezone.ts";
 import type { GameStatus, GameSummary } from "../../app/ports.ts";
 
@@ -39,7 +40,7 @@ export function GamesTable({
             </td>
             <td>{formatDateTime(game.startAt, timezone)}</td>
             <td>{game.finishedAt !== null ? formatDateTime(game.finishedAt, timezone) : ""}</td>
-            <td>{game.turn}</td>
+            <td>{game.turn === 0 ? GAME_NOT_STARTED_LABEL : game.turn}</td>
             <td>{game.islandCount}</td>
             <td>{gameStatusLabel(game.status)}</td>
           </tr>

@@ -4,6 +4,9 @@
 // parseDuration を追加した。
 // 「トップと管理画面のターン表示」節: 次のターン/ゲーム開始までの残り時間を整形する
 // formatRemaining を追加した (0 の単位は省略し、日数は 24 時間以上のときだけ出す)。
+// tmp/16-season.md「開始前の状態 = ターン 0」節「表記の原則 (ユーザー指示 2026-09-20)」: 「ターン 0」
+// という数字は画面・CLI のどこにも出さず、turn === 0 (開始前) は常に「ゲーム開始前」と表記する。
+// このラベルを 1 箇所にまとめるため GAME_NOT_STARTED_LABEL / formatTurnLabel を追加した。
 
 /**
  * 秒数を「N時間M分」のように整形する。時間/分のどちらかが 0 なら省略する
@@ -71,4 +74,18 @@ export function formatRemaining(diffSeconds: number): string {
     parts.push(`${minutes}分`);
   }
   return `あと ${parts.join(" ")}`;
+}
+
+/**
+ * `turn === 0` (開始前) を表す表示ラベル。「ターン 0」という数字を画面・CLI に出さないための
+ * 唯一の文言。tmp/16-season.md「表記の原則 (ユーザー指示 2026-09-20)」。
+ */
+export const GAME_NOT_STARTED_LABEL = "ゲーム開始前";
+
+/**
+ * ターン番号の表示ラベル。`turn === 0` (開始前) なら `GAME_NOT_STARTED_LABEL`、それ以外は
+ * `ターン${turn}` (スペースなし、既存の「ターン{n}」表記に合わせる)。
+ */
+export function formatTurnLabel(turn: number): string {
+  return turn === 0 ? GAME_NOT_STARTED_LABEL : `ターン${turn}`;
 }

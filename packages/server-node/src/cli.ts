@@ -4,7 +4,12 @@
 // `node dist/cli.js <command>` または root で `vp run --filter ./packages/server-node cli -- <command>`。
 import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
-import { formatDateTime, formatDuration, parseDuration } from "@hakoniwa/game";
+import {
+  formatDateTime,
+  formatDuration,
+  GAME_NOT_STARTED_LABEL,
+  parseDuration,
+} from "@hakoniwa/game";
 import type { GameStatus, SeasonState } from "@hakoniwa/game";
 import { composeNode } from "./compose.ts";
 import type { ComposedNode } from "./compose.ts";
@@ -71,7 +76,7 @@ const HELP_TEXT = `hakoniwa CLI
 `;
 
 const SEASON_STATE_LABELS: Record<SeasonState, string> = {
-  before: "開始前",
+  before: GAME_NOT_STARTED_LABEL,
   running: "進行中",
   finished: "終了",
 };
@@ -169,7 +174,7 @@ async function runDb(
           status.gameId !== undefined ? node.repo.listIslandSummaries(status.gameId).length : 0;
         io.stdout(`状態: 初期化済み`);
         io.stdout(`ゲーム: ${status.gameName} (id=${status.gameId}, ${status.gameStatus})`);
-        io.stdout(`ターン: ${status.turn}`);
+        io.stdout(`ターン: ${status.turn === 0 ? GAME_NOT_STARTED_LABEL : status.turn}`);
         io.stdout(`最終更新時間: ${formatTimestamp(status.lastTime ?? 0)}`);
         io.stdout(`島数: ${islandCount}`);
         if (status.season !== undefined) {

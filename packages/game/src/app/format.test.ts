@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { formatDuration, formatRemaining, parseDuration } from "./format.ts";
+import {
+  formatDuration,
+  formatRemaining,
+  formatTurnLabel,
+  GAME_NOT_STARTED_LABEL,
+  parseDuration,
+} from "./format.ts";
 
 describe("formatDuration", () => {
   it("60秒未満は秒表示", () => {
@@ -83,5 +89,19 @@ describe("formatRemaining", () => {
     expect(formatRemaining(86400)).toBe("あと 1日");
     expect(formatRemaining(99000)).toBe("あと 1日 3時間 30分");
     expect(formatRemaining(86400 + 3600 + 300)).toBe("あと 1日 1時間 5分");
+  });
+});
+
+// tmp/16-season.md「開始前の状態 = ターン 0」節「表記の原則 (ユーザー指示 2026-09-20)」: 「ターン 0」
+// という数字は出さず、turn === 0 は常に「ゲーム開始前」と表記する。
+describe("formatTurnLabel", () => {
+  it("turn === 0 は GAME_NOT_STARTED_LABEL (「ゲーム開始前」) を返す", () => {
+    expect(formatTurnLabel(0)).toBe(GAME_NOT_STARTED_LABEL);
+    expect(formatTurnLabel(0)).toBe("ゲーム開始前");
+  });
+
+  it("turn >= 1 は「ターンN」(スペースなし) を返す", () => {
+    expect(formatTurnLabel(1)).toBe("ターン1");
+    expect(formatTurnLabel(42)).toBe("ターン42");
   });
 });

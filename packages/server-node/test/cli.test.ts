@@ -85,7 +85,8 @@ describe("cli", () => {
     const status1 = status1IO.lines.join("\n");
     expect(status1).toContain("初期化済み");
     // tmp/16-season.md「開始前の状態 = ターン 0 (改訂 2026-09-20)」節: 新しいゲームは turn=0 (開始前)。
-    expect(status1).toContain("ターン: 0");
+    // 「表記の原則」節: 「ターン 0」という数字は出さず「ゲーム開始前」と表記する。
+    expect(status1).toContain("ターン: ゲーム開始前");
     expect(status1).toContain("島数: 0");
 
     const advanceIO = createIO();
@@ -181,7 +182,7 @@ describe("cli (tmp/16-season.md: 開始時刻・最終ターン)", () => {
     expect(await runCli(["db", "status"], env, statusIO)).toBe(0);
     const status = statusIO.lines.join("\n");
     expect(status).toContain("最終ターン: 100");
-    expect(status).toContain("状態(シーズン): 開始前");
+    expect(status).toContain("状態(シーズン): ゲーム開始前");
   });
 
   it("db init は HAKONIWA_START_AT / HAKONIWA_FINAL_TURN を既定値として使う", async () => {

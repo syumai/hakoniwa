@@ -192,7 +192,12 @@ export { isFinished, isBeforeStart, buildSeasonVM } from "./app/season.ts";
 
 export { parseLocalDateTime, formatDateTime, formatDateTimeLocalValue } from "./app/timezone.ts";
 
-export { formatDuration, parseDuration } from "./app/format.ts";
+export {
+  formatDuration,
+  formatTurnLabel,
+  GAME_NOT_STARTED_LABEL,
+  parseDuration,
+} from "./app/format.ts";
 
 export {
   FakeGameRepository,
