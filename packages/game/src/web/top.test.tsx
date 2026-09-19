@@ -164,6 +164,7 @@ describe("フッタ", () => {
     expect(html).not.toContain("掲示板(");
     expect(html).not.toContain("トップページ(");
     expect(html).toContain("箱庭諸島のページ(");
+    expect(html).toContain('TypeScript版配布(<a href="https://github.com/syumai/hakoniwa">');
   });
 
   it("管理者名だけ設定なら「管理者:名前」のみ表示する (メールの括弧は付かない)", async () => {

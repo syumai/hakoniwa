@@ -16,6 +16,7 @@ export interface LayoutProps {
 }
 
 const SCRIPT_SOURCE_URL = "http://www.bekkoame.ne.jp/~tokuoka/hakoniwa.html";
+const REPOSITORY_URL = "https://github.com/syumai/hakoniwa";
 
 /** `http://` `https://` から始まる文字列だけリンクにする (それ以外はそのまま文字列で表示)。 */
 function isHttpUrl(value: string): boolean {
@@ -74,6 +75,7 @@ function Footer({ config }: { config: GameConfig }) {
         ""
       )}
       箱庭諸島のページ(<a href={SCRIPT_SOURCE_URL}>{SCRIPT_SOURCE_URL}</a>)<br />
+      TypeScript版配布(<a href={REPOSITORY_URL}>{REPOSITORY_URL}</a>)<br />
     </p>
   );
 }
