@@ -44,6 +44,7 @@ function toSummary(island: Island): IslandSummary {
     factory: island.factory,
     mountain: island.mountain,
     prize: { ...island.prize, turns: [...island.prize.turns] },
+    abandonedAt: island.abandonedAt,
   };
 }
 
@@ -63,6 +64,11 @@ export class FakeGameRepository implements GameRepository {
   #logs = new Map<number, LogEntry[]>();
   #history = new Map<number, HistoryEntry[]>();
   #userPrefs = new Map<string, UserPrefs>();
+  /** tmp/19-abandon.md「回数制限」節。gameId -> 放棄記録一覧。 */
+  #abandonments = new Map<
+    number,
+    Array<{ userId: string; islandId: number; islandName: string; abandonedAt: number }>
+  >();
 
   transaction<T>(fn: () => T): T {
     return fn();
@@ -208,7 +214,7 @@ export class FakeGameRepository implements GameRepository {
   findIslandByOwner(gameId: number, userId: string): IslandSummary | undefined {
     for (const id of this.#orderOf(gameId)) {
       const island = this.#mustGet(gameId, id);
-      if (island.ownerUserId === userId) {
+      if (island.ownerUserId === userId && island.abandonedAt === null) {
         return toSummary(island);
       }
     }
@@ -303,6 +309,22 @@ export class FakeGameRepository implements GameRepository {
     this.#history.set(gameId, history.slice(Math.max(0, history.length - keep)));
   }
 
+  countAbandonments(gameId: number, userId: string): number {
+    return (this.#abandonments.get(gameId) ?? []).filter((a) => a.userId === userId).length;
+  }
+
+  recordAbandonment(
+    gameId: number,
+    userId: string,
+    islandId: number,
+    islandName: string,
+    abandonedAt: number,
+  ): void {
+    const list = this.#abandonments.get(gameId) ?? [];
+    list.push({ userId, islandId, islandName, abandonedAt });
+    this.#abandonments.set(gameId, list);
+  }
+
   reset(): void {
     this.#games = new Map();
     this.#nextGameId = 1;
@@ -310,6 +332,7 @@ export class FakeGameRepository implements GameRepository {
     this.#order = new Map();
     this.#logs = new Map();
     this.#history = new Map();
+    this.#abandonments = new Map();
   }
 
   getUserPrefs(userId: string): UserPrefs | undefined {

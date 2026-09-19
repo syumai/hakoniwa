@@ -86,6 +86,7 @@ export function createIslandsRoutes(deps: WebDeps): Hono<AppEnv> {
           config={deps.config.game}
           targets={targets}
           csrfToken={c.get("csrfToken") ?? ""}
+          timezone={deps.config.timezone}
           notice={result.notice}
         />,
       );

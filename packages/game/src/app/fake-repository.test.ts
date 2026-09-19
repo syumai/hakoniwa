@@ -273,3 +273,46 @@ describe("FakeGameRepository: 複数ゲーム", () => {
     expect(repo.getCurrentGameId()).toBeUndefined();
   });
 });
+
+// tmp/19-abandon.md (島の放棄と新しい島の発見)。
+describe("FakeGameRepository: 島の放棄", () => {
+  it("findIslandByOwner は放棄されていない島だけを返す", () => {
+    const repo = new FakeGameRepository();
+    const gameId = repo.createGame(gameInput(), 0);
+    const island = makeIsland(1, "島1");
+    repo.insertIsland(gameId, island, 0);
+    expect(repo.findIslandByOwner(gameId, "owner-1")?.id).toBe(1);
+
+    const abandoned = { ...island, abandonedAt: 12345 };
+    repo.updateIsland(gameId, abandoned);
+    expect(repo.findIslandByOwner(gameId, "owner-1")).toBeUndefined();
+  });
+
+  it("放棄後、同じ owner_user_id で新しい島を insert できる (部分インデックス相当)", () => {
+    const repo = new FakeGameRepository();
+    const gameId = repo.createGame(gameInput(), 0);
+    const island1 = makeIsland(1, "島1");
+    repo.insertIsland(gameId, island1, 0);
+    repo.updateIsland(gameId, { ...island1, abandonedAt: 12345 });
+
+    const island2 = makeIsland(2, "島2");
+    island2.ownerUserId = island1.ownerUserId;
+    expect(() => repo.insertIsland(gameId, island2, 1)).not.toThrow();
+    expect(repo.findIslandByOwner(gameId, island1.ownerUserId)?.id).toBe(2);
+  });
+
+  it("countAbandonments / recordAbandonment: (gameId, userId) ごとにカウントする", () => {
+    const repo = new FakeGameRepository();
+    const gameId = repo.createGame(gameInput(), 0);
+    expect(repo.countAbandonments(gameId, "u1")).toBe(0);
+
+    repo.recordAbandonment(gameId, "u1", 1, "島1", 100);
+    expect(repo.countAbandonments(gameId, "u1")).toBe(1);
+    expect(repo.countAbandonments(gameId, "u2")).toBe(0);
+
+    repo.recordAbandonment(gameId, "u1", 2, "島2", 200);
+    repo.recordAbandonment(gameId, "u2", 3, "島3", 300);
+    expect(repo.countAbandonments(gameId, "u1")).toBe(2);
+    expect(repo.countAbandonments(gameId, "u2")).toBe(1);
+  });
+});

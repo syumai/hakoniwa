@@ -7,8 +7,28 @@ import type { SeasonVM } from "../../app/season.ts";
 import { formatDateTime } from "../../app/timezone.ts";
 import type { GameHeaderVM, IslandRowVM, TopPageVM } from "../../app/view-models.ts";
 import { facilityScale } from "./island-info.tsx";
+import { MANUAL_URL } from "./layout.tsx";
 import { HistoryList, LogList } from "./logs.tsx";
 import { Notice } from "./messages.tsx";
+
+/**
+ * 遊び方 (外部サイト) への案内。「新しい島を探す」節の直下、フォームの上に表示する
+ * (コーディネーターの追加指示)。
+ */
+function ManualGuide() {
+  return (
+    <p>
+      <small>
+        初めての方は{" "}
+        <a href={MANUAL_URL} target="_blank" rel="noopener">
+          箱庭諸島の遊び方
+        </a>{" "}
+        をご覧ください (オリジナルの解説です。この版ではパスワードの代わりに SNS
+        などのログインを使うなど、一部の機能が異なります)。
+      </small>
+    </p>
+  );
+}
 
 /**
  * ゲームが 1 つも無いときのトップ画面。tmp/18-games.md「ルート」節: `GET /` がゲーム未開始時に
@@ -91,9 +111,13 @@ function IslandRow({
         <td class="rank-cell" rowspan={2}>
           {island.rank}
         </td>
-        <td class={island.absent !== 0 ? "island-name-faded" : "island-name"} rowspan={2}>
+        <td
+          class={island.abandoned || island.absent !== 0 ? "island-name-faded" : "island-name"}
+          rowspan={2}
+        >
           <a href={`/games/${gameId}/islands/${island.id}`}>
-            {island.name}島{island.absent !== 0 ? `(${island.absent})` : ""}
+            {island.name}島
+            {island.abandoned ? "(放棄)" : island.absent !== 0 ? `(${island.absent})` : ""}
           </a>
           <br />
           <PrizeIcons prize={island.prize} />
@@ -134,6 +158,7 @@ function MyIslandSection({ vm, csrfToken }: { vm: TopPageVM; csrfToken: string |
         <p>
           島を持つには<a href="/login">ログイン</a>してください。
         </p>
+        <ManualGuide />
       </>
     );
   }
@@ -160,6 +185,7 @@ function MyIslandSection({ vm, csrfToken }: { vm: TopPageVM; csrfToken: string |
   return (
     <>
       <h1>新しい島を探す</h1>
+      <ManualGuide />
       {vm.canCreate ? (
         <form action={`/games/${vm.game.id}/islands`} method="post">
           <input type="hidden" name="_csrf" value={csrfToken ?? ""} />

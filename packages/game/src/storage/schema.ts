@@ -15,8 +15,11 @@
  * v4: tmp/16-season.md「ターンの長さも DB に持つ (追加要件)」節。`game.unit_time_sec` を追加した。
  * v5: tmp/18-games.md。`game` (単一行) を廃止し `games` (複数ゲーム) に置き換えた。`islands` の
  *     主キーを `(game_id, id)` に変更し、`lbbs_posts`/`logs`/`history` に `game_id` を追加した。
+ * v6: tmp/19-abandon.md (島の放棄)。`islands.abandoned_at` を追加し、所有の一意性を
+ *     「放棄されていない島だけ」に絞った部分インデックスに変更した。放棄回数を記録する
+ *     `abandonments` 表を追加した。
  */
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 export const schemaSql = `
 CREATE TABLE schema_version (
@@ -42,6 +45,7 @@ CREATE TABLE games (
 -- Perl: hakojima.dat の島ブロック + island.N
 -- v2: password_hash を削除し、owner_user_id (better-auth "user".id, 1 ユーザー 1 島) を追加。
 -- v5: 主キーを (game_id, id) に変更 (島 ID はゲーム内で 1 から採番)。tmp/18-games.md。
+-- v6: abandoned_at (NULL = 有効) を追加。tmp/19-abandon.md。
 CREATE TABLE islands (
   game_id         INTEGER NOT NULL,
   id              INTEGER NOT NULL,
@@ -64,11 +68,25 @@ CREATE TABLE islands (
   terrain         TEXT    NOT NULL,
   commands        TEXT    NOT NULL,
   created_turn    INTEGER NOT NULL,
+  abandoned_at    INTEGER,
   PRIMARY KEY (game_id, id)
 ) STRICT;
 CREATE UNIQUE INDEX islands_game_rank  ON islands(game_id, rank);
 CREATE UNIQUE INDEX islands_game_name  ON islands(game_id, name);
-CREATE UNIQUE INDEX islands_game_owner ON islands(game_id, owner_user_id);
+-- v6: 所有の一意性は放棄されていない島だけに適用する (tmp/19-abandon.md「データ (スキーマ v6)」節)。
+CREATE UNIQUE INDEX islands_owner_active ON islands(game_id, owner_user_id) WHERE abandoned_at IS NULL;
+
+-- Perl 版には無い新規機能 (tmp/19-abandon.md)。島の放棄回数の記録。放棄島がターン末に削除
+-- されても記録は残す (削除しない)。
+CREATE TABLE abandonments (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  game_id      INTEGER NOT NULL,
+  user_id      TEXT    NOT NULL,
+  island_id    INTEGER NOT NULL,
+  island_name  TEXT    NOT NULL,
+  abandoned_at INTEGER NOT NULL
+) STRICT;
+CREATE INDEX abandonments_game_user ON abandonments(game_id, user_id);
 
 -- Perl: island.N 末尾の lbbs 行。position 0 が最新
 -- 外部キーは張らない (DO の PRAGMA 制限を避け、削除はリポジトリが明示的に行う)

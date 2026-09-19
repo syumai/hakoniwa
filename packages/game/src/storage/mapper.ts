@@ -28,6 +28,7 @@ export interface IslandRow {
   terrain: string;
   commands: string;
   created_turn: number;
+  abandoned_at: number | null;
 }
 
 /** `SELECT * FROM lbbs_posts` 1 行分。 */
@@ -62,6 +63,7 @@ interface IslandColumnValues {
   prizeTurns: string;
   terrain: string;
   commands: string;
+  abandonedAt: number | null;
 }
 
 function parseJSON(json: string, field: string): unknown {
@@ -156,6 +158,7 @@ export class IslandMapper {
       factory: row.factory,
       mountain: row.mountain,
       prize: this.rowToPrize(row),
+      abandonedAt: row.abandoned_at,
     };
   }
 
@@ -178,6 +181,7 @@ export class IslandMapper {
       terrain: terrainFromJSON(this.#islandSize, parseJSON(row.terrain, "terrain") as number[][]),
       commands: parseCommands(row.commands, this.#commandMax),
       lbbs: lbbsRows.map(rowToLbbsPost),
+      abandonedAt: row.abandoned_at,
     };
   }
 
@@ -207,6 +211,7 @@ export class IslandMapper {
       prizeTurns: JSON.stringify(island.prize.turns),
       terrain: JSON.stringify(island.terrain.toJSON()),
       commands: JSON.stringify(island.commands),
+      abandonedAt: island.abandonedAt,
     };
   }
 }

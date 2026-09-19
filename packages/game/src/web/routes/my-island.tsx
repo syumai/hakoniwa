@@ -5,6 +5,7 @@ import type { WebDeps } from "../deps.ts";
 import type { AppEnv } from "../env.ts";
 import { parseStringBody } from "../forms/common.ts";
 import {
+  parseAbandonForm,
   parseCommandForm,
   parseCommentForm,
   parseLbbsDeleteForm,
@@ -13,6 +14,7 @@ import {
 import { listIslandSelectOptions, requireGameIdParam } from "./helpers.ts";
 import { renderPage } from "./render.tsx";
 import { MyIslandPage } from "../views/my-island.tsx";
+import { TopPage } from "../views/top.tsx";
 
 /** `/games/:gameId{[0-9]+}` 配下にマウントする、自分の島の開発画面のルート。 */
 export function createMyIslandRoutes(deps: WebDeps): Hono<AppEnv> {
@@ -30,6 +32,7 @@ export function createMyIslandRoutes(deps: WebDeps): Hono<AppEnv> {
         config={deps.config.game}
         targets={targets}
         csrfToken={c.get("csrfToken") ?? ""}
+        timezone={deps.config.timezone}
       />,
     );
   });
@@ -48,6 +51,7 @@ export function createMyIslandRoutes(deps: WebDeps): Hono<AppEnv> {
         config={deps.config.game}
         targets={targets}
         csrfToken={c.get("csrfToken") ?? ""}
+        timezone={deps.config.timezone}
         notice={result.notice}
       />,
     );
@@ -67,6 +71,7 @@ export function createMyIslandRoutes(deps: WebDeps): Hono<AppEnv> {
         config={deps.config.game}
         targets={targets}
         csrfToken={c.get("csrfToken") ?? ""}
+        timezone={deps.config.timezone}
         notice={result.notice}
       />,
     );
@@ -86,6 +91,26 @@ export function createMyIslandRoutes(deps: WebDeps): Hono<AppEnv> {
         config={deps.config.game}
         targets={targets}
         csrfToken={c.get("csrfToken") ?? ""}
+        timezone={deps.config.timezone}
+        notice={result.notice}
+      />,
+    );
+  });
+
+  app.post("/my-island/abandon", async (c) => {
+    const gameId = requireGameIdParam(c);
+    const body = await parseStringBody(c);
+    parseAbandonForm(body);
+    const result = deps.gameService.abandonIsland(c.get("user"), gameId);
+    return renderPage(
+      c,
+      deps,
+      <TopPage
+        vm={result}
+        config={deps.config.game}
+        timezone={deps.config.timezone}
+        now={deps.clock.now()}
+        csrfToken={c.get("csrfToken")}
         notice={result.notice}
       />,
     );
@@ -105,6 +130,7 @@ export function createMyIslandRoutes(deps: WebDeps): Hono<AppEnv> {
         config={deps.config.game}
         targets={targets}
         csrfToken={c.get("csrfToken") ?? ""}
+        timezone={deps.config.timezone}
         notice={result.notice}
       />,
     );

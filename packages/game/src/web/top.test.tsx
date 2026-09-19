@@ -54,6 +54,8 @@ describe("GET /games/:gameId (トップ)", () => {
     expect(html).toContain("最近の出来事");
     expect(html).toContain("発見の記録");
     expect(html).toContain("ログイン");
+    // コーディネーターの追加指示: 未ログインでもログイン誘導の近くに遊び方リンクを出す。
+    expect(html).toContain("箱庭諸島の遊び方");
   });
 
   it("存在しない gameId は 404", async () => {
@@ -74,6 +76,8 @@ describe("GET /games/:gameId (トップ)", () => {
     expect(html).toContain("新しい島を探す");
     expect(html).toContain('action="/games/1/islands"');
     expect(html).not.toContain('action="/my-island"');
+    // コーディネーターの追加指示: 遊び方リンクをフォームの上に表示する。
+    expect(html).toContain("箱庭諸島の遊び方");
   });
 
   it("ログイン済みで島所持なら「自分の島の開発計画へ」リンクを含む", async () => {
@@ -153,6 +157,29 @@ describe("GET /games/:gameId (トップ)", () => {
     expect(html).toContain('class="island-name-faded"');
     expect(html).toContain("てすと島(25)");
   });
+
+  // tmp/19-abandon.md「表示」節。
+  it("順位表の島名: 放棄済みなら「(放棄)」を付け、island-name-faded クラスで表示する", async () => {
+    const testApp = setupTestApp();
+    const auth = await loginAs(testApp, { id: "u1", name: "たろう", email: "u1@example.com" });
+    await postForm(
+      testApp.app,
+      "/games/1/islands",
+      { name: "てすと", _csrf: auth.csrfToken },
+      { cookie: auth.cookie },
+    );
+    await postForm(
+      testApp.app,
+      "/games/1/my-island/abandon",
+      { confirm: "on", _csrf: auth.csrfToken },
+      { cookie: auth.cookie },
+    );
+
+    const res = await testApp.app.request("/games/1");
+    const html = await res.text();
+    expect(html).toContain('class="island-name-faded"');
+    expect(html).toContain("てすと島(放棄)");
+  });
 });
 
 describe("フッタ", () => {
@@ -165,6 +192,9 @@ describe("フッタ", () => {
     expect(html).not.toContain("トップページ(");
     expect(html).toContain("箱庭諸島のページ(");
     expect(html).toContain('TypeScript版配布(<a href="https://github.com/syumai/hakoniwa">');
+    // コーディネーターの追加指示: 遊び方 (外部サイト) へのリンク。
+    expect(html).toContain("遊び方(");
+    expect(html).toContain('href="https://hako2d-mj.xii.jp/pin/st/manual/man01.html"');
   });
 
   it("管理者名だけ設定なら「管理者:名前」のみ表示する (メールの括弧は付かない)", async () => {

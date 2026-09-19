@@ -3,7 +3,15 @@
 // tmp/18-games.md「データ (スキーマ v5)」節: v4 → v5 は `game` (単一行) を `games` (id=1,
 // name='第 1 回') に複製して廃止し、`islands` の主キーを (game_id, id) に作り直す。
 // 各バージョンの DB を素朴な DDL で作ってから migrate() を適用し、実 SQLite で確認する。
-import { defaultConfig, migrate, SCHEMA_VERSION, SqliteGameRepository } from "@hakoniwa/game";
+import {
+  createSeededRng,
+  defaultConfig,
+  estimate,
+  makeNewIsland,
+  migrate,
+  SCHEMA_VERSION,
+  SqliteGameRepository,
+} from "@hakoniwa/game";
 import { describe, expect, it } from "vitest";
 import { NodeSqliteDriver } from "../src/driver.ts";
 
@@ -564,5 +572,212 @@ describe("migrate: v4 → v5 (tmp/18-games.md)", () => {
       .all<{ name: string }>("PRAGMA table_info(history)")
       .map((c) => c.name);
     expect(historyCols).toContain("game_id");
+  });
+});
+
+/**
+ * v5 時点 (tmp/18-games.md まで、`islands` に `abandoned_at` が無く、所有の一意性が
+ * `islands_game_owner` という通常の UNIQUE INDEX の) DDL スナップショット。
+ * tmp/19-abandon.md (島の放棄) 以前の形。
+ */
+const V5_SCHEMA_SQL = `
+CREATE TABLE schema_version (
+  version INTEGER NOT NULL
+) STRICT;
+
+CREATE TABLE games (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  name            TEXT    NOT NULL,
+  status          TEXT    NOT NULL CHECK (status IN ('running', 'finished')),
+  turn            INTEGER NOT NULL,
+  last_time       INTEGER NOT NULL,
+  start_at        INTEGER NOT NULL,
+  final_turn      INTEGER,
+  unit_time_sec   INTEGER NOT NULL,
+  next_island_id  INTEGER NOT NULL,
+  created_at      INTEGER NOT NULL,
+  finished_at     INTEGER
+) STRICT;
+
+CREATE TABLE islands (
+  game_id         INTEGER NOT NULL,
+  id              INTEGER NOT NULL,
+  rank            INTEGER NOT NULL,
+  name            TEXT    NOT NULL,
+  owner_user_id   TEXT    NOT NULL,
+  comment         TEXT    NOT NULL DEFAULT '',
+  score           INTEGER NOT NULL DEFAULT 0,
+  absent          INTEGER NOT NULL DEFAULT 0,
+  money           INTEGER NOT NULL,
+  food            INTEGER NOT NULL,
+  pop             INTEGER NOT NULL DEFAULT 0,
+  area            INTEGER NOT NULL DEFAULT 0,
+  farm            INTEGER NOT NULL DEFAULT 0,
+  factory         INTEGER NOT NULL DEFAULT 0,
+  mountain        INTEGER NOT NULL DEFAULT 0,
+  prize_flags     INTEGER NOT NULL DEFAULT 0,
+  prize_monsters  INTEGER NOT NULL DEFAULT 0,
+  prize_turns     TEXT    NOT NULL DEFAULT '[]',
+  terrain         TEXT    NOT NULL,
+  commands        TEXT    NOT NULL,
+  created_turn    INTEGER NOT NULL,
+  PRIMARY KEY (game_id, id)
+) STRICT;
+CREATE UNIQUE INDEX islands_game_rank  ON islands(game_id, rank);
+CREATE UNIQUE INDEX islands_game_name  ON islands(game_id, name);
+CREATE UNIQUE INDEX islands_game_owner ON islands(game_id, owner_user_id);
+
+CREATE TABLE lbbs_posts (
+  game_id     INTEGER NOT NULL DEFAULT 1,
+  island_id   INTEGER NOT NULL,
+  position    INTEGER NOT NULL,
+  author      TEXT    NOT NULL CHECK (author IN ('visitor', 'owner')),
+  user_id     TEXT    NOT NULL,
+  name        TEXT    NOT NULL,
+  message     TEXT    NOT NULL,
+  turn        INTEGER NOT NULL,
+  PRIMARY KEY (game_id, island_id, position)
+) STRICT;
+
+CREATE TABLE logs (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  game_id     INTEGER NOT NULL DEFAULT 1,
+  turn        INTEGER NOT NULL,
+  seq         INTEGER NOT NULL,
+  secret      INTEGER NOT NULL DEFAULT 0,
+  island_id   INTEGER NOT NULL DEFAULT 0,
+  target_id   INTEGER NOT NULL DEFAULT 0,
+  html        TEXT    NOT NULL
+) STRICT;
+
+CREATE TABLE history (
+  id      INTEGER PRIMARY KEY AUTOINCREMENT,
+  game_id INTEGER NOT NULL DEFAULT 1,
+  turn    INTEGER NOT NULL,
+  html    TEXT    NOT NULL
+) STRICT;
+
+CREATE TABLE backups (
+  label       TEXT    PRIMARY KEY,
+  bookmark    TEXT    NOT NULL,
+  turn        INTEGER NOT NULL,
+  created_at  INTEGER NOT NULL
+) STRICT;
+`;
+
+function createV5Driver(): NodeSqliteDriver {
+  const driver = new NodeSqliteDriver(":memory:");
+  driver.exec(V5_SCHEMA_SQL);
+  driver.run("INSERT INTO schema_version (version) VALUES (5)");
+  driver.run(
+    `INSERT INTO games (
+       id, name, status, turn, last_time, start_at, final_turn, unit_time_sec,
+       next_island_id, created_at, finished_at
+     ) VALUES (1, '第 1 回', 'running', 3, 123456, 100, NULL, 21600, 4, 100, NULL)`,
+  );
+  return driver;
+}
+
+// tmp/19-abandon.md「データ (スキーマ v6)」節。
+describe("migrate: v5 → v6 (tmp/19-abandon.md)", () => {
+  it("schema_version が v6 になり、islands.abandoned_at 列と abandonments 表が追加される", async () => {
+    const driver = createV5Driver();
+
+    migrate(driver);
+
+    const versionRow = driver.get<{ version: number }>("SELECT version FROM schema_version");
+    expect(versionRow?.version).toBe(SCHEMA_VERSION);
+    expect(versionRow?.version).toBe(6);
+
+    const islandCols = driver
+      .all<{ name: string }>("PRAGMA table_info(islands)")
+      .map((c) => c.name);
+    expect(islandCols).toContain("abandoned_at");
+
+    const abandonmentsCols = driver
+      .all<{ name: string }>("PRAGMA table_info(abandonments)")
+      .map((c) => c.name);
+    expect(abandonmentsCols).toEqual(
+      expect.arrayContaining([
+        "id",
+        "game_id",
+        "user_id",
+        "island_id",
+        "island_name",
+        "abandoned_at",
+      ]),
+    );
+  });
+
+  it("既存の islands 行はそのまま保たれ、abandoned_at は NULL でバックフィルされる", async () => {
+    const driver = createV5Driver();
+    driver.run(
+      `INSERT INTO islands (
+         game_id, id, rank, name, owner_user_id, money, food, terrain, commands, created_turn
+       ) VALUES (1, 1, 0, '島1', 'u1', 100, 100, '[]', '[]', 1)`,
+    );
+
+    migrate(driver);
+
+    const row = driver.get<{ name: string; abandoned_at: number | null }>(
+      "SELECT name, abandoned_at FROM islands WHERE game_id = 1 AND id = 1",
+    );
+    expect(row?.name).toBe("島1");
+    expect(row?.abandoned_at).toBeNull();
+  });
+
+  it("放棄後 (abandoned_at 設定) は所有の一意性の対象から外れ、同じ owner_user_id で再度 insert できる", async () => {
+    const driver = createV5Driver();
+    migrate(driver);
+
+    const repo = new SqliteGameRepository(driver, {
+      islandSize: defaultConfig.islandSize,
+      commandMax: defaultConfig.commandMax,
+    });
+    const island1 = makeNewIsland(defaultConfig, createSeededRng(1), {
+      id: 1,
+      name: "島1",
+      ownerUserId: "u1",
+    });
+    estimate(island1);
+    repo.insertIsland(1, island1, 0);
+
+    const loaded = repo.findIsland(1, 1);
+    if (loaded === undefined) throw new Error("unreachable");
+    loaded.abandonedAt = 999;
+    repo.updateIsland(1, loaded);
+
+    const island2 = makeNewIsland(defaultConfig, createSeededRng(2), {
+      id: 2,
+      name: "島2",
+      ownerUserId: "u1",
+    });
+    estimate(island2);
+    expect(() => repo.insertIsland(1, island2, 1)).not.toThrow();
+    expect(repo.findIslandByOwner(1, "u1")?.id).toBe(2);
+  });
+
+  it("再度 migrate を呼んでも何も起きない (べき等)", async () => {
+    const driver = createV5Driver();
+
+    migrate(driver);
+    migrate(driver);
+
+    const versionRow = driver.get<{ version: number }>("SELECT version FROM schema_version");
+    expect(versionRow?.version).toBe(SCHEMA_VERSION);
+  });
+
+  it("新規 DB は最初から islands.abandoned_at と abandonments 表を持つ", async () => {
+    const driver = new NodeSqliteDriver(":memory:");
+
+    migrate(driver);
+
+    const islandCols = driver
+      .all<{ name: string }>("PRAGMA table_info(islands)")
+      .map((c) => c.name);
+    expect(islandCols).toContain("abandoned_at");
+    expect(
+      driver.get("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'abandonments'"),
+    ).toBeDefined();
   });
 });

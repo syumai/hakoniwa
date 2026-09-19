@@ -567,6 +567,21 @@ describe("doCommand: 食料輸出/援助 (B13: continue)", () => {
     expect(island.food).toBe(1000);
   });
 
+  // tmp/19-abandon.md「対象外」節: 放棄島への援助も target 不在扱いになる。
+  it("資金援助は target が放棄島なら logMsNoTarget を出し 'continue' (19)", () => {
+    const island = islandWithCommand(cmd({ kind: CommandKind.Money, target: 2, arg: 1 }), {
+      money: 1000,
+    });
+    const abandoned = makeTestIsland({ id: 2, name: "じろう", abandonedAt: 12345 });
+    const world = makeTestWorld([island, abandoned]);
+    const ctx = makeTestContext();
+
+    const outcome = doCommand(ctx, world, island);
+    expect(outcome).toBe("continue");
+    expect(ctx.log.flush().logs[0]!.html).toContain("目標の島に人が見当たらない");
+    expect(island.money).toBe(1000);
+  });
+
   it("資金援助は target 存在時に双方の残高が動く", () => {
     const donor = islandWithCommand(cmd({ kind: CommandKind.Money, target: 2, arg: 1 }), {
       id: 1,

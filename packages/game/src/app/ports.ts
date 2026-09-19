@@ -69,6 +69,8 @@ export interface IslandSummary {
   factory: number;
   mountain: number;
   prize: Prize;
+  /** 放棄した unix 秒。NULL = 有効。tmp/19-abandon.md。 */
+  abandonedAt: number | null;
 }
 
 export interface ListLogsQuery {
@@ -132,7 +134,10 @@ export interface GameRepository {
   loadAllIslands(gameId: number): Island[];
   findIsland(gameId: number, id: number): Island | undefined;
   findIslandByName(gameId: number, name: string): IslandSummary | undefined;
-  /** 1 ユーザー 1 島の制約の確認・自分の島の特定に使う (ゲームごと)。 */
+  /**
+   * 1 ユーザー 1 島の制約の確認・自分の島の特定に使う (ゲームごと)。tmp/19-abandon.md:
+   * 放棄されていない島 (`abandonedAt IS NULL`) だけを返す。
+   */
   findIslandByOwner(gameId: number, userId: string): IslandSummary | undefined;
 
   insertIsland(gameId: number, island: Island, rank: number): void;
@@ -153,6 +158,17 @@ export interface GameRepository {
   /** 新しい順に最大 limit 件。 */
   listHistory(gameId: number, limit: number): HistoryEntry[];
   trimHistory(gameId: number, keep: number): void;
+
+  /** tmp/19-abandon.md「回数制限」節。(game_id, user_id) の放棄回数。 */
+  countAbandonments(gameId: number, userId: string): number;
+  /** 放棄の記録を `abandonments` 表に残す (放棄島がターン末に削除されても記録は残る)。 */
+  recordAbandonment(
+    gameId: number,
+    userId: string,
+    islandId: number,
+    islandName: string,
+    abandonedAt: number,
+  ): void;
 
   /** 全テーブルの行を削除する (管理用)。better-auth の 4 表・user_prefs は対象外。 */
   reset(): void;

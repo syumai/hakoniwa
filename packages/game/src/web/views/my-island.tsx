@@ -4,6 +4,7 @@
 import type { GameConfig } from "../../core/config.ts";
 import { commandList } from "../../core/constants.ts";
 import type { FormattedCommand } from "../../core/commands/format.ts";
+import { formatDateTime } from "../../app/timezone.ts";
 import type { IslandSelectVM, OwnerPageVM } from "../../app/view-models.ts";
 import { buildMoneyDisplay } from "../../app/view-models.ts";
 import { IslandInfo } from "./island-info.tsx";
@@ -139,6 +140,45 @@ function CommandLine({ index, command }: { index: number; command: FormattedComm
   );
 }
 
+/**
+ * 「島を放棄する」節。tmp/19-abandon.md「画面」節: 開発画面の最下部に置く。
+ * 残り 0 回なら説明だけ表示しフォームは出さない。
+ */
+function AbandonSection({
+  remaining,
+  gameId,
+  csrfToken,
+}: {
+  remaining: number;
+  gameId: number;
+  csrfToken: string;
+}) {
+  return (
+    <>
+      <hr />
+      <h1>島を放棄する</h1>
+      <p>
+        島を放棄すると、住民が0人になり無人島として攻撃などの対象にならなくなります。放棄後は
+        「新しい島を探す」からすぐに新しい島を発見できます。放棄は1ゲームにつき3回まで行えます (残り
+        {remaining}回)。
+      </p>
+      {remaining > 0 ? (
+        <form action={`/games/${gameId}/my-island/abandon`} method="post">
+          <input type="hidden" name="_csrf" value={csrfToken} />
+          <label>
+            <input type="checkbox" name="confirm" />
+            本当に放棄する
+          </label>
+          <br />
+          <input type="submit" value="島を放棄する" />
+        </form>
+      ) : (
+        ""
+      )}
+    </>
+  );
+}
+
 /** 名前変更フォーム。旧 POST /settings をこの画面に統合したもの。 */
 function NameChangeForm({
   costChangeName,
@@ -174,15 +214,21 @@ export interface MyIslandPageProps {
   targets: readonly IslandSelectVM[];
   csrfToken: string;
   notice?: string;
+  timezone: string;
 }
 
 /** 開発画面。Perl 版 tempOwner + tempLbbs* + tempRecent(1)。旧 web/views/owner.tsx。 */
-export function MyIslandPage({ vm, config, targets, csrfToken, notice }: MyIslandPageProps) {
-  // tmp/18-games.md「表示」節: コメント・名前変更は現在のゲームかつ終了していないときだけ
-  // (tmp/16-season.md「開始前の状態 (追加要件)」節: 開始前でも許可する)。
+export function MyIslandPage({
+  vm,
+  config,
+  targets,
+  csrfToken,
+  notice,
+  timezone,
+}: MyIslandPageProps) {
+  // tmp/18-games.md「表示」節: コメント・名前変更・計画登録は現在のゲームかつ終了していないときだけ
+  // (tmp/16-season.md「開始前の状態 (追加要件)」節: 開始前でも許可する。計画登録も含む)。
   const writable = vm.game.isCurrent && vm.season.state !== "finished";
-  // tmp/16-season.md「開始前の状態 (追加要件)」節: 計画登録は開始前は不可 (進行中のときだけ)。
-  const commandFormWritable = writable && vm.season.state !== "before";
   // tmp/18-games.md「GameService」節: 記帳は現在のゲームであれば終了後も可、過去のゲームは不可。
   const lbbsWritable = vm.game.isCurrent;
   return (
@@ -212,8 +258,16 @@ export function MyIslandPage({ vm, config, targets, csrfToken, notice }: MyIslan
             commands={vm.rawCommands}
           />
         </div>
-        {commandFormWritable ? (
+        {writable ? (
           <div class="owner-form-col">
+            {vm.season.state === "before" ? (
+              <p class="small">
+                ゲーム開始 ({formatDateTime(vm.season.startAt, timezone)})
+                後、ターン1の終了時に実行されます。
+              </p>
+            ) : (
+              ""
+            )}
             <CommandForm
               config={config}
               defaults={vm.defaults}
@@ -221,10 +275,6 @@ export function MyIslandPage({ vm, config, targets, csrfToken, notice }: MyIslan
               gameId={vm.game.id}
               csrfToken={csrfToken}
             />
-          </div>
-        ) : writable ? (
-          <div class="owner-form-col">
-            <p>ゲームはまだ開始していません。開始後に計画を登録できます。</p>
           </div>
         ) : (
           ""
@@ -284,6 +334,16 @@ export function MyIslandPage({ vm, config, targets, csrfToken, notice }: MyIslan
         <span class="island-name">{vm.name}島</span>の近況
       </p>
       <LogList logs={vm.logs} />
+
+      {writable ? (
+        <AbandonSection
+          remaining={vm.abandon.remaining}
+          gameId={vm.game.id}
+          csrfToken={csrfToken}
+        />
+      ) : (
+        ""
+      )}
     </div>
   );
 }

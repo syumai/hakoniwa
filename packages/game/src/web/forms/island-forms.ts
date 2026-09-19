@@ -71,3 +71,14 @@ export interface LbbsDeleteForm {
 export function parseLbbsDeleteForm(body: Record<string, string>): LbbsDeleteForm {
   return { number: parseStrictNonNegativeInt(body, "number") };
 }
+
+/**
+ * 「島を放棄する」フォーム。`POST /games/:gameId/my-island/abandon`。tmp/19-abandon.md「画面」節:
+ * 誤操作防止の確認チェックボックス (`<input type="checkbox" name="confirm">`) を必須にする。
+ * 未チェックは `invalid_input`。
+ */
+export function parseAbandonForm(body: Record<string, string>): void {
+  if (field(body, "confirm") === "") {
+    throw new AppError("invalid_input", "confirm checkbox is required");
+  }
+}

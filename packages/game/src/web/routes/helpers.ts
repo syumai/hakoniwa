@@ -34,6 +34,7 @@ export function requireGameIdParam(c: Context<AppEnv>): number {
 /**
  * 「目標の島」「自分の島」等のセレクト用一覧。
  * GameService に専用メソッドがないため、getTopPage().islands (id/name のみ使用) から作る。
+ * tmp/19-abandon.md「対象外」節: 放棄島は目標の島セレクトから除外する。
  */
 export function listIslandSelectOptions(
   gameService: GameService,
@@ -41,5 +42,6 @@ export function listIslandSelectOptions(
 ): IslandSelectVM[] {
   return gameService
     .getTopPage(undefined, gameId)
-    .islands.map((island) => ({ id: island.id, name: island.name }));
+    .islands.filter((island) => !island.abandoned)
+    .map((island) => ({ id: island.id, name: island.name }));
 }

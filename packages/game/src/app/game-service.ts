@@ -15,7 +15,7 @@ import {
 } from "./sanitize.ts";
 import type { GameMeta, GameRepository, IslandSummary, UserPrefs } from "./ports.ts";
 import type { Clock } from "./ports.ts";
-import { buildSeasonVM, isBeforeStart, isFinished } from "./season.ts";
+import { buildSeasonVM, isFinished } from "./season.ts";
 import { buildIslandOgpVM, buildMoneyDisplay } from "./view-models.ts";
 import type {
   GameHeaderVM,
@@ -27,7 +27,7 @@ import type {
   TopPageVM,
 } from "./view-models.ts";
 import type { GameConfig } from "../core/config.ts";
-import { CommandKind, commandSpecs } from "../core/constants.ts";
+import { CommandKind, commandSpecs, LandKind } from "../core/constants.ts";
 import type { AutoPrepareKind } from "../core/commands/queue.ts";
 import { autoPrepare, clearAll, deleteAt, insertAt, writeAt } from "../core/commands/queue.ts";
 import { formatCommand } from "../core/commands/format.ts";
@@ -226,6 +226,7 @@ export class GameService {
     );
     const defaults: UserPrefs = repo.getUserPrefs(userId) ?? {};
     const season = buildSeasonVM(meta, this.#deps.clock.now());
+    const abandonCount = repo.countAbandonments(gameId, userId);
     return {
       ...buildDetailVM(island, rank, meta.turn),
       money: island.money,
@@ -236,6 +237,7 @@ export class GameService {
       defaults,
       season,
       game: this.#buildGameHeader(meta),
+      abandon: { remaining: Math.max(0, config.maxAbandonsPerGame - abandonCount) },
     };
   }
 
@@ -281,6 +283,7 @@ export class GameService {
         killedMonsters: killedMonsters(s.prize),
       },
       comment: s.comment,
+      abandoned: s.abandonedAt !== null,
     }));
     const sinceTurn = meta.turn - config.topLogTurns + 1;
     const logs = repo.listLogs(gameId, { sinceTurn });
@@ -421,19 +424,17 @@ export class GameService {
 
   /**
    * Perl 版 Map.pm commandMain の移植。actor 自身の島に対してのみ実行できる。
-   * tmp/16-season.md「開始前の状態 (追加要件)」節: running でもまだ `startAt` に達していなければ
-   * `game_not_started` (409) を返す。島の作成・コメント・名前変更・掲示板は開始前でも許可するため、
-   * この判定は registerCommand にのみ入れる。
+   * tmp/16-season.md「開始前の状態 (追加要件)」節の当初案では開始前の計画登録を拒否していたが、
+   * コーディネーターの追加指示によりこの制限を撤回した (設計書との差異)。計画登録は島の作成・
+   * コメント・名前変更・掲示板と同じく開始前でも行える (開始前に登録した計画はターン1終了時に
+   * 実行される)。
    */
   registerCommand(
     actor: AuthUser | undefined,
     gameId: number,
     input: CommandInput,
   ): OwnerPageVM & { notice: string } {
-    const meta = this.#requireWritableGame(gameId);
-    if (isBeforeStart(meta, this.#deps.clock.now())) {
-      throw new AppError("game_not_started", "ゲームはまだ開始していません。");
-    }
+    this.#requireWritableGame(gameId);
     const { user, summary } = this.#requireOwnIsland(actor, gameId);
     const id = summary.id;
     this.#validateCommandInput(input);
@@ -660,6 +661,65 @@ export class GameService {
         ...this.#buildOwnerPageVM(gameId, summary.id, user.id),
         notice: "記帳内容を削除しました。",
       };
+    });
+  }
+
+  // ----------------------------------------------------------------------
+  // 島の放棄 (tmp/19-abandon.md)
+  // ----------------------------------------------------------------------
+
+  /**
+   * Perl 版には無い新規機能。19「ユースケース」節の移植。
+   * 許可条件: 現在のゲーム、かつ終了していない (開始前は可)。自分の (放棄されていない) 島を
+   * 持っていること。回数制限 (`config.maxAbandonsPerGame`) を超えると `abandon_limit` (409)。
+   * 町のヘックスを荒地にして estimate、計画をすべて資金繰りに戻し `abandoned_at` を記録する。
+   * 成功後はトップ画面 VM を通知付きで返す (web 層がそのままトップを描画する)。
+   */
+  abandonIsland(actor: AuthUser | undefined, gameId: number): TopPageVM & { notice: string } {
+    const meta = this.#requireCurrentGame(gameId);
+    if (isFinished(meta)) {
+      throw new AppError("game_finished");
+    }
+    const { user, summary } = this.#requireOwnIsland(actor, gameId);
+    const { repo, config } = this.#deps;
+
+    return repo.transaction(() => {
+      const count = repo.countAbandonments(gameId, user.id);
+      if (count >= config.maxAbandonsPerGame) {
+        throw new AppError("abandon_limit", "島の放棄は 1 ゲームにつき 3 回までです。");
+      }
+
+      const island = repo.findIsland(gameId, summary.id);
+      if (island === undefined) {
+        throw new AppError("island_not_found");
+      }
+
+      // 町 → 荒地。estimate で pop 等を再計算する (Town が無くなるため pop は 0 になる)。
+      const { terrain } = island;
+      for (let y = 0; y < terrain.size; y++) {
+        for (let x = 0; x < terrain.size; x++) {
+          if (terrain.get(x, y).kind === LandKind.Town) {
+            terrain.setKind(x, y, LandKind.Waste, 0);
+          }
+        }
+      }
+      estimate(island);
+      // 計画はすべて資金繰りに戻す。
+      clearAll(island.commands, config.commandMax);
+      const now = this.#deps.clock.now();
+      island.abandonedAt = now;
+      repo.updateIsland(gameId, island);
+      repo.recordAbandonment(gameId, user.id, island.id, island.name, now);
+
+      const log = new LogCollector(meta.turn);
+      messages.logGiveupHistory(log, island.name);
+      const { history } = log.flush();
+      repo.appendHistory(gameId, history);
+
+      const remaining = config.maxAbandonsPerGame - (count + 1);
+      const notice = `${island.name}島を放棄しました。残り${remaining}回放棄できます。`;
+
+      return { ...this.getTopPage(actor, gameId), notice };
     });
   }
 }

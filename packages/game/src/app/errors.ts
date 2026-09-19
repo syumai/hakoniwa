@@ -31,7 +31,9 @@ export type AppErrorKind =
   /** 存在しない gameId を指定した。18「複数ゲーム」節。 */
   | "game_not_found"
   /** 現在のゲームが終了していない状態で新しいゲームを開始しようとした。18「複数ゲーム」節。 */
-  | "game_running";
+  | "game_running"
+  /** 1 ゲームにつき `GameConfig.maxAbandonsPerGame` 回までの島の放棄上限に達した。19「回数制限」節。 */
+  | "abandon_limit";
 
 /** app 層のユースケースが throw する唯一のエラー型。 */
 export class AppError extends Error {

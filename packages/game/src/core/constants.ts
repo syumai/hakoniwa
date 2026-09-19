@@ -60,8 +60,11 @@ export interface CommandSpec {
   cost: number;
 }
 
-/** コマンド一覧。Perl の @HcomList と同じ順序。 */
-export const commandList: readonly CommandSpec[] = [
+/**
+ * 全コマンドの一覧 (索引 `commandSpecs` の構築専用)。Perl の @HcomList と同じ順序。
+ * 「島の放棄」(kind 46) を含む。UI の選択肢には `commandList` (下記) を使うこと。
+ */
+const allCommandSpecs: readonly CommandSpec[] = [
   { kind: CommandKind.Prepare, name: "整地", cost: 5 },
   { kind: CommandKind.Sell, name: "食料輸出", cost: -100 },
   { kind: CommandKind.Prepare2, name: "地ならし", cost: 100 },
@@ -92,9 +95,18 @@ export const commandList: readonly CommandSpec[] = [
   { kind: CommandKind.AutoDelete, name: "全計画を白紙撤回", cost: 0 },
 ];
 
-/** コマンド種別 → CommandSpec の索引。 */
+/**
+ * UI (計画登録フォーム) の選択肢用のコマンド一覧。tmp/19-abandon.md「旧『島の放棄』計画」節:
+ * Perl 版の計画コマンド「島の放棄」(kind 46) は選択肢から外す。資金繰りが続いたときの
+ * 自動放棄 (kind 46 の自動投入) はコマンド処理側 (`turn/command.ts`) でそのまま動く。
+ */
+export const commandList: readonly CommandSpec[] = allCommandSpecs.filter(
+  (spec) => spec.kind !== CommandKind.Giveup,
+);
+
+/** コマンド種別 → CommandSpec の索引。「島の放棄」を含む全コマンドを引ける。 */
 export const commandSpecs: Readonly<Record<CommandKind, CommandSpec>> = Object.fromEntries(
-  commandList.map((spec) => [spec.kind, spec]),
+  allCommandSpecs.map((spec) => [spec.kind, spec]),
 ) as Readonly<Record<CommandKind, CommandSpec>>;
 
 /** 怪獣の特殊能力。 */

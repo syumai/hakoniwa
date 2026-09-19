@@ -69,6 +69,8 @@ export interface IslandRowVM {
   moneyDisplay: MoneyDisplay;
   prize: PrizeVM;
   comment: string;
+  /** 放棄済みか。tmp/19-abandon.md「表示」節: 順位表で名前に「(放棄)」を付ける。 */
+  abandoned: boolean;
 }
 
 /** ログイン状態と自分の島の有無。14「ルート」節の GET / 表示の出し分けに使う。 */
@@ -185,6 +187,8 @@ export interface OwnerPageVM extends IslandDetailVM {
   defaults: UserPrefs;
   /** 開始時刻・最終ターン・状態 (開始前/進行中/終了)。tmp/16-season.md。終了後はフォームを隠す。 */
   season: SeasonVM;
+  /** 島の放棄。tmp/19-abandon.md「ユースケース」節: 残り放棄可能回数。 */
+  abandon: { remaining: number };
   /** tmp/18-games.md。過去のゲーム (isCurrent=false) は読み取り専用として扱う。 */
   game: GameHeaderVM;
 }

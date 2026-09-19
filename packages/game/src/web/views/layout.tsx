@@ -17,6 +17,9 @@ export interface LayoutProps {
 
 const SCRIPT_SOURCE_URL = "http://www.bekkoame.ne.jp/~tokuoka/hakoniwa.html";
 const REPOSITORY_URL = "https://github.com/syumai/hakoniwa";
+/** 箱庭諸島の遊び方 (オリジナル版の解説ページ)。コーディネーターの追加指示によりフッタと
+ * トップの「新しい島を探す」節にリンクする。 */
+export const MANUAL_URL = "https://hako2d-mj.xii.jp/pin/st/manual/man01.html";
 
 /** `http://` `https://` から始まる文字列だけリンクにする (それ以外はそのまま文字列で表示)。 */
 function isHttpUrl(value: string): boolean {
@@ -43,6 +46,11 @@ function Footer({ config }: { config: GameConfig }) {
         過去のゲーム
       </a>
       <br />
+      遊び方(
+      <a href={MANUAL_URL} target="_blank" rel="noopener">
+        {MANUAL_URL}
+      </a>
+      )<br />
       {hasAdminName || hasEmail ? (
         <>
           管理者:{hasAdminName ? adminName : ""}

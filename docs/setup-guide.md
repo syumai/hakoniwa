@@ -120,8 +120,13 @@ HAKONIWA_AUTH_SECRET=xxxx HAKONIWA_ADMIN_EMAILS=you@example.com node packages/se
 | POST     | `/games/:gameId/islands/:id/lbbs`                                     | 記帳 (現在のゲームのみ。終了後でも記帳自体は可能)                                                                        |
 | GET      | `/games/:gameId/my-island`                                            | 自分の島の開発画面 (過去のゲームは読み取り専用)                                                                          |
 | POST     | `/games/:gameId/my-island/commands`\|`comment`\|`name`\|`lbbs/delete` | 現在のゲームのみ                                                                                                         |
+| POST     | `/games/:gameId/my-island/abandon`                                    | 島の放棄 (確認チェック必須。現在のゲームのみ)                                                                            |
 | GET      | `/my-island`, `/islands/:id`, `/islands/:id/ogp.png`                  | ゲーム ID を含まない旧 URL。現在のゲームの同じパスへ 302 (シェア済み URL 対策)                                           |
 
 `/login`、`/account`、`/admin` はゲームに依存しないので従来どおりのパスのままです。同時に実行できるゲームは 1 つですが、終了後は次のゲームを開始でき、過去のゲームは読み取り専用のまま `/games` から一覧・閲覧できます。
+
+開発画面の「島を放棄する」から、自分の島を放棄して新しい島を探しに行けます。放棄すると住民が 0 人の無人島になり (町は荒地に戻り、登録済みの計画はすべて資金繰りに戻ります)、攻撃・援助などの対象にならなくなる一方、直ちに「新しい島を探す」で新しい島を作れます。放棄は 1 ゲームにつき 3 回までです。
+
+初めて遊ぶ方向けに、オリジナル (Perl) 版の [遊び方](https://hako2d-mj.xii.jp/pin/st/manual/man01.html) も参考にしてください (この版はパスワードの代わりに SNS などのログインを使うなど、一部の機能が異なります)。
 
 島の URL (`/games/:gameId/islands/:id`) を X や Discord、Slack 等でシェアすると、`GET /games/:gameId/islands/:id/ogp.png` (800×420 PNG) の地図画像が OGP (`og:image`) として表示されます。画像 URL には現在ターンの `?turn=N` が付き、ターンが進むと URL が変わるため、SNS 側のキャッシュも新しい地図に更新されます。

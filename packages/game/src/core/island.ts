@@ -139,6 +139,7 @@ export function makeNewIsland(config: GameConfig, rng: Rng, init: NewIslandInit)
     terrain,
     commands,
     lbbs: [],
+    abandonedAt: null,
   };
 }
 

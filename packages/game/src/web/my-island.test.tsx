@@ -166,6 +166,95 @@ describe("GET /games/:gameId/my-island (開発画面)", () => {
   });
 });
 
+// tmp/19-abandon.md (島の放棄と新しい島の発見)。
+describe("POST /games/:gameId/my-island/abandon (島の放棄)", () => {
+  it("GET /my-island: 「島を放棄する」節に残り回数とチェックボックス付きフォームを表示する", async () => {
+    const testApp = setupTestApp();
+    const { auth } = await createIsland(testApp);
+    const res = await testApp.app.request("/games/1/my-island", {
+      headers: { cookie: auth.cookie },
+    });
+    const html = await res.text();
+    expect(html).toContain("島を放棄する");
+    expect(html).toContain("残り3回");
+    expect(html).toContain('action="/games/1/my-island/abandon"');
+    expect(html).toContain('name="confirm"');
+  });
+
+  it("confirm チェックなしは 400 (invalid_input)", async () => {
+    const testApp = setupTestApp();
+    const { auth } = await createIsland(testApp);
+    const res = await postForm(
+      testApp.app,
+      "/games/1/my-island/abandon",
+      { _csrf: auth.csrfToken },
+      { cookie: auth.cookie },
+    );
+    expect(res.status).toBe(400);
+    // 島は放棄されていない。
+    const top = await testApp.app.request("/games/1");
+    expect(await top.text()).not.toContain("(放棄)");
+  });
+
+  it("成功: トップへ通知付きで描画し、順位表に「(放棄)」が出て、自分の島が無い扱いになる", async () => {
+    const testApp = setupTestApp();
+    const { auth } = await createIsland(testApp, "すてじま");
+    const res = await postForm(
+      testApp.app,
+      "/games/1/my-island/abandon",
+      { confirm: "on", _csrf: auth.csrfToken },
+      { cookie: auth.cookie },
+    );
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain("すてじま島を放棄しました");
+    expect(html).toContain("残り2回放棄できます");
+    expect(html).toContain("すてじま島(放棄)");
+
+    // 島が無い扱いになるので、再度島を作成できる。
+    const created = await postForm(
+      testApp.app,
+      "/games/1/islands",
+      { name: "にばんめ", _csrf: auth.csrfToken },
+      { cookie: auth.cookie },
+    );
+    expect(created.status).toBe(200);
+  });
+
+  it("4回目の放棄は 409 (abandon_limit)", async () => {
+    const testApp = setupTestApp();
+    const auth = await loginAs(testApp, { id: "u1", name: "たろう", email: "u1@example.com" });
+    for (let i = 0; i < 3; i++) {
+      await postForm(
+        testApp.app,
+        "/games/1/islands",
+        { name: `島${i}`, _csrf: auth.csrfToken },
+        { cookie: auth.cookie },
+      );
+      await postForm(
+        testApp.app,
+        "/games/1/my-island/abandon",
+        { confirm: "on", _csrf: auth.csrfToken },
+        { cookie: auth.cookie },
+      );
+    }
+    await postForm(
+      testApp.app,
+      "/games/1/islands",
+      { name: "4島目", _csrf: auth.csrfToken },
+      { cookie: auth.cookie },
+    );
+    const res = await postForm(
+      testApp.app,
+      "/games/1/my-island/abandon",
+      { confirm: "on", _csrf: auth.csrfToken },
+      { cookie: auth.cookie },
+    );
+    expect(res.status).toBe(409);
+    expect(await res.text()).toContain("島の放棄は 1 ゲームにつき 3 回までです。");
+  });
+});
+
 describe("POST /games/:gameId/my-island/commands (計画登録)", () => {
   it("成功: コマンドを登録しました と (0,0)で整地 を表示する", async () => {
     const testApp = setupTestApp();
@@ -423,22 +512,22 @@ describe("tmp/16-season.md: ゲーム開始前 (now < startAt)", () => {
     return { testApp, auth };
   }
 
-  it("GET /games/:gameId/my-island: 計画フォームを出さず「ゲームはまだ開始していません。開始後に計画を登録できます。」を表示するが、地図・計画一覧・コメント・名前変更・掲示板のフォームは表示する", async () => {
+  it("GET /games/:gameId/my-island: 開始前でも計画フォームを表示し、開始時刻の案内を出す。地図・計画一覧・コメント・名前変更・掲示板のフォームも表示する", async () => {
     const { testApp, auth } = await setupBeforeStart();
     const res = await testApp.app.request("/games/1/my-island", {
       headers: { cookie: auth.cookie },
     });
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain("ゲームはまだ開始していません。開始後に計画を登録できます。");
-    expect(html).not.toContain('action="/games/1/my-island/commands"');
+    expect(html).toContain("ターン1の終了時に実行されます");
+    expect(html).toContain('action="/games/1/my-island/commands"');
     expect(html).toContain('action="/games/1/my-island/comment"');
     expect(html).toContain('action="/games/1/my-island/name"');
     expect(html).toContain("map-cell");
     expect(html).toContain("開発計画");
   });
 
-  it("POST /games/:gameId/my-island/commands は 409 game_not_started", async () => {
+  it("POST /games/:gameId/my-island/commands は開始前でも 200 で成功する", async () => {
     const { testApp, auth } = await setupBeforeStart();
     const res = await postForm(
       testApp.app,
@@ -455,8 +544,8 @@ describe("tmp/16-season.md: ゲーム開始前 (now < startAt)", () => {
       },
       { cookie: auth.cookie },
     );
-    expect(res.status).toBe(409);
-    expect(await res.text()).toContain("ゲームはまだ開始していません。");
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("コマンドを登録しました");
   });
 
   it("POST /games/:gameId/my-island/comment は開始前でも 200 で成功する", async () => {

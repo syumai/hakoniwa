@@ -74,6 +74,8 @@ export interface GameConfig {
   historyMax: number;
   /** 放棄コマンド自動入力ターン数。 */
   giveupTurns: number;
+  /** 島の放棄 (`GameService.abandonIsland`) の 1 ゲームあたりの上限回数。tmp/19-abandon.md。 */
+  maxAbandonsPerGame: number;
   /** コマンド入力限界数。 */
   commandMax: number;
   /** ローカル掲示板を使用するか。 */
@@ -141,6 +143,7 @@ export const defaultConfig: GameConfig = {
   backupKeep: 4,
   historyMax: 10,
   giveupTurns: 28,
+  maxAbandonsPerGame: 3,
   commandMax: 20,
   useLbbs: false,
   lbbsMax: 10,

@@ -47,6 +47,20 @@ describe("doMissile: 対象なし/基地なし", () => {
     expect(logs.some((l) => l.html.includes("目標の島に人が見当たらない"))).toBe(true);
   });
 
+  // tmp/19-abandon.md「対象外」節: 放棄島はターゲット解決 (findIsland) から除外される。
+  it("ターゲットが放棄島なら logMsNoTarget を出し 'continue' を返す", () => {
+    const island = makeTestIsland({ id: 1, money: 100 });
+    const target = makeTestIsland({ id: 2, abandonedAt: 12345 });
+    const world = makeTestWorld([island, target]);
+    const ctx = makeTestContext({ points: allPoints(12) });
+
+    const outcome = doMissile(ctx, world, island, cmd({ target: 2, x: 5, y: 5 }));
+
+    expect(outcome).toBe("continue");
+    const { logs } = ctx.log.flush();
+    expect(logs.some((l) => l.html.includes("目標の島に人が見当たらない"))).toBe(true);
+  });
+
   it("基地が一つもなければ logMsNoBase を出し 'continue' を返す", () => {
     const island = makeTestIsland({ id: 1, money: 100 });
     const target = makeTestIsland({ id: 2 });

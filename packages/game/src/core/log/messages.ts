@@ -758,10 +758,28 @@ export function logPropaganda(log: LogCollector, id: number, name: string, comNa
   log.normal(`${markup.islandName(name)}で${markup.com(comName)}が行われました。`, id);
 }
 
-/** 放棄。 */
-export function logGiveup(log: LogCollector, id: number, name: string): void {
+/**
+ * 放棄 (通常ログのみ)。Perl 由来の自動放棄 (計画コマンド「島の放棄」kind 46 の実行。
+ * `turn/command-misc.ts` の `doGiveup`) が使う。
+ */
+export function logGiveupNotice(log: LogCollector, id: number, name: string): void {
   log.normal(`${markup.islandName(name)}は放棄され、${markup.b("無人島")}になりました。`, id);
+}
+
+/**
+ * 放棄の記録 (history のみ)。tmp/19-abandon.md「ユースケース」節: `GameService.abandonIsland`
+ * は放棄した時点で history にこの文言を追記する。tmp/19-abandon.md「ターン処理」節への
+ * コーディネーターの修正指示により、ターン末の除去時は通常ログ (`logGiveupNotice`) だけを出し、
+ * history はここ (放棄した時点) の1回だけにする (二重記録の解消)。
+ */
+export function logGiveupHistory(log: LogCollector, name: string): void {
   log.history(`${markup.islandName(name)}、放棄され${markup.b("無人島")}となる。`);
+}
+
+/** 放棄 (通常ログ + history)。Perl 由来の自動放棄 (`doGiveup`) が使う。 */
+export function logGiveup(log: LogCollector, id: number, name: string): void {
+  logGiveupNotice(log, id, name);
+  logGiveupHistory(log, name);
 }
 
 /** 死滅。 */

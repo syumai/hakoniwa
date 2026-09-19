@@ -220,6 +220,30 @@ const MIGRATION_STEPS: Record<number, MigrationStep> = {
     }
     driver.exec("CREATE INDEX history_game ON history(game_id, id)");
   },
+
+  // v5 → v6: tmp/19-abandon.md「データ (スキーマ v6)」節。
+  // islands.abandoned_at (NULL = 有効) を追加し、所有の一意性を「放棄されていない島だけ」に
+  // 絞った部分インデックスへ差し替える (現行の一意性は UNIQUE INDEX (table 制約ではない) なので
+  // DROP INDEX → CREATE INDEX で済み、islands 表そのものの作り直しは不要)。放棄回数を記録する
+  // abandonments 表を追加する。
+  5: (driver) => {
+    driver.exec("ALTER TABLE islands ADD COLUMN abandoned_at INTEGER");
+    driver.exec("DROP INDEX IF EXISTS islands_game_owner");
+    driver.exec(
+      "CREATE UNIQUE INDEX islands_owner_active ON islands(game_id, owner_user_id) WHERE abandoned_at IS NULL",
+    );
+    driver.exec(`
+      CREATE TABLE abandonments (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        game_id      INTEGER NOT NULL,
+        user_id      TEXT    NOT NULL,
+        island_id    INTEGER NOT NULL,
+        island_name  TEXT    NOT NULL,
+        abandoned_at INTEGER NOT NULL
+      ) STRICT;
+    `);
+    driver.exec("CREATE INDEX abandonments_game_user ON abandonments(game_id, user_id)");
+  },
 };
 
 /**

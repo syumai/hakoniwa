@@ -46,7 +46,7 @@ interface HistoryRow {
 const ISLAND_UPDATE_COLUMNS_SQL = `
   name = ?, owner_user_id = ?, comment = ?, score = ?, absent = ?, money = ?, food = ?,
   pop = ?, area = ?, farm = ?, factory = ?, mountain = ?,
-  prize_flags = ?, prize_monsters = ?, prize_turns = ?, terrain = ?, commands = ?
+  prize_flags = ?, prize_monsters = ?, prize_turns = ?, terrain = ?, commands = ?, abandoned_at = ?
 `;
 
 /** `SqliteGameRepository.islandToColumnValues` の結果を UPDATE のバインド順に並べたもの。 */
@@ -69,6 +69,7 @@ function columnValuesToParams(v: ReturnType<IslandMapper["islandToColumnValues"]
     v.prizeTurns,
     v.terrain,
     v.commands,
+    v.abandonedAt,
   ];
 }
 
@@ -251,7 +252,7 @@ export class SqliteGameRepository implements GameRepository {
 
   findIslandByOwner(gameId: number, userId: string): IslandSummary | undefined {
     const row = this.#driver.get<IslandRow>(
-      "SELECT * FROM islands WHERE game_id = ? AND owner_user_id = ?",
+      "SELECT * FROM islands WHERE game_id = ? AND owner_user_id = ? AND abandoned_at IS NULL",
       gameId,
       userId,
     );
@@ -283,8 +284,8 @@ export class SqliteGameRepository implements GameRepository {
       `INSERT INTO islands (
          game_id, id, rank, name, owner_user_id, comment, score, absent, money, food,
          pop, area, farm, factory, mountain,
-         prize_flags, prize_monsters, prize_turns, terrain, commands, created_turn
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         prize_flags, prize_monsters, prize_turns, terrain, commands, created_turn, abandoned_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       gameId,
       v.id,
       rank,
@@ -306,6 +307,7 @@ export class SqliteGameRepository implements GameRepository {
       v.terrain,
       v.commands,
       createdTurn,
+      v.abandonedAt,
     );
     this.#syncLbbs(gameId, island.id, island.lbbs);
   }
@@ -461,6 +463,33 @@ export class SqliteGameRepository implements GameRepository {
     );
   }
 
+  countAbandonments(gameId: number, userId: string): number {
+    const row = this.#driver.get<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM abandonments WHERE game_id = ? AND user_id = ?",
+      gameId,
+      userId,
+    );
+    return row?.n ?? 0;
+  }
+
+  recordAbandonment(
+    gameId: number,
+    userId: string,
+    islandId: number,
+    islandName: string,
+    abandonedAt: number,
+  ): void {
+    this.#driver.run(
+      `INSERT INTO abandonments (game_id, user_id, island_id, island_name, abandoned_at)
+       VALUES (?, ?, ?, ?, ?)`,
+      gameId,
+      userId,
+      islandId,
+      islandName,
+      abandonedAt,
+    );
+  }
+
   reset(): void {
     this.#driver.exec(
       `DELETE FROM lbbs_posts;
@@ -468,7 +497,8 @@ export class SqliteGameRepository implements GameRepository {
        DELETE FROM logs;
        DELETE FROM history;
        DELETE FROM games;
-       DELETE FROM backups;`,
+       DELETE FROM backups;
+       DELETE FROM abandonments;`,
     );
   }
 

@@ -42,7 +42,11 @@ export function getState(ctx: TurnContext, islandId: number): TurnIslandState {
   return state;
 }
 
-/** World から id で島を探す。Perl の $HidToNumber{$id} 経由の島取得に相当。 */
+/**
+ * World から id で島を探す。Perl の $HidToNumber{$id} 経由の島取得に相当。
+ * tmp/19-abandon.md「対象外」節: 放棄島 (`abandonedAt !== null`) はターゲット解決から除外する
+ * (見つからない扱いにし、呼び出し側の `logMsNoTarget` 経路で中止させる)。
+ */
 export function findIsland(world: World, id: number): Island | undefined {
-  return world.islands.find((island) => island.id === id);
+  return world.islands.find((island) => island.id === id && island.abandonedAt === null);
 }

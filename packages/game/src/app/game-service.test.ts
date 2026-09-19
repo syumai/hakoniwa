@@ -638,8 +638,112 @@ describe("GameService 終了後 (game_finished)", () => {
   });
 });
 
-// tmp/16-season.md「開始前の状態 (追加要件)」節。
-describe("GameService 開始前 (game_not_started)", () => {
+// tmp/19-abandon.md (島の放棄と新しい島の発見)。
+describe("GameService.abandonIsland", () => {
+  it("町を荒地にして pop を 0 にし、計画を資金繰りに戻し、abandoned_at を記録する", () => {
+    const { service, repo, gameId } = setup();
+    const created = service.createIsland(user("u1"), gameId, "テスト");
+    // コマンドを1件登録しておき、放棄後に資金繰りへ戻ることを確認する。
+    service.registerCommand(user("u1"), gameId, {
+      number: 0,
+      kind: CommandKind.Prepare,
+      x: 0,
+      y: 0,
+      amount: 0,
+      target: 0,
+      mode: "write",
+    });
+
+    const result = service.abandonIsland(user("u1"), gameId);
+    expect(result.notice).toBe(`テスト島を放棄しました。残り2回放棄できます。`);
+
+    const island = repo.findIsland(gameId, created.id);
+    expect(island?.abandonedAt).not.toBeNull();
+    expect(island?.pop).toBe(0);
+    expect(island?.commands.every((c) => c.kind === CommandKind.DoNothing)).toBe(true);
+    for (let y = 0; y < (island?.terrain.size ?? 0); y++) {
+      for (let x = 0; x < (island?.terrain.size ?? 0); x++) {
+        expect(island?.terrain.get(x, y).kind).not.toBe(LandKind.Town);
+      }
+    }
+  });
+
+  it("放棄後は findIslandByOwner が undefined を返し、直ちに新しい島を作れる", () => {
+    const { service, repo, gameId } = setup();
+    service.createIsland(user("u1"), gameId, "テスト島");
+    service.abandonIsland(user("u1"), gameId);
+    expect(repo.findIslandByOwner(gameId, "u1")).toBeUndefined();
+
+    const created = service.createIsland(user("u1"), gameId, "新しい島");
+    expect(created.name).toBe("新しい島");
+  });
+
+  it("history に「放棄され無人島となる」を追記する", () => {
+    const { service, repo, gameId } = setup();
+    service.createIsland(user("u1"), gameId, "テスト島");
+    service.abandonIsland(user("u1"), gameId);
+    const history = repo.listHistory(gameId, 10);
+    expect(history[0]?.html).toContain("テスト島");
+    expect(history[0]?.html).toContain("放棄され");
+  });
+
+  it("4 回目の放棄は abandon_limit (409)", () => {
+    const { service, repo, gameId } = setup();
+    for (let i = 0; i < 3; i++) {
+      service.createIsland(user("u1"), gameId, `島${i}`);
+      service.abandonIsland(user("u1"), gameId);
+    }
+    service.createIsland(user("u1"), gameId, "4島目");
+    expectAppError(() => service.abandonIsland(user("u1"), gameId), "abandon_limit");
+    expect(repo.countAbandonments(gameId, "u1")).toBe(3);
+  });
+
+  it("残り放棄可能回数は OwnerPageVM.abandon.remaining に表れる", () => {
+    const { service, gameId } = setup();
+    service.createIsland(user("u1"), gameId, "テスト島");
+    let owner = service.openOwnerPage(user("u1"), gameId);
+    expect(owner.abandon.remaining).toBe(3);
+
+    service.abandonIsland(user("u1"), gameId);
+    service.createIsland(user("u1"), gameId, "2代目");
+    owner = service.openOwnerPage(user("u1"), gameId);
+    expect(owner.abandon.remaining).toBe(2);
+  });
+
+  it("島を持っていなければ no_island", () => {
+    const { service, gameId } = setup();
+    expectAppError(() => service.abandonIsland(user("u1"), gameId), "no_island");
+  });
+
+  it("終了後は game_finished", () => {
+    const { service, repo, gameId } = setup();
+    service.createIsland(user("u1"), gameId, "テスト島");
+    repo.saveMeta({ ...repo.getMeta(gameId), finalTurn: 1 });
+    repo.finishGame(gameId, 2_000_000);
+    expectAppError(() => service.abandonIsland(user("u1"), gameId), "game_finished");
+  });
+
+  it("開始前でも許可される", () => {
+    const repo = new FakeGameRepository();
+    repo.createGame(
+      {
+        name: "第 1 回",
+        startAt: 2_000_000,
+        finalTurn: null,
+        unitTimeSec: defaultConfig.unitTimeSec,
+      },
+      0,
+    );
+    const { service, gameId } = setup({ repo, clock: new FakeClock(1_000_000) });
+    service.createIsland(user("u1"), gameId, "テスト島");
+    const result = service.abandonIsland(user("u1"), gameId);
+    expect(result.notice).toContain("放棄しました");
+  });
+});
+
+// tmp/16-season.md「開始前の状態 (追加要件)」節。コーディネーターの追加指示により、
+// 計画登録も開始前に許可する (開始前に登録した計画はターン1終了時に実行される)。
+describe("GameService 開始前", () => {
   /** startAt を clock.now() より未来にして「開始前」状態を作る。 */
   function setupBeforeStart() {
     const repo = new FakeGameRepository();
@@ -671,22 +775,19 @@ describe("GameService 開始前 (game_not_started)", () => {
     expect(vm.name).toBe("テスト島");
   });
 
-  it("registerCommand は game_not_started (409)", () => {
+  it("registerCommand は開始前でも許可される", () => {
     const { service, gameId } = setupBeforeStart();
     service.createIsland(user("u1"), gameId, "テスト島");
-    expectAppError(
-      () =>
-        service.registerCommand(user("u1"), gameId, {
-          number: 0,
-          kind: CommandKind.Prepare,
-          x: 0,
-          y: 0,
-          amount: 0,
-          target: 0,
-          mode: "write",
-        }),
-      "game_not_started",
-    );
+    const result = service.registerCommand(user("u1"), gameId, {
+      number: 0,
+      kind: CommandKind.Prepare,
+      x: 0,
+      y: 0,
+      amount: 0,
+      target: 0,
+      mode: "write",
+    });
+    expect(result.notice).toBe("コマンドを登録しました。");
   });
 
   it("updateComment は開始前でも許可される", () => {

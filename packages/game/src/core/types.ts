@@ -78,6 +78,11 @@ export interface Island {
   commands: Command[];
   /** 長さ ≤ lbbsMax。先頭が最新。 */
   lbbs: LbbsPost[];
+  /**
+   * 放棄した unix 秒。NULL = 有効。tmp/19-abandon.md「データ (スキーマ v6)」節。
+   * 放棄後も owner_user_id は履歴のため残すが、所有判定 (findIslandByOwner) からは除外される。
+   */
+  abandonedAt: number | null;
 }
 
 /** ターン処理中だけ使う作業用フィールド。永続化しない。 */

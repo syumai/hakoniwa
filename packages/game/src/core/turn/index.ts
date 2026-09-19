@@ -85,8 +85,13 @@ export function runTurn(world: World, ctx: TurnContext): TurnResult {
   const order = randomArray(n, ctx.rng);
 
   // 収入、消費フェイズ
+  // tmp/19-abandon.md「ターン処理」節: 放棄島 (abandonedAt !== null) は収入・計画・成長・災害の
+  // 各フェーズをスキップする。
   for (let i = 0; i < n; i++) {
     const island = islands[order[i]!]!;
+    if (island.abandonedAt !== null) {
+      continue;
+    }
     estimate(island);
     income(island, ctx.config);
     // ターン開始前の人口をメモる
@@ -96,6 +101,9 @@ export function runTurn(world: World, ctx: TurnContext): TurnResult {
   // コマンド処理 (戻り値が consumed になるまで繰り返す)
   for (let i = 0; i < n; i++) {
     const island = islands[order[i]!]!;
+    if (island.abandonedAt !== null) {
+      continue;
+    }
     while (doCommand(ctx, world, island) === "continue") {
       // 継続
     }
@@ -104,12 +112,28 @@ export function runTurn(world: World, ctx: TurnContext): TurnResult {
   // 成長および単ヘックス災害
   for (let i = 0; i < n; i++) {
     const island = islands[order[i]!]!;
+    if (island.abandonedAt !== null) {
+      continue;
+    }
     doEachHex(ctx, island);
   }
 
   // 島全体処理
   for (let i = 0; i < n; i++) {
     const island = islands[order[i]!]!;
+
+    if (island.abandonedAt !== null) {
+      // 放棄島: ターン末の死滅判定で除去する (pop === 0)。除去時のログは logDead ではなく
+      // 通常ログ「放棄され、無人島になりました」(logGiveupNotice)。history は
+      // GameService.abandonIsland が放棄した時点で既に1回記録しているため、ここでは
+      // 出さない (二重記録防止。コーディネーターの修正指示)。
+      const state = getState(ctx, island.id);
+      state.dead = true;
+      island.pop = 0;
+      messages.logGiveupNotice(ctx.log, island.id, island.name);
+      continue;
+    }
+
     doIslandProcess(ctx, world, island);
 
     // 死滅判定

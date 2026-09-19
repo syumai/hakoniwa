@@ -148,6 +148,10 @@ pnpm --filter @hakoniwa/game generate:ogp-tiles
 - **Node サーバー**: `HAKONIWA_TURN_CHECK_INTERVAL_SEC` (既定 60 秒) 間隔のタイマーから判定されるため、アクセスがなくてもターンが進みます
 - **Cloudflare Workers**: `wrangler.jsonc` の `triggers.crons` (既定 `*/15 * * * *`、15 分ごと) から Worker の `scheduled` ハンドラが呼ばれ、DO の RPC `checkTurn()` (`turnService.advanceTurnIfDue`) を実行します。実際にターンを進めるべきかどうかは DB に保存された1ターンの長さ (初期化時に `HAKONIWA_UNIT_TIME_SEC` で決まり、以後は管理画面/CLI で変更できる) と最終更新時刻から判定するため、Cron 側は境界を意識しません。ターン境界と Cron 間隔の差 (最大 15 分) だけ進行が遅れますが、リクエストごとの遅延判定 (turn-check ミドルウェア) も併存するのでアクセスがあればその時点で進みます。ローカルの `wrangler dev` では Cron は自動発火しないため、手動で `curl http://localhost:8787/cdn-cgi/local/scheduled` を叩いて試せます
 
+## 島の放棄
+
+開発画面の「島を放棄する」(`POST /games/:gameId/my-island/abandon`) から、自分の島を放棄して新しい島を探しに行けます。放棄すると `islands.abandoned_at` が記録され、町のヘックスは荒地に、計画はすべて資金繰りに戻ります。所有判定 (`findIslandByOwner`) は放棄されていない島だけを返すため、放棄直後から新しい島を作成できます。放棄島はターン処理の収入・計画・成長・災害の各フェーズをスキップし、ターン末の死滅判定で除去されます (除去時のログは通常の死滅ではなく「放棄され、無人島になりました」)。放棄回数は `GameConfig.maxAbandonsPerGame` (既定 3) までで、`abandonments` 表に (game_id, user_id) ごとに記録が残ります (放棄島がターン末に削除されても記録は残ります)。
+
 ## Workers Cache と `no-store` の方針
 
 島の URL (`/games/:gameId/islands/:id`) を X や Discord、Slack 等でシェアすると、`GET /games/:gameId/islands/:id/ogp.png` (800×420 PNG) の地図画像が OGP (`og:image`) として表示されます。地図は観光者向けの表示 (基地→森、海底基地→海、ハリボテ→防衛施設に見える偽装ルールを含む) をそのまま敷き詰めたもので、文字は描画しません (島名やターン・人口・面積・順位は `og:title`/`og:description` に載せます)。画像は外部サービスやネイティブライブラリを使わず、`packages/game/src/ogp/` の純粋な TypeScript (自前の PNG エンコーダ + 事前生成したタイル画像データ) で毎回組み立てます。`GET /islands/:id/ogp.png` のレスポンスは `Cache-Control: public, max-age=3600` (1 時間) を返します。

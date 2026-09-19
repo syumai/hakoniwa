@@ -361,4 +361,54 @@ describe("SqliteGameRepository", () => {
       expect(byId.get(game2)?.islandCount).toBe(1);
     });
   });
+
+  // tmp/19-abandon.md「データ (スキーマ v6)」節。
+  describe("島の放棄", () => {
+    it("放棄後は所有の一意性 (部分インデックス) から外れ、同じ owner_user_id で再度 insert できる", () => {
+      gameId = repo.createGame(newGameInput(), 0);
+      const island1 = makeIsland(1, "島1");
+      repo.insertIsland(gameId, island1, 0);
+
+      // 部分インデックス islands_owner_active は abandoned_at IS NULL のときだけ効くため、
+      // abandoned_at を設定した行は一意性の対象から外れる。
+      const loaded = repo.findIsland(gameId, 1);
+      if (loaded === undefined) throw new Error("unreachable");
+      loaded.abandonedAt = 999;
+      repo.updateIsland(gameId, loaded);
+
+      const island2 = makeNewIsland(defaultConfig, createSeededRng(2), {
+        id: 2,
+        name: "島2",
+        ownerUserId: island1.ownerUserId,
+      });
+      estimate(island2);
+      expect(() => repo.insertIsland(gameId, island2, 1)).not.toThrow();
+      expect(repo.findIslandByOwner(gameId, island1.ownerUserId)?.id).toBe(2);
+    });
+
+    it("countAbandonments / recordAbandonment は (game_id, user_id) ごとに記録・集計する", () => {
+      gameId = repo.createGame(newGameInput(), 0);
+      expect(repo.countAbandonments(gameId, "u1")).toBe(0);
+
+      repo.recordAbandonment(gameId, "u1", 1, "島1", 111);
+      repo.recordAbandonment(gameId, "u1", 2, "島2", 222);
+      repo.recordAbandonment(gameId, "u2", 3, "島3", 333);
+
+      expect(repo.countAbandonments(gameId, "u1")).toBe(2);
+      expect(repo.countAbandonments(gameId, "u2")).toBe(1);
+    });
+
+    it("findIslandByOwner は abandoned_at が NULL の島だけを返す", () => {
+      gameId = repo.createGame(newGameInput(), 0);
+      const island = makeIsland(1, "島1");
+      repo.insertIsland(gameId, island, 0);
+      expect(repo.findIslandByOwner(gameId, island.ownerUserId)?.id).toBe(1);
+
+      const loaded = repo.findIsland(gameId, 1);
+      if (loaded === undefined) throw new Error("unreachable");
+      loaded.abandonedAt = 999;
+      repo.updateIsland(gameId, loaded);
+      expect(repo.findIslandByOwner(gameId, island.ownerUserId)).toBeUndefined();
+    });
+  });
 });

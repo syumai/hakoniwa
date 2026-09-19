@@ -74,6 +74,9 @@ export function errorMessage(kind: AppErrorKind): string {
       return "そのゲームは見つかりませんでした。";
     case "game_running":
       return "現在のゲームが終了していません。";
+    // tmp/19-abandon.md「回数制限」節。
+    case "abandon_limit":
+      return "島の放棄は 1 ゲームにつき 3 回までです。";
     default: {
       const exhaustive: never = kind;
       return exhaustive;
@@ -119,6 +122,9 @@ export function errorStatus(kind: AppErrorKind): 400 | 401 | 403 | 404 | 409 | 5
     case "game_not_found":
       return 404;
     case "game_running":
+      return 409;
+    // tmp/19-abandon.md「回数制限」節。
+    case "abandon_limit":
       return 409;
     default: {
       const exhaustive: never = kind;
