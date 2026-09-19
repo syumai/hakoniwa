@@ -303,17 +303,18 @@ describe("tmp/16-season.md: ターンの長さも DB に持つ (追加要件)", 
     const admin = await loginAdmin(testApp);
     const res = await testApp.app.request("/admin", { headers: { cookie: admin.cookie } });
     const html = await res.text();
-    expect(html).toContain('name="unit-time"');
-    expect(html).toContain('value="3600"');
+    // unitTimeSec: 3600 → 1 時間 0 分。
+    expect(html).toMatch(/name="unit-hours"[^>]*value="1"/);
+    expect(html).toMatch(/name="unit-minutes"[^>]*value="0"/);
   });
 
-  it("POST /admin/init: unit-time を指定して初期化できる", async () => {
+  it("POST /admin/init: unit-hours/unit-minutes を指定して初期化できる", async () => {
     const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL], skipInit: true });
     const admin = await loginAdmin(testApp);
     const res = await postForm(
       testApp.app,
       "/admin/init",
-      { "unit-time": 60, _csrf: admin.csrfToken },
+      { "unit-hours": 0, "unit-minutes": 1, _csrf: admin.csrfToken },
       { cookie: admin.cookie },
     );
     expect(res.status).toBe(200);
@@ -343,7 +344,7 @@ describe("tmp/16-season.md: ターンの長さも DB に持つ (追加要件)", 
     const res = await postForm(
       testApp.app,
       "/admin/unit-time",
-      { "unit-time": 120, _csrf: admin.csrfToken },
+      { "unit-hours": 0, "unit-minutes": 2, _csrf: admin.csrfToken },
       { cookie: admin.cookie },
     );
     expect(res.status).toBe(200);
@@ -353,13 +354,13 @@ describe("tmp/16-season.md: ターンの長さも DB に持つ (追加要件)", 
     expect(after.lastTime).toBe(before.lastTime);
   });
 
-  it("POST /admin/unit-time: 0 以下は 400 (invalid_input)", async () => {
+  it("POST /admin/unit-time: 合計 60 秒未満は 400 (invalid_input)", async () => {
     const testApp = setupTestApp({ adminEmails: [ADMIN_EMAIL] });
     const admin = await loginAdmin(testApp);
     const res = await postForm(
       testApp.app,
       "/admin/unit-time",
-      { "unit-time": 0, _csrf: admin.csrfToken },
+      { "unit-hours": 0, "unit-minutes": 0, _csrf: admin.csrfToken },
       { cookie: admin.cookie },
     );
     expect(res.status).toBe(400);

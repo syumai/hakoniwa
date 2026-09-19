@@ -91,14 +91,14 @@ HAKONIWA_AUTH_SECRET=xxxx HAKONIWA_DEV_LOGIN=true HAKONIWA_ADMIN_EMAILS=you@exam
 ```sh
 node packages/server-node/dist/cli.js --help
 node packages/server-node/dist/cli.js db init          # データの新規作成
-node packages/server-node/dist/cli.js db init --start-at 2026-10-01T21:00:00+09:00 --final-turn 100 --unit-time 3600
+node packages/server-node/dist/cli.js db init --start-at 2026-10-01T21:00:00+09:00 --final-turn 100 --unit-time 6h30m
 node packages/server-node/dist/cli.js db status        # ターン数、最終更新時刻、開始時刻、最終ターン、1ターンの長さ、状態、島数など
 node packages/server-node/dist/cli.js db reset --yes    # 現役データを削除する (古いスキーマの DB を作り直す場合にも使う)
 node packages/server-node/dist/cli.js turn check       # 期限が来ていればターンを進める (終了後は 0)
 node packages/server-node/dist/cli.js turn advance     # 強制的に 1 ターン進める (終了後は何もしない)
 node packages/server-node/dist/cli.js time set <unix|ISO8601>
 node packages/server-node/dist/cli.js game set-final-turn <N|none>  # 最終ターン数の変更 (none で無期限に戻す)
-node packages/server-node/dist/cli.js game set-unit-time <sec>      # 1ターンの長さ(秒)の変更 (次のターン境界から効く)
+node packages/server-node/dist/cli.js game set-unit-time <値>       # 1ターンの長さの変更 (次のターン境界から効く。6h/90m/1h30m/3600 (数字のみは秒) を受け付ける)
 node packages/server-node/dist/cli.js backup list|create [label]|restore <label>|delete <label>
 ```
 
@@ -240,9 +240,9 @@ Workers Cache は `Cache-Control` の無い応答も RFC 9111 のヒューリス
 
 ## 管理画面の機能一覧 (`/admin`)
 
-- **データ作成・削除**: 「新しいデータを作る」(開始日時・最終ターン・1 ターンの長さを指定可能) / 「このデータを削除」
+- **データ作成・削除**: 「新しいデータを作る」(開始日時・最終ターン・1 ターンの長さ (時間・分の入力) を指定可能) / 「このデータを削除」
 - **最終更新時刻の変更**: 日時指定 (datetime-local) または unix 秒指定
-- **ゲーム設定**: 最終ターン数の変更 (空欄で無期限)、1 ターンの長さの変更 (次のターン境界から反映)
+- **ゲーム設定**: 最終ターン数の変更 (空欄で無期限)、1 ターンの長さの変更 (時間・分の入力。次のターン境界から反映)
 - **ターンを進める**: `HAKONIWA_DEBUG=true` のときにトップページにも表示される、手動でのターン進行 (管理者ログイン必須)
 - **ログイン方法の ON/OFF**: X / Discord / メールをそれぞれ有効化・無効化 (環境変数で未設定の方法は選べない)
 - **資金・食料の最大化**: 島を選んで資金・食料を最大値にする

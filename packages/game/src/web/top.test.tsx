@@ -229,13 +229,15 @@ describe("POST /turn (デバッグ用)", () => {
 });
 
 describe("tmp/16-season.md: トップの3状態 (開始前/進行中/終了)", () => {
-  it("進行中: 「ターンN」/「最終ターンM」と「次のターン:」+残り時間を表示する", async () => {
+  it("進行中: 「ターンN」を見出しにし、最終ターン・次のターン:+残り時間を補足行 (<small>) で表示する", async () => {
     const { app } = setupTestApp({ finalTurn: 10 });
     const res = await app.request("/");
     const html = await res.text();
-    expect(html).toContain("ターン1");
-    expect(html).toContain("最終ターン10");
+    expect(html).toContain("<h1>ターン1</h1>");
+    expect(html).toContain("<small>最終ターン10</small>");
     expect(html).toContain("次のターン:");
+    // 従来の「ターンN / 最終ターンM」の並記はやめた。
+    expect(html).not.toContain("ターン1 / 最終ターン10");
     expect(html).not.toContain("結果発表");
     expect(html).not.toContain("ゲーム開始:");
   });

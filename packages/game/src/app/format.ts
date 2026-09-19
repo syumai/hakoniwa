@@ -1,5 +1,7 @@
 // tmp/16-season.md「ターンの長さも DB に持つ (追加要件)」節: 「管理画面・トップの表示は
 // 『1 ターン = N 時間 (M 分)』のように分かりやすく整形する (秒数のまま出さない)」の実装。
+// 「1 ターンの長さの入力を『時間・分』にする」節: CLI 側の逆変換 (文字列 → 秒数) として
+// parseDuration を追加した。
 
 /**
  * 秒数を「N時間M分」のように整形する。時間/分のどちらかが 0 なら省略する
@@ -20,4 +22,24 @@ export function formatDuration(totalSeconds: number): string {
     return `${hours}時間`;
   }
   return `${hours}時間${minutes}分`;
+}
+
+/**
+ * `formatDuration` の逆変換。CLI の `db init --unit-time` / `game set-unit-time` が受け付ける
+ * 書式をパースする: `"6h"` (時間のみ)、`"90m"` (分のみ)、`"1h30m"` (時間+分)、`"3600"`
+ * (数字のみは秒とみなす)。不正な形式・0 以下は `undefined`。
+ */
+export function parseDuration(text: string): number | undefined {
+  if (/^\d+$/.test(text)) {
+    const sec = Number(text);
+    return sec > 0 ? sec : undefined;
+  }
+  const match = /^(?:(\d+)h)?(?:(\d+)m)?$/.exec(text);
+  if (match === null || (match[1] === undefined && match[2] === undefined)) {
+    return undefined;
+  }
+  const hours = match[1] !== undefined ? Number(match[1]) : 0;
+  const minutes = match[2] !== undefined ? Number(match[2]) : 0;
+  const sec = hours * 3600 + minutes * 60;
+  return sec > 0 ? sec : undefined;
 }

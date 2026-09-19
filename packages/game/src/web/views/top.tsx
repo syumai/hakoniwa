@@ -174,12 +174,19 @@ function NextTurnNotice({
 }) {
   return (
     <p>
-      次のターン:{formatDateTime(nextTurnAt, timezone)} ({formatRemaining(nextTurnAt - now)})
+      <small>
+        次のターン:{formatDateTime(nextTurnAt, timezone)} ({formatRemaining(nextTurnAt - now)})
+      </small>
     </p>
   );
 }
 
-/** ターン見出し。tmp/16-season.md「表示」節: 開始前/進行中/終了で出し分ける。 */
+/**
+ * ターン見出し。tmp/16-season.md「表示」節: 開始前/進行中/終了で出し分ける。
+ * 「トップと管理画面のターン表示」節: 「ターンN」だけを見出しにし、最終ターン・
+ * 1 ターンの長さ・次のターン (または開始日時) は直下の `<p><small>` に分けて表示する
+ * (従来の「ターンN / 最終ターンM」の並記はやめた)。
+ */
 function SeasonHeading({
   season,
   now,
@@ -194,14 +201,22 @@ function SeasonHeading({
   }
   return (
     <>
-      <h1>
-        ターン{season.turn}
-        {season.finalTurn !== null ? ` / 最終ターン${season.finalTurn}` : ""}
-      </h1>
-      <p>1 ターン: {formatDuration(season.unitTimeSec)}</p>
+      <h1>ターン{season.turn}</h1>
+      {season.finalTurn !== null ? (
+        <p>
+          <small>最終ターン{season.finalTurn}</small>
+        </p>
+      ) : (
+        ""
+      )}
+      <p>
+        <small>1 ターン: {formatDuration(season.unitTimeSec)}</small>
+      </p>
       {season.state === "before" ? (
         <p>
-          ゲーム開始:{formatDateTime(season.startAt, timezone)}({timezone})
+          <small>
+            ゲーム開始:{formatDateTime(season.startAt, timezone)}({timezone})
+          </small>
         </p>
       ) : (
         ""

@@ -4,7 +4,7 @@
 // `node dist/cli.js <command>` または root で `vp run --filter ./packages/server-node cli -- <command>`。
 import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
-import { formatDateTime, formatDuration } from "@hakoniwa/game";
+import { formatDateTime, formatDuration, parseDuration } from "@hakoniwa/game";
 import type { SeasonState } from "@hakoniwa/game";
 import { composeNode } from "./compose.ts";
 import type { ComposedNode } from "./compose.ts";
@@ -37,7 +37,8 @@ const HELP_TEXT = `hakoniwa CLI
   db init                新しいデータを作る
     --start-at <ISO8601>    開始日時 (省略時: HAKONIWA_START_AT、それも無ければ現在時刻を切り下げ)
     --final-turn <N>        最終ターン数 (省略時: HAKONIWA_FINAL_TURN、それも無ければ無期限)
-    --unit-time <sec>       1 ターンの長さ (秒。省略時: HAKONIWA_UNIT_TIME_SEC)
+    --unit-time <値>        1 ターンの長さ (省略時: HAKONIWA_UNIT_TIME_SEC。
+                             "6h"/"90m"/"1h30m"/"3600" (数字のみは秒) を受け付ける)
   db reset --yes         現役データを削除する (要 --yes)
                           ※ v1 (パスワード認証) の DB は v2 (better-auth) のスキーマと
                             互換性が無いため、v1 の DB ファイルを使い続けている場合は
@@ -47,7 +48,8 @@ const HELP_TEXT = `hakoniwa CLI
   turn advance           期限に関係なく強制的に 1 ターン進める (終了後は何もしない)
   time set <unix|ISO8601> 最終更新時間を変更する
   game set-final-turn <N|none> 最終ターン数を変更する (none で無期限に戻す)
-  game set-unit-time <sec> 1 ターンの長さ(秒)を変更する (次のターン境界から効く)
+  game set-unit-time <値> 1 ターンの長さを変更する (次のターン境界から効く。
+                          "6h"/"90m"/"1h30m"/"3600" (数字のみは秒) を受け付ける)
   backup list            バックアップ一覧を表示する
   backup create [label]  バックアップを作成する (label 省略可)
   backup restore <label> バックアップを現役データへ復元する
@@ -70,6 +72,20 @@ function parsePositiveIntArg(raw: string, label: string): number {
     throw new UsageError(`${label} は正の整数で指定してください (got: ${raw})`);
   }
   return Number(raw);
+}
+
+/**
+ * 1 ターンの長さの文字列 (`"6h"`/`"90m"`/`"1h30m"`/`"3600"` (数字のみは秒)) を秒数に変換する。
+ * `db init --unit-time`/`game set-unit-time` 共通。「1 ターンの長さの入力を『時間・分』にする」節。
+ */
+function parseDurationArg(raw: string, label: string): number {
+  const sec = parseDuration(raw);
+  if (sec === undefined) {
+    throw new UsageError(
+      `${label} は "6h"/"90m"/"1h30m"/"3600" (数字のみは秒) の形式で指定してください (got: ${raw})`,
+    );
+  }
+  return sec;
 }
 
 /** unix 秒 (整数文字列) または ISO8601 文字列を unix 秒に変換する。 */
@@ -115,9 +131,7 @@ async function runDb(
           : node.config.finalTurn;
       const unitTimeSecRaw = values["unit-time"];
       const unitTimeSec =
-        unitTimeSecRaw !== undefined
-          ? parsePositiveIntArg(unitTimeSecRaw, "--unit-time")
-          : undefined;
+        unitTimeSecRaw !== undefined ? parseDurationArg(unitTimeSecRaw, "--unit-time") : undefined;
       node.adminService.initialize(Math.floor(Date.now() / 1000), {
         ...(startAt !== undefined ? { startAt } : {}),
         ...(finalTurn !== undefined ? { finalTurn } : {}),
@@ -216,8 +230,12 @@ async function runGame(positionals: string[], node: ComposedNode, io: CliIO): Pr
       return;
     }
     case "set-unit-time": {
-      const raw = requirePositional(positionals, 1, "game set-unit-time の値 (秒)");
-      const unitTimeSec = parsePositiveIntArg(raw, "game set-unit-time");
+      const raw = requirePositional(
+        positionals,
+        1,
+        'game set-unit-time の値 ("6h"/"90m"/"1h30m"/"3600" (数字のみは秒))',
+      );
+      const unitTimeSec = parseDurationArg(raw, "game set-unit-time");
       node.adminService.setUnitTimeSec(unitTimeSec);
       io.stdout(
         `1 ターンの長さを ${formatDuration(unitTimeSec)} (${unitTimeSec}秒) に設定しました。`,

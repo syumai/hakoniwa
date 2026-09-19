@@ -13,6 +13,12 @@ function timeToString(unixSeconds: number): string {
   return new Date(unixSeconds * 1000).toLocaleString("ja-JP");
 }
 
+/** 秒数を「時間・分」の 2 つの数値入力の既定値に分解する。 */
+function splitHoursMinutes(totalSeconds: number): { hours: number; minutes: number } {
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  return { hours: Math.floor(totalMinutes / 60), minutes: totalMinutes % 60 };
+}
+
 /** SeasonState → 表示文言。tmp/16-season.md「管理画面」節。 */
 function seasonStateLabel(state: SeasonState): string {
   switch (state) {
@@ -185,9 +191,23 @@ function InitForm({
         <input type="number" name="final-turn" min={1} value={initDefaults.finalTurn ?? ""} />
       </p>
       <p>
-        1 ターンの長さ (秒)
+        1 ターンの長さ
         <br />
-        <input type="number" name="unit-time" min={1} value={initDefaults.unitTimeSec} />
+        <input
+          type="number"
+          name="unit-hours"
+          min={0}
+          value={splitHoursMinutes(initDefaults.unitTimeSec).hours}
+        />
+        時間
+        <input
+          type="number"
+          name="unit-minutes"
+          min={0}
+          max={59}
+          value={splitHoursMinutes(initDefaults.unitTimeSec).minutes}
+        />
+        分
       </p>
       <input type="submit" value="新しいデータを作る" />
     </form>
@@ -224,13 +244,13 @@ export function AdminPage({
             <b>開始時刻</b>:{formatDateTime(status.season.startAt, timezone)}({timezone})
           </p>
           <p>
-            <b>最終ターン</b>:{status.season.finalTurn ?? "無期限"}
+            <small>最終ターン:{status.season.finalTurn ?? "無期限"}</small>
           </p>
           <p>
-            <b>1 ターンの長さ</b>:{formatDuration(status.season.unitTimeSec)}
+            <small>1 ターンの長さ:{formatDuration(status.season.unitTimeSec)}</small>
           </p>
           <p>
-            <b>状態</b>:{seasonStateLabel(status.season.state)}
+            <small>状態:{seasonStateLabel(status.season.state)}</small>
           </p>
           <form action="/admin/reset" method="post">
             <input type="hidden" name="_csrf" value={csrfToken} />
@@ -265,8 +285,22 @@ export function AdminPage({
           </form>
           <form action="/admin/unit-time" method="post">
             <input type="hidden" name="_csrf" value={csrfToken} />1 ターンの長さ
-            (秒。変更は次のターン境界から効く)
-            <input type="number" name="unit-time" min={1} value={status.season.unitTimeSec} />
+            (変更は次のターン境界から効く)
+            <input
+              type="number"
+              name="unit-hours"
+              min={0}
+              value={splitHoursMinutes(status.season.unitTimeSec).hours}
+            />
+            時間
+            <input
+              type="number"
+              name="unit-minutes"
+              min={0}
+              max={59}
+              value={splitHoursMinutes(status.season.unitTimeSec).minutes}
+            />
+            分
             <input type="submit" value="1 ターンの長さを変更" />
           </form>
 

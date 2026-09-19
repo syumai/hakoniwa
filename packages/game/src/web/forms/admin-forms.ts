@@ -50,7 +50,8 @@ export function parseAdminLastTimeForm(
 
 /**
  * 「新しいデータを作る」フォーム。開始日時 (省略可)、最終ターン数 (省略可)、
- * 1 ターンの長さ (秒、省略可。tmp/16-season.md「ターンの長さも DB に持つ」節) を受け取る。
+ * 1 ターンの長さ (秒、省略可。tmp/16-season.md「ターンの長さも DB に持つ」節。
+ * 「時間・分」入力からの変換は `parseUnitTimeSec` を参照) を受け取る。
  */
 export interface AdminInitForm {
   startAt?: number;
@@ -61,7 +62,6 @@ export interface AdminInitForm {
 export function parseAdminInitForm(body: Record<string, string>, timezone: string): AdminInitForm {
   const startAtRaw = field(body, "start-at");
   const finalTurnRaw = field(body, "final-turn");
-  const unitTimeSecRaw = field(body, "unit-time");
   const form: AdminInitForm = {};
 
   if (startAtRaw !== "") {
@@ -77,11 +77,9 @@ export function parseAdminInitForm(body: Record<string, string>, timezone: strin
     }
     form.finalTurn = Number(finalTurnRaw);
   }
-  if (unitTimeSecRaw !== "") {
-    if (!/^\d+$/.test(unitTimeSecRaw) || Number(unitTimeSecRaw) <= 0) {
-      throw new AppError("invalid_input", "unit-time must be a positive integer");
-    }
-    form.unitTimeSec = Number(unitTimeSecRaw);
+  const unitTimeSec = parseUnitTimeSec(body);
+  if (unitTimeSec !== undefined) {
+    form.unitTimeSec = unitTimeSec;
   }
   return form;
 }
@@ -99,15 +97,46 @@ export function parseFinalTurnForm(body: Record<string, string>): number | null 
 }
 
 /**
- * 「ゲーム設定」の 1 ターンの長さ (秒) 変更フォーム。tmp/16-season.md「ターンの長さも DB に
- * 持つ (追加要件)」節。空欄・0 以下は invalid_input。
+ * 「時間」「分」入力 (`unit-hours` / `unit-minutes`) を秒数に変換する。
+ * 「1 ターンの長さの入力を『時間・分』にする」節: 両方とも空欄なら省略扱いで `undefined`
+ * を返す (「新しいデータを作る」で現在値/env の既定値を使うケース)。どちらかに値があれば
+ * 非負整数・分は 0-59 で検証し、合計 (hours*3600 + minutes*60) が 60 秒未満、または
+ * 不正な値なら invalid_input。
+ */
+function parseUnitTimeSec(body: Record<string, string>): number | undefined {
+  const hoursRaw = field(body, "unit-hours");
+  const minutesRaw = field(body, "unit-minutes");
+  if (hoursRaw === "" && minutesRaw === "") {
+    return undefined;
+  }
+  const hoursOk = hoursRaw === "" || /^\d+$/.test(hoursRaw);
+  const minutesOk = minutesRaw === "" || /^\d+$/.test(minutesRaw);
+  if (!hoursOk || !minutesOk) {
+    throw new AppError("invalid_input", "unit-hours/unit-minutes must be non-negative integers");
+  }
+  const hours = hoursRaw === "" ? 0 : Number(hoursRaw);
+  const minutes = minutesRaw === "" ? 0 : Number(minutesRaw);
+  if (minutes > 59) {
+    throw new AppError("invalid_input", "unit-minutes must be 0-59");
+  }
+  const unitTimeSec = hours * 3600 + minutes * 60;
+  if (unitTimeSec < 60) {
+    throw new AppError("invalid_input", "unit time must be at least 60 seconds");
+  }
+  return unitTimeSec;
+}
+
+/**
+ * 「ゲーム設定」の 1 ターンの長さ変更フォーム (`unit-hours` / `unit-minutes`)。
+ * tmp/16-season.md「ターンの長さも DB に持つ (追加要件)」節。空欄・不正値・
+ * 合計 60 秒未満は invalid_input。
  */
 export function parseUnitTimeForm(body: Record<string, string>): number {
-  const raw = field(body, "unit-time");
-  if (raw === "" || !/^\d+$/.test(raw) || Number(raw) <= 0) {
-    throw new AppError("invalid_input", "unit-time must be a positive integer");
+  const unitTimeSec = parseUnitTimeSec(body);
+  if (unitTimeSec === undefined) {
+    throw new AppError("invalid_input", "unit-hours/unit-minutes is required");
   }
-  return Number(raw);
+  return unitTimeSec;
 }
 
 /** チェックボックスの有無 (存在すれば "on" 等の非空文字列) を真偽値に変換する。 */
