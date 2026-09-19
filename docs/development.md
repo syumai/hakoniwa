@@ -148,6 +148,8 @@ pnpm --filter @hakoniwa/game generate:ogp-tiles
 - **Node サーバー**: `HAKONIWA_TURN_CHECK_INTERVAL_SEC` (既定 60 秒) 間隔のタイマーから判定されるため、アクセスがなくてもターンが進みます
 - **Cloudflare Workers**: `wrangler.jsonc` の `triggers.crons` (既定 `*/15 * * * *`、15 分ごと) から Worker の `scheduled` ハンドラが呼ばれ、DO の RPC `checkTurn()` (`turnService.advanceTurnIfDue`) を実行します。実際にターンを進めるべきかどうかは DB に保存された1ターンの長さ (初期化時に `HAKONIWA_UNIT_TIME_SEC` で決まり、以後は管理画面/CLI で変更できる) と最終更新時刻から判定するため、Cron 側は境界を意識しません。ターン境界と Cron 間隔の差 (最大 15 分) だけ進行が遅れますが、リクエストごとの遅延判定 (turn-check ミドルウェア) も併存するのでアクセスがあればその時点で進みます。ローカルの `wrangler dev` では Cron は自動発火しないため、手動で `curl http://localhost:8787/cdn-cgi/local/scheduled` を叩いて試せます
 
+リクエスト時の判定と Cron / タイマーが同時に走っても、ターンは二重に進みません。1 ターン分の処理 (`TurnService.#advanceOnce`) は `await` を含まない同期処理としてリポジトリの 1 トランザクション内で実行され、ゲームの状態更新は `tryBumpTurn` (`UPDATE games ... WHERE id = ? AND turn = ?`) の楽観ロックで進行前のターン番号を条件にします。先に進めた側が勝ち、負けた側はロールバックして何もしません。Cloudflare Workers では Durable Object 自体が単一スレッドで、`transactionSync` の中で同期的に完結するため、そもそも 2 つのトリガーが同時に同じ DO で処理されることはありません。
+
 ## 島の放棄
 
 開発画面の「島を放棄する」(`POST /games/:gameId/my-island/abandon`) から、自分の島を放棄して新しい島を探しに行けます。放棄すると `islands.abandoned_at` が記録され、町のヘックスは荒地に、計画はすべて資金繰りに戻ります。所有判定 (`findIslandByOwner`) は放棄されていない島だけを返すため、放棄直後から新しい島を作成できます。放棄島はターン処理の収入・計画・成長・災害の各フェーズをスキップし、ターン末の死滅判定で除去されます (除去時のログは通常の死滅ではなく「放棄され、無人島になりました」)。放棄回数は `GameConfig.maxAbandonsPerGame` (既定 3) までで、`abandonments` 表に (game_id, user_id) ごとに記録が残ります (放棄島がターン末に削除されても記録は残ります)。
