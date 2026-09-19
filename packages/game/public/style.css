@@ -96,9 +96,16 @@ table td {
   padding: 2px 6px;
 }
 
-/* 幅の広い表 (順位表、島情報、掲示板、管理画面の表) を横スクロール可能にする。 */
+/* 幅の広い表 (順位表、島情報、掲示板、管理画面の表) を横スクロール可能にする。
+   セル内は折り返さない (Perl 版の NOBR 相当)。折り返すと表が画面幅に押し込まれて
+   読めなくなるため、幅が足りないときは枠内を横スクロールさせる。 */
 .table-scroll {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-scroll table {
+  white-space: nowrap;
 }
 
 /* トップのターン情報 (次のターン/ゲーム開始・ターン間隔) の表。罫線・背景なしの小さな
