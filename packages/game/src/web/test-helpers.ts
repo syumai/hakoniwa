@@ -1,6 +1,7 @@
 // web 層テスト用の共通セットアップ。*.test.tsx ではないので vitest には拾われない。
 import { AdminService } from "../app/admin-service.ts";
 import { AuthMethodPolicy } from "../app/auth-methods.ts";
+import type { AuthMethodsFlags } from "../app/auth-methods.ts";
 import {
   FakeBackupStore,
   FakeClock,
@@ -30,6 +31,12 @@ export interface FakeSessionUser {
   image?: string;
 }
 
+/** `deps.auth.api.listUserAccounts` が返す連携済みアカウントの最小モック。 */
+export interface FakeLinkedAccount {
+  id: string;
+  providerId: string;
+}
+
 /**
  * tmp/14-users-auth.md「サーバーサイドでの呼び出し」節の `auth.api.getSession` の最小モック。
  * web 層のテストではログイン方法 (OAuth/magic-link/devLogin) 自体は better-auth 本体の責務なので
@@ -37,7 +44,10 @@ export interface FakeSessionUser {
  * `getSession` がテストで用意したユーザーを返せれば十分。
  */
 export class FakeAuth {
-  #sessions = new Map<string, { user: FakeSessionUser; sessionId: string }>();
+  #sessions = new Map<
+    string,
+    { user: FakeSessionUser; sessionId: string; accounts: FakeLinkedAccount[] }
+  >();
   #counter = 0;
 
   api = {
@@ -68,6 +78,17 @@ export class FakeAuth {
         },
       };
     },
+    /**
+     * `/account` (routes/account.tsx) 向けの最小モック。ログイン中セッションに紐づけた
+     * `accounts` (login() の第 2 引数、または linkAccount()) をそのまま返す。
+     */
+    listUserAccounts: async ({ headers }: { headers: Headers }): Promise<FakeLinkedAccount[]> => {
+      const token = extractSessionToken(headers);
+      if (token === undefined) {
+        return [];
+      }
+      return this.#sessions.get(token)?.accounts ?? [];
+    },
   };
 
   /** `/api/auth/*` は web 層のテストでは叩かない想定 (実 better-auth を使う結合テストの領分)。 */
@@ -76,11 +97,14 @@ export class FakeAuth {
   };
 
   /** テストが「ログイン中」を模擬するための Cookie ヘッダ値と session.id を発行する。 */
-  login(user: FakeSessionUser): { cookieHeader: string; sessionId: string } {
+  login(
+    user: FakeSessionUser,
+    accounts: FakeLinkedAccount[] = [],
+  ): { cookieHeader: string; sessionId: string } {
     this.#counter += 1;
     const token = `test-token-${this.#counter}`;
     const sessionId = `test-session-${this.#counter}`;
-    this.#sessions.set(token, { user, sessionId });
+    this.#sessions.set(token, { user, sessionId, accounts });
     return { cookieHeader: `${SESSION_COOKIE_NAME}=${token}`, sessionId };
   }
 }
@@ -118,6 +142,11 @@ export interface SetupOptions {
   unitTimeSec?: number;
   /** 省略時は "Asia/Tokyo"。 */
   timezone?: string;
+  /**
+   * ログイン方法の「設定済みか」(環境変数相当)。省略時は x/discord 無効・email 有効
+   * (既存テストの挙動どおり)。X / Discord ログインボタンの表示を確認するテスト用に上書きできる。
+   */
+  authMethodsConfigured?: Partial<AuthMethodsFlags>;
 }
 
 export interface TestApp {
@@ -173,7 +202,7 @@ export function setupTestApp(options: SetupOptions = {}): TestApp {
 
   const turnService = new TurnService({ repo, config: game, rng, backupStore, logger });
   const authMethods = new AuthMethodPolicy({
-    configured: { x: false, discord: false, email: true },
+    configured: { x: false, discord: false, email: true, ...options.authMethodsConfigured },
     settings: new FakeSettingsRepository(),
   });
   const adminService = new AdminService({
@@ -216,13 +245,15 @@ export function currentMeta(testApp: TestApp): GameMeta {
 
 /**
  * `testApp.auth.login(user)` でセッションを作り、そのまま POST に使える Cookie ヘッダと
- * `_csrf` トークンをまとめて返す。
+ * `_csrf` トークンをまとめて返す。`accounts` は `/account` (GET) が返す連携済みアカウント一覧
+ * (`deps.auth.api.listUserAccounts`) のモック用。省略時は連携済みなし。
  */
 export async function loginAs(
   testApp: TestApp,
   user: FakeSessionUser,
+  accounts: FakeLinkedAccount[] = [],
 ): Promise<{ cookie: string; csrfToken: string; user: FakeSessionUser }> {
-  const { cookieHeader, sessionId } = testApp.auth.login(user);
+  const { cookieHeader, sessionId } = testApp.auth.login(user, accounts);
   const csrfToken = await createCsrfToken(testApp.config.auth.secret, sessionId);
   return { cookie: cookieHeader, csrfToken, user };
 }

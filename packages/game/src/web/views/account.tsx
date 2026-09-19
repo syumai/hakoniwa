@@ -73,7 +73,9 @@ export function AccountPage({
       {methods.enabled.x && !linkedProviders.has("twitter") ? (
         <form action="/account/link/x" method="post">
           <input type="hidden" name="_csrf" value={csrfToken} />
-          <input type="submit" value="X (Twitter) を連携する" />
+          <button type="submit" class="auth-button auth-button-x">
+            <img class="auth-logo" src="/images/x-logo.svg" alt="" />X で連携する
+          </button>
         </form>
       ) : (
         ""
@@ -81,7 +83,10 @@ export function AccountPage({
       {methods.enabled.discord && !linkedProviders.has("discord") ? (
         <form action="/account/link/discord" method="post">
           <input type="hidden" name="_csrf" value={csrfToken} />
-          <input type="submit" value="Discord を連携する" />
+          <button type="submit" class="auth-button auth-button-discord">
+            <img class="auth-logo" src="/images/discord-logo.svg" alt="" />
+            Discord で連携する
+          </button>
         </form>
       ) : (
         ""

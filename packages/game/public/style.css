@@ -333,3 +333,20 @@ form {
     font-size: 16px;
   }
 }
+
+/* ==================== X / Discord ログインボタン ==================== */
+/* 各社のブランドガイドライン (X Brand Toolkit / Discord Branding) に沿い、ロゴの色・形は
+   変更しない。ここでは余白 (Discord Flexible スタイルの条件) のみを最小限指定する。
+   ボタン自体の色・角丸・影はブラウザ既定のまま。 */
+
+.auth-logo {
+  height: 1.2em;
+  width: auto;
+  vertical-align: -0.2em;
+  margin-right: 0.5em;
+}
+
+.auth-button {
+  display: inline-block;
+  padding: 0.3em 0.9em;
+}

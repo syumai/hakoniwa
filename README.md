@@ -22,6 +22,11 @@
 - **スマートフォン対応**: スマートフォンの画面幅でも入力欄や長い URL がはみ出さないようにしています。
 - **2 つの実行環境**: Node.js (`node:sqlite`) と Cloudflare Workers (Durable Objects SQLite) のどちらでも同じゲームロジックで動きます。
 
+X / Discord のログイン・連携ボタンのロゴは、各社の公式ブランドアセット
+([X Brand Toolkit](https://about.x.com/en/who-we-are/brand-toolkit)、
+[Discord Branding](https://discord.com/branding)) をそのまま使用しており、各社の商標ガイドラインに
+従います。X ロゴは Brand Toolkit の SVG を黒配色で使用しています。
+
 ## 構成
 
 pnpm workspace によるモノレポです。パッケージ化しているのは差し替え単位となる Adapter だけで、ゲーム本体は 1 パッケージです。

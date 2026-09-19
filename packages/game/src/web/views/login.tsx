@@ -18,8 +18,8 @@ export function LoginPage({ methods, devLogin }: LoginPageProps) {
           <h1>SNS アカウントでログイン</h1>
           {methods.enabled.x ? (
             <p>
-              <a href="/auth/x" class="login-x">
-                X (Twitter) でログイン
+              <a href="/auth/x" class="auth-button auth-button-x">
+                <img class="auth-logo" src="/images/x-logo.svg" alt="" />X でログイン
               </a>
             </p>
           ) : (
@@ -27,7 +27,8 @@ export function LoginPage({ methods, devLogin }: LoginPageProps) {
           )}
           {methods.enabled.discord ? (
             <p>
-              <a href="/auth/discord" class="login-discord">
+              <a href="/auth/discord" class="auth-button auth-button-discord">
+                <img class="auth-logo" src="/images/discord-logo.svg" alt="" />
                 Discord でログイン
               </a>
             </p>
