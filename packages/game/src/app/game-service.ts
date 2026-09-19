@@ -15,7 +15,7 @@ import {
 } from "./sanitize.ts";
 import type { GameMeta, GameRepository, IslandSummary, UserPrefs } from "./ports.ts";
 import type { Clock } from "./ports.ts";
-import { buildSeasonVM, isFinished } from "./season.ts";
+import { buildSeasonVM, isBeforeStart, isFinished } from "./season.ts";
 import { buildIslandOgpVM, buildMoneyDisplay } from "./view-models.ts";
 import type {
   GameHeaderVM,
@@ -419,13 +419,21 @@ export class GameService {
     }
   }
 
-  /** Perl 版 Map.pm commandMain の移植。actor 自身の島に対してのみ実行できる。 */
+  /**
+   * Perl 版 Map.pm commandMain の移植。actor 自身の島に対してのみ実行できる。
+   * tmp/16-season.md「開始前の状態 (追加要件)」節: running でもまだ `startAt` に達していなければ
+   * `game_not_started` (409) を返す。島の作成・コメント・名前変更・掲示板は開始前でも許可するため、
+   * この判定は registerCommand にのみ入れる。
+   */
   registerCommand(
     actor: AuthUser | undefined,
     gameId: number,
     input: CommandInput,
   ): OwnerPageVM & { notice: string } {
-    this.#requireWritableGame(gameId);
+    const meta = this.#requireWritableGame(gameId);
+    if (isBeforeStart(meta, this.#deps.clock.now())) {
+      throw new AppError("game_not_started", "ゲームはまだ開始していません。");
+    }
     const { user, summary } = this.#requireOwnIsland(actor, gameId);
     const id = summary.id;
     this.#validateCommandInput(input);

@@ -412,3 +412,84 @@ describe("tmp/16-season.md: ゲーム終了後 (現在のゲームのまま)", (
     expect(await res.text()).toContain("ゲームは終了しました。");
   });
 });
+
+// tmp/16-season.md「開始前の状態 (追加要件)」節。
+describe("tmp/16-season.md: ゲーム開始前 (now < startAt)", () => {
+  /** startAt を未来にした testApp を作り、島を1つ発見する (開始前でも島の発見は許可される)。 */
+  async function setupBeforeStart() {
+    const futureStart = 2_000_000;
+    const testApp = setupTestApp({ startAt: futureStart, lastTime: futureStart });
+    const { auth } = await createIsland(testApp);
+    return { testApp, auth };
+  }
+
+  it("GET /games/:gameId/my-island: 計画フォームを出さず「ゲームはまだ開始していません。開始後に計画を登録できます。」を表示するが、地図・計画一覧・コメント・名前変更・掲示板のフォームは表示する", async () => {
+    const { testApp, auth } = await setupBeforeStart();
+    const res = await testApp.app.request("/games/1/my-island", {
+      headers: { cookie: auth.cookie },
+    });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain("ゲームはまだ開始していません。開始後に計画を登録できます。");
+    expect(html).not.toContain('action="/games/1/my-island/commands"');
+    expect(html).toContain('action="/games/1/my-island/comment"');
+    expect(html).toContain('action="/games/1/my-island/name"');
+    expect(html).toContain("map-cell");
+    expect(html).toContain("開発計画");
+  });
+
+  it("POST /games/:gameId/my-island/commands は 409 game_not_started", async () => {
+    const { testApp, auth } = await setupBeforeStart();
+    const res = await postForm(
+      testApp.app,
+      "/games/1/my-island/commands",
+      {
+        _csrf: auth.csrfToken,
+        number: 0,
+        kind: 1,
+        x: 0,
+        y: 0,
+        amount: 0,
+        target: 0,
+        mode: "insert",
+      },
+      { cookie: auth.cookie },
+    );
+    expect(res.status).toBe(409);
+    expect(await res.text()).toContain("ゲームはまだ開始していません。");
+  });
+
+  it("POST /games/:gameId/my-island/comment は開始前でも 200 で成功する", async () => {
+    const { testApp, auth } = await setupBeforeStart();
+    const res = await postForm(
+      testApp.app,
+      "/games/1/my-island/comment",
+      { _csrf: auth.csrfToken, message: "よろしく" },
+      { cookie: auth.cookie },
+    );
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("コメントを更新しました");
+  });
+
+  it("開始時刻を過去にすると計画登録が通るようになる", async () => {
+    const { testApp, auth } = await setupBeforeStart();
+    testApp.repo.saveMeta({ ...currentMeta(testApp), startAt: 0, lastTime: 0 });
+    const res = await postForm(
+      testApp.app,
+      "/games/1/my-island/commands",
+      {
+        _csrf: auth.csrfToken,
+        number: 0,
+        kind: 1,
+        x: 0,
+        y: 0,
+        amount: 0,
+        target: 0,
+        mode: "insert",
+      },
+      { cookie: auth.cookie },
+    );
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("コマンドを登録しました");
+  });
+});

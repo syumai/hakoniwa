@@ -638,6 +638,81 @@ describe("GameService 終了後 (game_finished)", () => {
   });
 });
 
+// tmp/16-season.md「開始前の状態 (追加要件)」節。
+describe("GameService 開始前 (game_not_started)", () => {
+  /** startAt を clock.now() より未来にして「開始前」状態を作る。 */
+  function setupBeforeStart() {
+    const repo = new FakeGameRepository();
+    repo.createGame(
+      {
+        name: "第 1 回",
+        startAt: 2_000_000,
+        finalTurn: null,
+        unitTimeSec: defaultConfig.unitTimeSec,
+      },
+      0,
+    );
+    return setup({
+      repo,
+      clock: new FakeClock(1_000_000),
+      config: { ...defaultConfig, useLbbs: true, costChangeName: 10 },
+    });
+  }
+
+  it("season.state は 'before'", () => {
+    const { service, gameId } = setupBeforeStart();
+    const top = service.getTopPage(undefined, gameId);
+    expect(top.season.state).toBe("before");
+  });
+
+  it("createIsland は開始前でも許可される", () => {
+    const { service, gameId } = setupBeforeStart();
+    const vm = service.createIsland(user("u1"), gameId, "テスト島");
+    expect(vm.name).toBe("テスト島");
+  });
+
+  it("registerCommand は game_not_started (409)", () => {
+    const { service, gameId } = setupBeforeStart();
+    service.createIsland(user("u1"), gameId, "テスト島");
+    expectAppError(
+      () =>
+        service.registerCommand(user("u1"), gameId, {
+          number: 0,
+          kind: CommandKind.Prepare,
+          x: 0,
+          y: 0,
+          amount: 0,
+          target: 0,
+          mode: "write",
+        }),
+      "game_not_started",
+    );
+  });
+
+  it("updateComment は開始前でも許可される", () => {
+    const { service, gameId } = setupBeforeStart();
+    service.createIsland(user("u1"), gameId, "テスト島");
+    const result = service.updateComment(user("u1"), gameId, "よろしく");
+    expect(result.comment).toBe("よろしく");
+  });
+
+  it("changeName は開始前でも許可される", () => {
+    const { service, gameId } = setupBeforeStart();
+    service.createIsland(user("u1"), gameId, "元の名前");
+    const result = service.changeName(user("u1"), gameId, "新しい名前");
+    expect(result.name).toBe("新しい名前");
+  });
+
+  it("postLbbs / deleteLbbs は開始前でも許可される", () => {
+    const { service, gameId } = setupBeforeStart();
+    const created = service.createIsland(user("u1"), gameId, "テスト島");
+    const posted = service.postLbbs(user("u2", "旅人"), gameId, created.id, "こんにちは");
+    expect(posted.lbbs[0]).toMatchObject({ name: "旅人", message: "こんにちは" });
+    const deleted = service.deleteLbbs(user("u1"), gameId, 0);
+    expect(deleted.lbbs).toHaveLength(0);
+  });
+});
+
 // tmp/18-games.md「複数ゲーム (過去のゲームの保存)」節。
 describe("GameService: 複数ゲーム", () => {
   function setupTwoGames() {

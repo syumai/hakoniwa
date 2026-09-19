@@ -178,8 +178,11 @@ export interface MyIslandPageProps {
 
 /** 開発画面。Perl 版 tempOwner + tempLbbs* + tempRecent(1)。旧 web/views/owner.tsx。 */
 export function MyIslandPage({ vm, config, targets, csrfToken, notice }: MyIslandPageProps) {
-  // tmp/18-games.md「表示」節: 計画登録・コメント・名前変更は現在のゲームかつ進行中のときだけ。
+  // tmp/18-games.md「表示」節: コメント・名前変更は現在のゲームかつ終了していないときだけ
+  // (tmp/16-season.md「開始前の状態 (追加要件)」節: 開始前でも許可する)。
   const writable = vm.game.isCurrent && vm.season.state !== "finished";
+  // tmp/16-season.md「開始前の状態 (追加要件)」節: 計画登録は開始前は不可 (進行中のときだけ)。
+  const commandFormWritable = writable && vm.season.state !== "before";
   // tmp/18-games.md「GameService」節: 記帳は現在のゲームであれば終了後も可、過去のゲームは不可。
   const lbbsWritable = vm.game.isCurrent;
   return (
@@ -209,7 +212,7 @@ export function MyIslandPage({ vm, config, targets, csrfToken, notice }: MyIslan
             commands={vm.rawCommands}
           />
         </div>
-        {writable ? (
+        {commandFormWritable ? (
           <div class="owner-form-col">
             <CommandForm
               config={config}
@@ -218,6 +221,10 @@ export function MyIslandPage({ vm, config, targets, csrfToken, notice }: MyIslan
               gameId={vm.game.id}
               csrfToken={csrfToken}
             />
+          </div>
+        ) : writable ? (
+          <div class="owner-form-col">
+            <p>ゲームはまだ開始していません。開始後に計画を登録できます。</p>
           </div>
         ) : (
           ""

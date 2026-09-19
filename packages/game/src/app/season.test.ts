@@ -45,11 +45,17 @@ describe("isBeforeStart", () => {
     expect(isBeforeStart(meta({ turn: 1, startAt: 1000 }), 1000)).toBe(false);
   });
 
-  it("turn が1でなければ false", () => {
-    expect(isBeforeStart(meta({ turn: 2, startAt: 1000 }), 0)).toBe(false);
+  // tmp/16-season.md「開始前の状態 (追加要件)」節: state === 'before' の判定は
+  // `now < startAt` のみで行い、turn は問わない。
+  it("turn が1でなくても now < startAt なら true (turn は問わない)", () => {
+    expect(isBeforeStart(meta({ turn: 2, startAt: 1000 }), 0)).toBe(true);
   });
 
-  it("終了済みなら turn===1 でも false", () => {
+  it("turn が1でなく、now >= startAt なら false", () => {
+    expect(isBeforeStart(meta({ turn: 2, startAt: 1000 }), 1000)).toBe(false);
+  });
+
+  it("終了済みなら now < startAt でも false", () => {
     expect(
       isBeforeStart(meta({ turn: 1, startAt: 1000, status: "finished", finishedAt: 0 }), 0),
     ).toBe(false);

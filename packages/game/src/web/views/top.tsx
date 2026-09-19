@@ -209,11 +209,19 @@ function SeasonHeading({
   if (season.state === "finished") {
     return <h2>結果発表 (ターン{season.finishedAtTurn}終了時点)</h2>;
   }
+  // tmp/16-season.md「開始前の状態 (追加要件)」節: 開始前は見出しを「開始前」にし、
+  // 「ターン 1」は出さない。
   return (
     <>
       <h2>
-        ターン {season.turn}
-        {season.finalTurn !== null ? ` / ${season.finalTurn}` : ""}
+        {season.state === "before" ? (
+          "開始前"
+        ) : (
+          <>
+            ターン {season.turn}
+            {season.finalTurn !== null ? ` / ${season.finalTurn}` : ""}
+          </>
+        )}
       </h2>
       <table class="turn-info">
         {season.state === "before" ? (

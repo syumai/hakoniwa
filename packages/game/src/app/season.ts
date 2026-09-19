@@ -10,9 +10,15 @@ export function isFinished(meta: GameMeta): boolean {
   return meta.status === "finished";
 }
 
-/** 開始前: ターン1のまま、まだ開始時刻に達していない (終了していないゲームに限る)。 */
+/**
+ * 開始前: まだ開始時刻に達していない (終了していないゲームに限る)。
+ * 設計書との差異: tmp/16-season.md「開始前の状態 (追加要件)」節により、`turn === 1` かどうかは
+ * 問わず `now < startAt` だけで判定する (以前は `turn === 1 &&` も条件にしていたが、
+ * `startAt` はターン1の間しか動かせないため実質的な挙動は変わらない。判定の意図を
+ * `now < startAt` 単独で表せるよう明示的に外した)。
+ */
 export function isBeforeStart(meta: GameMeta, now: number): boolean {
-  return !isFinished(meta) && meta.turn === 1 && now < meta.startAt;
+  return !isFinished(meta) && now < meta.startAt;
 }
 
 export type SeasonState = "before" | "running" | "finished";

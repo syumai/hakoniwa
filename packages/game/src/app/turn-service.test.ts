@@ -83,6 +83,34 @@ describe("TurnService.advanceTurnIfDue", () => {
     expect(repo.getMeta(gameId).turn).toBe(1);
   });
 
+  // tmp/16-season.md「開始前の状態 (追加要件)」節: `setLastTime` で lastTime を startAt より
+  // 過去にずらしても (期限判定だけなら満たしてしまう状況でも)、`now < startAt` なら進まない。
+  it("開始前 (now < startAt): 期限判定は満たしていても 0 を返し、meta は変わらない", () => {
+    const repo = new FakeGameRepository();
+    const gameId = setupGame(repo, {
+      turn: 1,
+      startAt: 2000,
+      lastTime: 500,
+      unitTimeSec: 100,
+      nextIslandId: 2,
+    });
+    repo.insertIsland(gameId, makeIsland(defaultConfig, createSeededRng(1), 1), 0);
+    const turnService = new TurnService({
+      repo,
+      config: defaultConfig,
+      rng: createSeededRng(2),
+      backupStore: new FakeBackupStore(),
+      logger: new FakeLogger(),
+    });
+
+    // now(700) - lastTime(500) = 200 >= unitTimeSec(100) なので期限判定だけなら満たすが、
+    // now(700) < startAt(2000) なので進まない。
+    const advanced = turnService.advanceTurnIfDue(700);
+
+    expect(advanced).toBe(0);
+    expect(repo.getMeta(gameId).turn).toBe(1);
+  });
+
   it("期限後なら 1 ターン進め、meta が更新される", () => {
     const repo = new FakeGameRepository();
     const gameId = setupGame(repo, { turn: 1, lastTime: 1000, nextIslandId: 2 });
@@ -285,6 +313,30 @@ describe("TurnService.advanceTurn", () => {
     turnService.advanceTurn(0);
 
     expect(repo.getMeta(gameId).turn).toBe(6);
+  });
+
+  // tmp/16-season.md「開始前の状態 (追加要件)」節: 管理者の手動進行 (advanceTurn) も
+  // 開始前 (now < startAt) は進めない。
+  it("開始前 (now < startAt) は何もしない", () => {
+    const repo = new FakeGameRepository();
+    const gameId = setupGame(repo, {
+      turn: 1,
+      startAt: 2000,
+      lastTime: 2000,
+      nextIslandId: 2,
+    });
+    repo.insertIsland(gameId, makeIsland(defaultConfig, createSeededRng(1), 1), 0);
+    const turnService = new TurnService({
+      repo,
+      config: defaultConfig,
+      rng: createSeededRng(2),
+      backupStore: new FakeBackupStore(),
+      logger: new FakeLogger(),
+    });
+
+    turnService.advanceTurn(1000);
+
+    expect(repo.getMeta(gameId).turn).toBe(1);
   });
 
   it("tmp/18-games.md: ゲームが1つも無ければ何もしない (例外にならない)", () => {

@@ -1,7 +1,7 @@
 // tmp/08-turn-trigger-admin-cli.md 「ターン進行トリガー」節 + tmp/18-games.md (複数ゲーム) の移植。
 // Perl 版 Main.pm readIslandsFile のターン判定 + Turn.pm turnMain の移植。
 import type { BackupStore, GameMeta, GameRepository, Logger } from "./ports.ts";
-import { isFinished } from "./season.ts";
+import { isBeforeStart, isFinished } from "./season.ts";
 import type { GameConfig } from "../core/config.ts";
 import type { Rng } from "../core/rng.ts";
 import type { World } from "../core/types.ts";
@@ -47,6 +47,12 @@ export class TurnService {
       if (isFinished(meta)) {
         break;
       }
+      // tmp/16-season.md「開始前の状態 (追加要件)」節: `now < startAt` を明示的に判定する
+      // (通常は `lastTime === startAt` のため下の期限判定で自然に満たされないが、
+      // `setLastTime` で過去にずらした場合にも整合させるため明示的に判定する)。
+      if (isBeforeStart(meta, now)) {
+        break;
+      }
       // tmp/16-season.md「ターンの長さも DB に持つ」節: 期限判定は config ではなく meta.unitTimeSec
       // (管理画面「ゲーム設定」/ CLI `game set-unit-time` で変更された値) を使う。
       if (now - meta.lastTime < meta.unitTimeSec) {
@@ -70,6 +76,10 @@ export class TurnService {
     }
     const meta = repo.getMeta(gameId);
     if (isFinished(meta)) {
+      return;
+    }
+    // tmp/16-season.md「開始前の状態 (追加要件)」節: 管理者の手動進行も開始前は進めない。
+    if (isBeforeStart(meta, now)) {
       return;
     }
     this.#advanceOnce(gameId, meta, now);
