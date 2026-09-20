@@ -1010,3 +1010,175 @@ describe("migrate: v6 → v7 (tmp/16-season.md「開始前の状態 = ターン 
     expect(meta.firstTurn).toBe(0);
   });
 });
+
+/**
+ * v7 時点 (tmp/16-season.md まで、`games.first_turn` はあるが `islands.commands` に
+ * kind=61/62 (整地自動入力/地ならし自動入力) のバグ由来の値が混入しうる) の DDL スナップショット。
+ * v7 の `games`/`islands` の形は v6 の DDL に `games.first_turn` を加えたものと同じなので、
+ * V6_SCHEMA_SQL に ALTER TABLE を重ねて作る。
+ */
+function createV7Driver(): NodeSqliteDriver {
+  const driver = new NodeSqliteDriver(":memory:");
+  driver.exec(V6_SCHEMA_SQL);
+  driver.exec("ALTER TABLE games ADD COLUMN first_turn INTEGER NOT NULL DEFAULT 1");
+  driver.run("INSERT INTO schema_version (version) VALUES (7)");
+  driver.run(
+    `INSERT INTO games (
+       id, name, status, turn, first_turn, last_time, start_at, final_turn, unit_time_sec,
+       next_island_id, created_at, finished_at
+     ) VALUES (1, '第 1 回', 'running', 3, 1, 1000, 1000, NULL, 21600, 4, 1000, NULL)`,
+  );
+  return driver;
+}
+
+function insertV7Island(
+  driver: NodeSqliteDriver,
+  params: { gameId: number; id: number; name: string; ownerUserId: string; commands: unknown[] },
+): void {
+  driver.run(
+    `INSERT INTO islands (
+       game_id, id, rank, name, owner_user_id, money, food, terrain, commands, created_turn
+     ) VALUES (?, ?, ?, ?, ?, 100, 100, '[]', ?, 1)`,
+    params.gameId,
+    params.id,
+    params.id - 1,
+    params.name,
+    params.ownerUserId,
+    JSON.stringify(params.commands),
+  );
+}
+
+// tmp/20-autoprepare-fix.md「修正 (稼働中ゲームのデータ、スキーマ v8。ユーザー指示により実施)」節。
+describe("migrate: v7 → v8 (tmp/20-autoprepare-fix.md)", () => {
+  it("schema_version が v8 になる (DDL 自体は変わらない)", async () => {
+    const driver = createV7Driver();
+
+    migrate(driver);
+
+    const versionRow = driver.get<{ version: number }>("SELECT version FROM schema_version");
+    expect(versionRow?.version).toBe(SCHEMA_VERSION);
+  });
+
+  it("kind=61 (整地自動入力) は 1 (整地) に、kind=62 (地ならし自動入力) は 2 (地ならし) に変換される", async () => {
+    const driver = createV7Driver();
+    insertV7Island(driver, {
+      gameId: 1,
+      id: 1,
+      name: "島1",
+      ownerUserId: "u1",
+      commands: [
+        { kind: 61, target: 0, x: 5, y: 4, arg: 0 },
+        { kind: 62, target: 0, x: 2, y: 3, arg: 0 },
+      ],
+    });
+
+    migrate(driver);
+
+    const row = driver.get<{ commands: string }>(
+      "SELECT commands FROM islands WHERE game_id = 1 AND id = 1",
+    );
+    expect(JSON.parse(row?.commands ?? "[]")).toEqual([
+      { kind: 1, target: 0, x: 5, y: 4, arg: 0 },
+      { kind: 2, target: 0, x: 2, y: 3, arg: 0 },
+    ]);
+  });
+
+  it("kind=61/62 以外の計画 (資金繰り/農場整備) は target/x/y/arg を含めて一切変更されない", async () => {
+    const driver = createV7Driver();
+    insertV7Island(driver, {
+      gameId: 1,
+      id: 1,
+      name: "島1",
+      ownerUserId: "u1",
+      commands: [
+        { kind: 41, target: 0, x: 0, y: 0, arg: 0 },
+        { kind: 12, target: 3, x: 1, y: 2, arg: 7 },
+        { kind: 61, target: 0, x: 5, y: 4, arg: 0 },
+      ],
+    });
+
+    migrate(driver);
+
+    const row = driver.get<{ commands: string }>(
+      "SELECT commands FROM islands WHERE game_id = 1 AND id = 1",
+    );
+    expect(JSON.parse(row?.commands ?? "[]")).toEqual([
+      { kind: 41, target: 0, x: 0, y: 0, arg: 0 },
+      { kind: 12, target: 3, x: 1, y: 2, arg: 7 },
+      { kind: 1, target: 0, x: 5, y: 4, arg: 0 },
+    ]);
+  });
+
+  it("61/62 を含まない島は commands 文字列がそのまま (UPDATE されない) 保たれる", async () => {
+    const driver = createV7Driver();
+    insertV7Island(driver, {
+      gameId: 1,
+      id: 1,
+      name: "島1",
+      ownerUserId: "u1",
+      commands: [{ kind: 41, target: 0, x: 0, y: 0, arg: 0 }],
+    });
+    const before = driver.get<{ commands: string }>(
+      "SELECT commands FROM islands WHERE game_id = 1 AND id = 1",
+    )?.commands;
+
+    migrate(driver);
+
+    const after = driver.get<{ commands: string }>(
+      "SELECT commands FROM islands WHERE game_id = 1 AND id = 1",
+    )?.commands;
+    expect(after).toBe(before);
+  });
+
+  it("終了済みゲームの島・放棄済みの島も区別せず変換される", async () => {
+    const driver = createV7Driver();
+    driver.run("UPDATE games SET status = 'finished', finished_at = 2000 WHERE id = 1");
+    insertV7Island(driver, {
+      gameId: 1,
+      id: 1,
+      name: "島1",
+      ownerUserId: "u1",
+      commands: [{ kind: 62, target: 0, x: 1, y: 1, arg: 0 }],
+    });
+    driver.run("UPDATE islands SET abandoned_at = 999 WHERE game_id = 1 AND id = 1");
+
+    migrate(driver);
+
+    const row = driver.get<{ commands: string; abandoned_at: number | null }>(
+      "SELECT commands, abandoned_at FROM islands WHERE game_id = 1 AND id = 1",
+    );
+    expect(JSON.parse(row?.commands ?? "[]")).toEqual([{ kind: 2, target: 0, x: 1, y: 1, arg: 0 }]);
+    expect(row?.abandoned_at).toBe(999);
+  });
+
+  it("再度 migrate を呼んでも何も起きない (べき等)", async () => {
+    const driver = createV7Driver();
+    insertV7Island(driver, {
+      gameId: 1,
+      id: 1,
+      name: "島1",
+      ownerUserId: "u1",
+      commands: [{ kind: 61, target: 0, x: 5, y: 4, arg: 0 }],
+    });
+
+    migrate(driver);
+    migrate(driver);
+
+    const versionRow = driver.get<{ version: number }>("SELECT version FROM schema_version");
+    expect(versionRow?.version).toBe(SCHEMA_VERSION);
+    const row = driver.get<{ commands: string }>(
+      "SELECT commands FROM islands WHERE game_id = 1 AND id = 1",
+    );
+    expect(JSON.parse(row?.commands ?? "[]")).toEqual([{ kind: 1, target: 0, x: 5, y: 4, arg: 0 }]);
+  });
+
+  it("新規 DB は最初から v8 であり、変換対象が無いので正常に作られる", async () => {
+    const driver = new NodeSqliteDriver(":memory:");
+
+    migrate(driver);
+
+    const versionRow = driver.get<{ version: number }>("SELECT version FROM schema_version");
+    expect(versionRow?.version).toBe(SCHEMA_VERSION);
+    expect(driver.all("SELECT * FROM islands")).toHaveLength(0);
+  });
+});

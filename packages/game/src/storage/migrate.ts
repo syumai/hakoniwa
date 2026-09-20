@@ -255,6 +255,41 @@ const MIGRATION_STEPS: Record<number, MigrationStep> = {
     driver.exec("ALTER TABLE games ADD COLUMN first_turn INTEGER NOT NULL DEFAULT 1");
     driver.exec("UPDATE games SET turn = 0, first_turn = 0 WHERE turn = 1 AND status = 'running'");
   },
+
+  // v7 → v8: tmp/20-autoprepare-fix.md「修正 (稼働中ゲームのデータ、スキーマ v8。ユーザー指示に
+  // より実施)」節。DDL の変更は無い (データ変換のみ)。`GameService.registerCommand` のバグにより
+  // 「整地自動入力」「地ならし自動入力」の計画が、本来書き込むべき実コマンド (整地 = kind 1 /
+  // 地ならし = kind 2) ではなく、入力値の kind (AutoPrepare = 61 / AutoPrepare2 = 62) のまま
+  // `islands.commands` に保存されてしまっていた。`islands.commands` は `Command[]` を
+  // `JSON.stringify` した文字列なので、SQL の文字列置換ではなく `driver.all` で全行読み、
+  // `JSON.parse` → 該当 kind だけ変換 → `JSON.stringify` で書き戻す (保存形式に依存しないため)。
+  // target/x/y/arg と他の計画の kind は一切変更しない。対象は終了済み・放棄済みの島も含めて全件。
+  // 変換対象の計画が 1 つも無い島は UPDATE しない。
+  7: (driver) => {
+    const rows = driver.all<{ game_id: number; id: number; commands: string }>(
+      "SELECT game_id, id, commands FROM islands",
+    );
+    for (const row of rows) {
+      const commands = JSON.parse(row.commands) as Array<{ kind: number; [key: string]: unknown }>;
+      let changed = false;
+      for (const command of commands) {
+        if (command.kind === 61) {
+          command.kind = 1;
+          changed = true;
+        } else if (command.kind === 62) {
+          command.kind = 2;
+          changed = true;
+        }
+      }
+      if (!changed) continue;
+      driver.run(
+        "UPDATE islands SET commands = ? WHERE game_id = ? AND id = ?",
+        JSON.stringify(commands),
+        row.game_id,
+        row.id,
+      );
+    }
+  },
 };
 
 /**

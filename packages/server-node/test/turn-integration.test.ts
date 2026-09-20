@@ -1,13 +1,15 @@
 // 実 DB (:memory:) + buildDeps で GameService/TurnService を結合テストする。
 import {
   buildDeps,
+  CommandKind,
   createSeededRng,
   defaultConfig,
   FakeBackupStore,
   FakeClock,
+  LandKind,
   migrate,
 } from "@hakoniwa/game";
-import type { AppConfig, AuthUser } from "@hakoniwa/game";
+import type { AppConfig, AuthUser, Point, Terrain } from "@hakoniwa/game";
 import { beforeEach, describe, expect, it } from "vitest";
 import { NodeSqliteDriver } from "../src/driver.ts";
 
@@ -152,5 +154,138 @@ describe("turn-integration (実 DB)", () => {
     deps.turnService.advanceTurn(clock.now());
     expect(deps.repo.getMeta(gameId).turn).toBe(2);
     expect(deps.turnService.advanceTurnIfDue(clock.now() + 100000)).toBe(0);
+  });
+
+  // 「整地自動入力」「地ならし自動入力」の回帰テスト: registerCommand で AutoPrepare/AutoPrepare2
+  // (kind 61/62) を登録した際、実行可能な計画 (Prepare/Prepare2) に変換されずそのまま保存される
+  // と、turn/command.ts の switch に該当 case が無く "consumed" に落ちて何も実行されない
+  // (荒地が整地されず、所持金も減らない) バグがあった。ここでは実際に GameService.registerCommand
+  // → TurnService.advanceTurn を実行し、地形と所持金の変化まで確認する。
+  //
+  // disaster 系の確率はすべて 0 にする: 整地には 1% (disaster.maizo) の埋蔵金付与があり、
+  // 隕石・噴火等は座標が完全にランダムで対象ヘックスの種別を問わないため、確率を残したままだと
+  // rng の消費順序次第で所持金・地形の期待値が揺れてしまう (シード固定でも回帰テストとして
+  // 脆くなる) ため。
+  /**
+   * createIsland が作る地形 (makeNewLand) は乱数で荒地が残る場合があり、テスト側で指定した
+   * 座標以外にも荒地が残っていると「整地自動入力」がその荒地まで拾ってしまい、実行対象の座標
+   * や個数が期待通りにならない。町・森・山・基地はそのまま残し (pop を保つため)、荒地だけを
+   * 平地に均してから、テストで狙った座標だけを荒地にし直す。
+   */
+  function resetWasteToOnly(terrain: Terrain, points: Point[]): void {
+    for (let y = 0; y < terrain.size; y++) {
+      for (let x = 0; x < terrain.size; x++) {
+        if (terrain.get(x, y).kind === LandKind.Waste) {
+          terrain.setKind(x, y, LandKind.Plains, 0);
+        }
+      }
+    }
+    for (const { x, y } of points) {
+      terrain.setKind(x, y, LandKind.Waste, 0);
+    }
+  }
+
+  const noDisasterOverrides: Partial<typeof defaultConfig> = {
+    disaster: {
+      ...defaultConfig.disaster,
+      earthquake: 0,
+      tsunami: 0,
+      typhoon: 0,
+      meteo: 0,
+      hugeMeteo: 0,
+      eruption: 0,
+      fire: 0,
+      maizo: 0,
+      falldown: 0,
+      monster: 0,
+    },
+  };
+
+  it("整地自動入力 (AutoPrepare): 登録した計画が 1 ターンで実行され、荒地が減り所持金が 5 減る", () => {
+    const { gameService, turnService, repo, clock, gameId } = setup(noDisasterOverrides);
+
+    gameService.createIsland(user("u1"), gameId, "島1");
+    const summary = repo.findIslandByOwner(gameId, "u1");
+    if (summary === undefined) throw new Error("island not found");
+    const island = repo.findIsland(gameId, summary.id);
+    if (island === undefined) throw new Error("island not found");
+    // createIsland が作った地形 (中心部に町・森・山・基地を含む。pop > 0) はそのまま残し
+    // (テラインを丸ごと差し替えると pop が 0 になり、ターン処理の死滅判定で島ごと消えてしまう)、
+    // 荒地だけ島の隅の 1 マスに絞る。
+    resetWasteToOnly(island.terrain, [{ x: 0, y: 0 }]);
+    repo.updateIsland(gameId, island);
+
+    gameService.registerCommand(user("u1"), gameId, {
+      number: 0,
+      kind: CommandKind.AutoPrepare,
+      x: 0,
+      y: 0,
+      amount: 0,
+      target: 0,
+      mode: "write",
+    });
+
+    const before = repo.findIsland(gameId, summary.id);
+    if (before === undefined) throw new Error("island not found");
+    // 登録された計画の kind が AutoPrepare(61) のままではなく、実行可能な Prepare(1) であること。
+    expect(before.commands[0]?.kind).toBe(CommandKind.Prepare);
+    const moneyBefore = before.money;
+
+    turnService.advanceTurn(clock.now());
+
+    const after = repo.findIsland(gameId, summary.id);
+    if (after === undefined) throw new Error("island not found");
+    expect(after.terrain.get(0, 0).kind).toBe(LandKind.Plains);
+    expect(after.money).toBe(moneyBefore - 5);
+  });
+
+  it("地ならし自動入力 (AutoPrepare2): 登録した計画が 1 ターンでまとめて実行され (continue)、荒地が全て減り所持金が 100×実行数 減る", () => {
+    const { gameService, turnService, repo, clock, gameId } = setup(noDisasterOverrides);
+
+    gameService.createIsland(user("u1"), gameId, "島1");
+    const summary = repo.findIslandByOwner(gameId, "u1");
+    if (summary === undefined) throw new Error("island not found");
+    const island = repo.findIsland(gameId, summary.id);
+    if (island === undefined) throw new Error("island not found");
+    // createIsland が作った地形 (pop > 0) はそのまま残し、荒地は島の隅の数マスだけに絞る。
+    const wastePoints = [
+      { x: 0, y: 0 },
+      { x: 1, y: 1 },
+      { x: 2, y: 2 },
+    ];
+    resetWasteToOnly(island.terrain, wastePoints);
+    // 地ならし (cost 100) を複数回実行できるだけの所持金を用意する。
+    island.money = 1000;
+    repo.updateIsland(gameId, island);
+
+    gameService.registerCommand(user("u1"), gameId, {
+      number: 0,
+      kind: CommandKind.AutoPrepare2,
+      x: 0,
+      y: 0,
+      amount: 0,
+      target: 0,
+      mode: "write",
+    });
+
+    const before = repo.findIsland(gameId, summary.id);
+    if (before === undefined) throw new Error("island not found");
+    const registered = before.commands.filter((c) => c.kind === CommandKind.Prepare2);
+    expect(registered).toHaveLength(wastePoints.length);
+    const moneyBefore = before.money;
+
+    // 地ならしは doPrepare が "continue" を返すため、1 回の advanceTurn で登録された分がまとめて
+    // 実行される。
+    turnService.advanceTurn(clock.now());
+
+    const after = repo.findIsland(gameId, summary.id);
+    if (after === undefined) throw new Error("island not found");
+    for (const { x, y } of wastePoints) {
+      expect(after.terrain.get(x, y).kind).toBe(LandKind.Plains);
+    }
+    // 登録した地ならし (cost 100) 3 件が同一ターン内でまとめて実行された後、doCommand の
+    // while ループはキューの続き (資金繰り = DoNothing) も "consumed" になるまで処理するため、
+    // 資金繰り 1 回分の money+=10 も同じターンに乗る (command.ts の仕様通り)。
+    expect(after.money).toBe(moneyBefore - 100 * wastePoints.length + 10);
   });
 });

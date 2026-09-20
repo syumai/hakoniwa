@@ -28,7 +28,6 @@ import type {
 } from "./view-models.ts";
 import type { GameConfig } from "../core/config.ts";
 import { CommandKind, commandSpecs, LandKind } from "../core/constants.ts";
-import type { AutoPrepareKind } from "../core/commands/queue.ts";
 import { autoPrepare, clearAll, deleteAt, insertAt, writeAt } from "../core/commands/queue.ts";
 import { formatCommand } from "../core/commands/format.ts";
 import type { ResolveIslandName } from "../core/commands/format.ts";
@@ -452,8 +451,13 @@ export class GameService {
       if (input.mode === "delete") {
         deleteAt(commands, input.number, max);
       } else if (kind === CommandKind.AutoPrepare || kind === CommandKind.AutoPrepare2) {
+        // 登録すべき実コマンド種別 (整地/地ならし) に変換して渡す。AutoPrepare/AutoPrepare2 (61/62)
+        // はあくまで UI 上の「自動入力」操作を表す値であり、そのまま計画として保存してはいけない
+        // (保存すると turn/command.ts の switch に該当 case が無く、何もせず 1 枠消費するだけになる)。
+        const prepareKind =
+          kind === CommandKind.AutoPrepare ? CommandKind.Prepare : CommandKind.Prepare2;
         const points = shuffledPoints(config.islandSize, this.#deps.rng);
-        autoPrepare(commands, input.number, island.terrain, kind as AutoPrepareKind, points, max);
+        autoPrepare(commands, input.number, island.terrain, prepareKind, points, max);
       } else if (kind === CommandKind.AutoDelete) {
         clearAll(commands, max);
       } else {

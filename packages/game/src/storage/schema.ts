@@ -21,8 +21,12 @@
  * v7: tmp/16-season.md「開始前の状態 = ターン 0 (改訂 2026-09-20)」節。`games.first_turn` を
  *     追加した。ゲーム開始直後のターン番号 (新方式 = 0、旧方式 = 1)。新規ゲームは
  *     `turn = 0, first_turn = 0` で作られ、開始時刻に最初のターン処理が行われて `turn = 1` になる。
+ * v8: tmp/20-autoprepare-fix.md「修正 (稼働中ゲームのデータ、スキーマ v8。ユーザー指示により実施)」節。
+ *     DDL 自体に変更は無い (データ変換のみ)。`islands.commands` に誤って保存された
+ *     `kind = 61` (AutoPrepare) / `62` (AutoPrepare2) の計画を、本来書き込むべきだった
+ *     `1` (Prepare/整地) / `2` (Prepare2/地ならし) に変換する。
  */
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 
 export const schemaSql = `
 CREATE TABLE schema_version (

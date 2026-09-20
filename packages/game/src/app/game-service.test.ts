@@ -227,7 +227,7 @@ describe("GameService.registerCommand", () => {
     expect(result.commands[defaultConfig.commandMax - 1]?.text).toBe("資金繰り");
   });
 
-  it("AutoPrepare: 荒地を自動で整地予定に入れる", () => {
+  it("AutoPrepare: 荒地を自動で整地予定 (kind: Prepare) に入れる", () => {
     const { service, repo, gameId } = setupIsland();
     const summary = repo.findIslandByOwner(gameId, "u1");
     if (summary === undefined) throw new Error("island not found");
@@ -247,8 +247,52 @@ describe("GameService.registerCommand", () => {
       target: 0,
       mode: "write",
     });
+
+    // 保存された計画の kind は AutoPrepare(61) のままではなく、実行可能な Prepare(1) であること
+    // (61/62 のまま保存されると turn/command.ts の switch に該当 case が無く、何も実行されず
+    // 1 ターン 1 枠を消費するだけになるバグの再発防止)。
+    const updated = repo.findIsland(gameId, summary.id);
+    if (updated === undefined) throw new Error("island not found");
+    const registered = updated.commands.filter((c) => c.kind !== CommandKind.DoNothing);
+    expect(registered).toHaveLength(2);
+    expect(registered.every((c) => c.kind === CommandKind.Prepare)).toBe(true);
+
+    // 表示文言も「整地自動入力」ではなく「整地」であること。
     const texts = result.commands.map((c) => c.text);
-    expect(texts.filter((t) => t.includes("整地"))).toHaveLength(2);
+    expect(texts.filter((t) => t.endsWith("で整地"))).toHaveLength(2);
+    expect(texts.some((t) => t.includes("整地自動入力"))).toBe(false);
+  });
+
+  it("AutoPrepare2: 荒地を自動で地ならし予定 (kind: Prepare2) に入れる", () => {
+    const { service, repo, gameId } = setupIsland();
+    const summary = repo.findIslandByOwner(gameId, "u1");
+    if (summary === undefined) throw new Error("island not found");
+    const island = repo.findIsland(gameId, summary.id);
+    if (island === undefined) throw new Error("island not found");
+    island.terrain = createTerrain(defaultConfig.islandSize);
+    island.terrain.setKind(0, 0, LandKind.Waste, 0);
+    island.terrain.setKind(1, 1, LandKind.Waste, 0);
+    repo.updateIsland(gameId, island);
+
+    const result = service.registerCommand(user("u1"), gameId, {
+      number: 0,
+      kind: CommandKind.AutoPrepare2,
+      x: 0,
+      y: 0,
+      amount: 0,
+      target: 0,
+      mode: "write",
+    });
+
+    const updated = repo.findIsland(gameId, summary.id);
+    if (updated === undefined) throw new Error("island not found");
+    const registered = updated.commands.filter((c) => c.kind !== CommandKind.DoNothing);
+    expect(registered).toHaveLength(2);
+    expect(registered.every((c) => c.kind === CommandKind.Prepare2)).toBe(true);
+
+    const texts = result.commands.map((c) => c.text);
+    expect(texts.filter((t) => t.endsWith("で地ならし"))).toHaveLength(2);
+    expect(texts.some((t) => t.includes("地ならし自動入力"))).toBe(false);
   });
 
   it("AutoDelete: 全て資金繰りにする", () => {
