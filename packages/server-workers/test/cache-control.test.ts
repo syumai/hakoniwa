@@ -67,7 +67,15 @@ describe("Cache-Control (Workers Cache が従う応答ヘッダ)", () => {
     const ogpRes = await stub.fetch("http://example.com/games/1/islands/1/ogp.png");
     expect(ogpRes.status).toBe(200);
     expect(ogpRes.headers.get("content-type")).toBe("image/png");
-    expect(ogpRes.headers.get("cache-control")).toBe("public, max-age=3600");
+    // tmp/21-kv-snapshot-cache.md「OGP 画像」節: 進行中のゲームの max-age は「次のターンまでの
+    // 秒数」を 60〜3600 秒にクランプした値なので、実行時刻によって変わる (ゲーム作成時の
+    // startAt は現在時刻を 1 ターン長で切り下げた値になるため、ターン長の残りが 1 時間を切る
+    // 時間帯に実行すると 3600 未満になる)。固定値ではなく範囲で検証する。
+    const ogpCacheControl = ogpRes.headers.get("cache-control");
+    const ogpMaxAge = Number(/^public, max-age=(\d+)$/.exec(ogpCacheControl ?? "")?.[1]);
+    expect(ogpCacheControl).toMatch(/^public, max-age=\d+$/);
+    expect(ogpMaxAge).toBeGreaterThanOrEqual(60);
+    expect(ogpMaxAge).toBeLessThanOrEqual(3600);
     expect(ogpRes.headers.get("cache-tag")).toBe("island-1");
 
     // 旧 URL (ゲーム ID を含まない) は現在のゲームへ 302 で転送される。
