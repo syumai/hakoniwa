@@ -12,13 +12,24 @@
 import type { Env } from "./env.ts";
 import { HakoniwaGame } from "./game-object.ts";
 
+// DO の取得に location hint `apac-ne` (北東アジア) を指定する。
+// 注意:
+// - location hint が効くのは DO の **初回作成時のみ** で、ベストエフォート。既存の DO は移動しない。
+// - プレイヤーは日本在住が中心のため `apac-ne` を選択している。
+// - 変更する場合は次のいずれかから選ぶ: wnam, enam, sam, weur, eeur, apac, apac-ne, apac-se, oc, afr, me
+//   (参考: https://developers.cloudflare.com/durable-objects/reference/data-location/#provide-a-location-hint)
+function getGame(env: Env) {
+  const id = env.GAME.idFromName("main");
+  return env.GAME.get(id, { locationHint: "apac-ne" });
+}
+
 export default {
   fetch(request: Request, env: Env): Response | Promise<Response> {
-    return env.GAME.getByName("main").fetch(request);
+    return getGame(env).fetch(request);
   },
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     // 進めるべきかどうか (unitTimeSec と game.last_time から判定) は DO 側 (checkTurn) に任せる。
-    ctx.waitUntil(env.GAME.getByName("main").checkTurn());
+    ctx.waitUntil(getGame(env).checkTurn());
   },
 } satisfies ExportedHandler<Env>;
 
