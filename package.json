@@ -78,6 +78,12 @@
       },
       "HAKONIWA_TIMEZONE": {
         "description": "日時の入力・表示に使うタイムゾーン (IANA タイムゾーン名)。任意 (既定値は Asia/Tokyo)。"
+      },
+      "HAKONIWA_SNAPSHOT_TTL_SEC": {
+        "description": "未ログインのトップ・観光ページを Workers KV にキャッシュする機能 (`kv_namespaces` の SNAPSHOT。未設定でも動作します) の短期 TTL (秒)。任意 (既定値は 60)。進行中/開始前のゲームのページと、終了済みの島ページに使います。Workers KV の最小 TTL が 60 秒のため、それ未満を指定しても 60 に切り上げられます。"
+      },
+      "HAKONIWA_SNAPSHOT_TTL_IMMUTABLE_SEC": {
+        "description": "上記キャッシュ機能の長期 TTL (秒)。任意 (既定値は 2592000 = 30日)。過去のゲームや、終了済みのゲームのトップページのように二度と変わらないページに使います。"
       }
     }
   }

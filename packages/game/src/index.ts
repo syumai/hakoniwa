@@ -249,6 +249,11 @@ export { ConsoleMailer, ResendMailer } from "./bootstrap/mailer.ts";
 export type { WebDeps } from "./web/deps.ts";
 export { createApp } from "./web/app.tsx";
 
+// tmp/21-kv-snapshot-cache.md: Worker 側 (DO を経由しない) でトップ/観光ページを描画するための
+// レンダリング関数。既存の web 層の View (Layout/TopPage/IslandPage) をそのまま使う。
+export type { RenderIslandPageHtmlInput, RenderTopPageHtmlInput } from "./web/render-snapshot.tsx";
+export { renderIslandPageHtml, renderTopPageHtml } from "./web/render-snapshot.tsx";
+
 // ----------------------------------------------------------------------
 // OGP 画像 (tmp/17-ogp.md)。PNG エンコードと島の地図の描画。
 // ----------------------------------------------------------------------

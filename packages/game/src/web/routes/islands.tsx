@@ -2,7 +2,8 @@
 // POST /islands, GET /islands/:id, POST /islands/:id/lbbs。
 // tmp/17-ogp.md: GET /islands/:id/ogp.png (OGP 画像)。
 import { Hono } from "hono";
-import type { IslandPageVM, OwnerPageVM } from "../../app/view-models.ts";
+import type { GameHeaderVM, IslandPageVM, OwnerPageVM } from "../../app/view-models.ts";
+import type { SeasonVM } from "../../app/season.ts";
 import { renderIslandOgp } from "../../ogp/render.ts";
 import type { WebDeps } from "../deps.ts";
 import type { AppEnv } from "../env.ts";
@@ -20,6 +21,30 @@ import { NewIslandPage } from "../views/new-island.tsx";
  */
 function resolveOrigin(deps: WebDeps, requestUrl: string): string {
   return deps.config.auth.baseUrl ?? new URL(requestUrl).origin;
+}
+
+/** OGP 画像の `Cache-Control` の下限・上限 (秒)。tmp/21-kv-snapshot-cache.md「OGP 画像」節。 */
+const OGP_MIN_MAX_AGE_SEC = 60;
+const OGP_MAX_MAX_AGE_SEC = 3600;
+/** 過去のゲーム/終了済みのゲームの画像は不変なので 1 年 (実質恒久) キャッシュしてよい。 */
+const OGP_IMMUTABLE_MAX_AGE_SEC = 60 * 60 * 24 * 365;
+
+/**
+ * tmp/21-kv-snapshot-cache.md「OGP 画像の Cache-Control」節: 過去のゲーム、または現在のゲーム
+ * だが終了済みの画像は不変なので `immutable` を付けて長期キャッシュする。進行中/開始前は
+ * 次のターンまでの秒数 (60〜3600 秒にクランプ) にする。開始前 (`season.state === 'before'`) は
+ * 次のターン (= ゲーム開始) の予定時刻が定まっていても、管理者がいつでも設定を変えられるため
+ * 最短の 60 秒にする。
+ */
+function ogpCacheControl(game: GameHeaderVM, season: SeasonVM, now: number): string {
+  if (!game.isCurrent || season.state === "finished") {
+    return `public, max-age=${OGP_IMMUTABLE_MAX_AGE_SEC}, immutable`;
+  }
+  const maxAge =
+    season.state === "running" && season.nextTurnAt !== null
+      ? Math.max(OGP_MIN_MAX_AGE_SEC, Math.min(OGP_MAX_MAX_AGE_SEC, season.nextTurnAt - now))
+      : OGP_MIN_MAX_AGE_SEC;
+  return `public, max-age=${maxAge}`;
 }
 
 /** postLbbs の戻り値が OwnerPageVM (島主として記帳) か IslandPageVM (観光者として記帳) かを判定する。 */
@@ -57,13 +82,13 @@ export function createIslandsRoutes(deps: WebDeps): Hono<AppEnv> {
   app.get("/islands/:id{[0-9]+}/ogp.png", async (c) => {
     const gameId = requireGameIdParam(c);
     const id = parseIdParam(c);
-    const { island, turn } = deps.gameService.getIslandOgp(gameId, id);
+    const { island, turn, game, season } = deps.gameService.getIslandOgp(gameId, id);
     const png = await renderIslandOgp(island, turn);
     // TS 5.9 の DOM 型は `Uint8Array<ArrayBuffer>` を要求する。encodePng は SharedArrayBuffer を
     // 使わないため安全にキャストする。
     return c.body(png as Uint8Array<ArrayBuffer>, 200, {
       "Content-Type": "image/png",
-      "Cache-Control": "public, max-age=3600",
+      "Cache-Control": ogpCacheControl(game, season, deps.clock.now()),
       // tmp/17-ogp.md 「キャッシュ (Workers Cache)」節: 将来 ctx.cache.purge({ tags }) で
       // ターン進行時にこの島の OGP 画像だけ無効化できるように付けておく (初版では purge しない)。
       "Cache-Tag": `island-${id}`,

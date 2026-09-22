@@ -2,11 +2,13 @@
 // 1 インスタンス = ゲーム世界 1 つ。DO の SQLite ストレージに Node 版と同じスキーマを構築し、
 // @hakoniwa/game の buildDeps で組み立てた Hono app にそのまま委譲する。
 import { DurableObject } from "cloudflare:workers";
-import { buildDeps, loadConfigFromEnv, migrate } from "@hakoniwa/game";
+import { AppError, buildDeps, buildSeasonVM, loadConfigFromEnv, migrate } from "@hakoniwa/game";
 import type { BuiltDeps } from "@hakoniwa/game";
 import { BookmarkBackupStore } from "./backup.ts";
 import { DurableObjectSqlDriver } from "./driver.ts";
 import type { Env } from "./env.ts";
+import { computeSnapshotTtl, loadSnapshotTtlConfig, toIslandPageSnapshotVM } from "./snapshot.ts";
+import type { PageSnapshotRequest, PageSnapshotResult } from "./snapshot.ts";
 
 /**
  * ゲーム世界を 1 つ保持する Durable Object。
@@ -42,6 +44,60 @@ export class HakoniwaGame extends DurableObject<Env> {
     return this.#requireDeps().turnService.advanceTurnIfDue(now);
   }
 
+  /**
+   * tmp/21-kv-snapshot-cache.md: 未ログイン GET のトップ/観光ページ用の RPC。worker.ts が
+   * KV キャッシュを外した (ミスした) ときに呼ぶ。対象のゲーム/島が無ければ `undefined` を返し、
+   * 呼び出し側は従来どおり `fetch` (DO への HTTP 転送) にフォールバックする。
+   * TTL はここ (DO 側) で決める (Worker 側に「不変かどうか」の判定を持たせないため)。
+   */
+  pageSnapshot(input: PageSnapshotRequest): PageSnapshotResult | undefined {
+    const deps = this.#requireDeps();
+    const { ttlSec, ttlImmutableSec } = loadSnapshotTtlConfig(this.env);
+    const now = Math.floor(Date.now() / 1000);
+    try {
+      if (input.kind === "top") {
+        const vm = deps.gameService.getTopPage(undefined, input.gameId);
+        const nextTurnAt = vm.season.nextTurnAt;
+        const ttl = computeSnapshotTtl({
+          kind: "top",
+          isCurrent: vm.game.isCurrent,
+          seasonState: vm.season.state,
+          nextTurnAt,
+          now,
+          ttlSec,
+          ttlImmutableSec,
+        });
+        return { kind: "top", vm, nextTurnAt, ttl };
+      }
+      const vm = deps.gameService.getIslandPage(input.gameId, input.islandId);
+      // IslandPageVM には season が無いため、TTL 判定用に別途取得する
+      // (getIslandPage が成功した時点でゲームの存在は確認済み)。
+      const season = buildSeasonVM(deps.repo.getMeta(input.gameId));
+      const ttl = computeSnapshotTtl({
+        kind: "island",
+        isCurrent: vm.game.isCurrent,
+        seasonState: season.state,
+        nextTurnAt: season.nextTurnAt,
+        now,
+        ttlSec,
+        ttlImmutableSec,
+      });
+      return {
+        kind: "island",
+        vm: toIslandPageSnapshotVM(vm),
+        nextTurnAt: season.nextTurnAt,
+        ttl,
+      };
+    } catch (err) {
+      if (err instanceof AppError) {
+        // ゲーム/島が無い、未初期化等。呼び出し側 (worker.ts) が DO への通常の fetch に
+        // フォールバックし、いつもどおりのエラー画面 (app.onError) を出す。
+        return undefined;
+      }
+      throw err;
+    }
+  }
+
   #requireDeps(): BuiltDeps {
     if (this.#deps === undefined) {
       // blockConcurrencyWhile が完了する前に fetch/checkTurn が呼ばれることは無いはずだが、
@@ -54,9 +110,11 @@ export class HakoniwaGame extends DurableObject<Env> {
 
 /**
  * `env` (バインディングを含む) から、`loadConfigFromEnv` が読む文字列の環境変数だけを取り出す。
- * `GAME` (DurableObjectNamespace) 等のバインディングは文字列ではないため除外される。
+ * `GAME` (DurableObjectNamespace)・`SNAPSHOT` (KVNamespace) 等のバインディングは文字列では
+ * ないため除外される。worker.ts も同じ `AppConfig` を組み立てるために export する
+ * (tmp/21-kv-snapshot-cache.md: Worker 側レンダリングに `GameConfig`/timezone が要る)。
  */
-function pickStringEnv(env: Env): Record<string, string | undefined> {
+export function pickStringEnv(env: Env): Record<string, string | undefined> {
   const result: Record<string, string | undefined> = {};
   for (const [key, value] of Object.entries(env)) {
     if (typeof value === "string") {

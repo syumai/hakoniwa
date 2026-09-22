@@ -156,13 +156,31 @@ pnpm --filter @hakoniwa/game generate:ogp-tiles
 
 ## Workers Cache と `no-store` の方針
 
-島の URL (`/games/:gameId/islands/:id`) を X や Discord、Slack 等でシェアすると、`GET /games/:gameId/islands/:id/ogp.png` (800×420 PNG) の地図画像が OGP (`og:image`) として表示されます。地図は観光者向けの表示 (基地→森、海底基地→海、ハリボテ→防衛施設に見える偽装ルールを含む) をそのまま敷き詰めたもので、文字は描画しません (島名やターン・人口・面積・順位は `og:title`/`og:description` に載せます)。画像は外部サービスやネイティブライブラリを使わず、`packages/game/src/ogp/` の純粋な TypeScript (自前の PNG エンコーダ + 事前生成したタイル画像データ) で毎回組み立てます。`GET /islands/:id/ogp.png` のレスポンスは `Cache-Control: public, max-age=3600` (1 時間) を返します。
+島の URL (`/games/:gameId/islands/:id`) を X や Discord、Slack 等でシェアすると、`GET /games/:gameId/islands/:id/ogp.png` (800×420 PNG) の地図画像が OGP (`og:image`) として表示されます。地図は観光者向けの表示 (基地→森、海底基地→海、ハリボテ→防衛施設に見える偽装ルールを含む) をそのまま敷き詰めたもので、文字は描画しません (島名やターン・人口・面積・順位は `og:title`/`og:description` に載せます)。画像は外部サービスやネイティブライブラリを使わず、`packages/game/src/ogp/` の純粋な TypeScript (自前の PNG エンコーダ + 事前生成したタイル画像データ) で毎回組み立てます。
+
+`GET /islands/:id/ogp.png` の `Cache-Control` は tmp/21-kv-snapshot-cache.md「OGP 画像」節により画像の変わりやすさで出し分けます (`routes/islands.tsx` の `ogpCacheControl`)。過去のゲーム、または現在のゲームでも終了済みのゲームの画像は二度と変わらないため `public, max-age=31536000, immutable`。進行中のゲームは次のターンまでの秒数 (60〜3600 秒にクランプ)、ゲーム開始前は最短の `public, max-age=60` を返します。
 
 Cloudflare Workers 版は、自前で Cache API (`caches.default`) を呼ぶ実装は持たず、代わりに [Workers Cache](https://developers.cloudflare.com/workers/cache/) (`wrangler.jsonc` の `cache.enabled: true`) を使います。これは応答の `Cache-Control` に従って Cloudflare 側が自動でキャッシュする機能で、**`*.workers.dev` のデフォルトドメインでも有効**です (Cache API と違いカスタムドメインは不要)。
 
-Workers Cache は `Cache-Control` の無い応答も RFC 9111 のヒューリスティックでキャッシュしてしまい、しかも Cookie 付きリクエストをバイパスしません (バイパス対象は `Set-Cookie` を含む応答と `Authorization` 付きリクエストのみ)。そのため、セッション依存の HTML (`/api/auth/*` の better-auth の応答を含む) が他人に配信されてしまわないよう、`packages/game/src/web/app.tsx` の `defaultCacheControlMiddleware` が **すべての応答に既定で `Cache-Control: private, no-store` を付け**、ルートが明示的に `Cache-Control` を設定している場合だけそちらを優先します。`GET /games/:gameId/islands/:id/ogp.png` は自身で `public, max-age=3600` (と、将来のパージ用に `Cache-Tag: island-<id>`) を設定するので、そちらがキャッシュされます。
+Workers Cache は `Cache-Control` の無い応答も RFC 9111 のヒューリスティックでキャッシュしてしまい、しかも Cookie 付きリクエストをバイパスしません (バイパス対象は `Set-Cookie` を含む応答と `Authorization` 付きリクエストのみ)。そのため、セッション依存の HTML (`/api/auth/*` の better-auth の応答を含む) が他人に配信されてしまわないよう、`packages/game/src/web/app.tsx` の `defaultCacheControlMiddleware` が **すべての応答に既定で `Cache-Control: private, no-store` を付け**、ルートが明示的に `Cache-Control` を設定している場合だけそちらを優先します。`GET /games/:gameId/islands/:id/ogp.png` は自身で上記の `Cache-Control` (と、将来のパージ用に `Cache-Tag: island-<id>`) を設定するので、そちらがキャッシュされます。`GET /games/:gameId` (トップ) と `GET /games/:gameId/islands/:id` (観光) の HTML は引き続き `private, no-store` のままです (下記「KV スナップショットキャッシュ」節)。
 
 この既定 no-store のミドルウェアは Node 版でも同じように動きますが、Node 版自体はキャッシュ層を持たないため実質無害です (必要ならリバースプロキシ側でキャッシュしてください)。
+
+### 画像 (`packages/game/public/images/`) の長期キャッシュ
+
+`packages/game/public/images/` の地形タイル画像 (gif) やロゴ (svg) は内容が変わらない固定名のファイルです。Workers Static Assets の既定は `Cache-Control: public, max-age=0, must-revalidate` (毎回再検証) のため、`packages/game/public/_headers` で `/images/*` だけ `Cache-Control: public, max-age=31536000, immutable` にしています (`style.css` と `owner.js` はデプロイで内容が変わるため既定のままです)。**画像を差し替える場合はファイル名を変えてください** (現状 Perl 版から引き継いだ固定名で、差し替えの予定が無いことを前提にした設定です)。`_headers` は Node 版には影響しません (Workers Static Assets 専用の仕組み)。
+
+## KV スナップショットキャッシュ (Cloudflare Workers)
+
+tmp/21-kv-snapshot-cache.md。未ログイン (セッション Cookie 無し) の `GET /games/:gameId` (トップ) と `GET /games/:gameId/islands/:id` (観光) は、DO への往復 (実測で 200ms 以上) を省くため、ページの View Model (DB から組み立てた `TopPageVM`/`IslandPageVM` の JSON。HTML そのものではない) を Workers KV (`env.SNAPSHOT`) に TTL 付きで保存し、Worker (`packages/server-workers/src/worker.ts`) 側でレンダリングして応答します。HTML はキャッシュしないため、「次のターンまであと N 分」のような表示はリクエスト時刻で再計算され、キャッシュしても古くなりません。
+
+- **対象外はすべて DO へ転送**: ログイン中 (Cookie に `hako` を含む)、POST、`/`、`/games`、開発画面、管理画面、OGP 画像などは従来どおり `HakoniwaGame` (DO) への HTTP 転送のままです。ログイン中のユーザーは常に DO から最新を見られるため、自分のコメント・記帳・島の発見は即座に反映されます。未ログインの閲覧だけが最大 TTL 分だけ古くなる可能性があります。
+- **`env.SNAPSHOT` は省略可能**: 未バインドなら `worker.ts` は常に DO へ転送します (Node 版・KV 名前空間を作る前のデプロイ・テストに影響しません)。
+- **レンダリングは Worker 側**: `@hakoniwa/game` が公開する `renderTopPageHtml`/`renderIslandPageHtml` (`packages/game/src/web/render-snapshot.tsx`) が、DO 側の `routes/render.tsx` (`renderPage`) と同じ `Layout`/`TopPage`/`IslandPage` の JSX を `user`/`csrfToken` を `undefined` にして描画します。hono/jsx の要素から文字列を得る処理 (`resolveCallback`) は `c.html()` の内部実装と同じものを使っており、出力が一致することを `packages/server-workers/test/snapshot-cache.test.ts` の「Worker が返す HTML と DO が返す HTML が一致する」テストで確認しています。
+- **DO 側の RPC**: `HakoniwaGame.pageSnapshot({ kind, gameId, islandId? })` (`packages/server-workers/src/game-object.ts`) が `{ kind, vm, nextTurnAt, ttl }` を返します (対象のゲーム/島が無ければ `undefined`)。`vm` の `terrain` は RPC 越しにクラスインスタンスのメソッドを渡せないため、`Terrain.toJSON()` (`number[][]`) にした形 (`IslandPageSnapshotVM`) で受け渡し、Worker 側で `terrainFromJSON` により復元します (`packages/server-workers/src/snapshot.ts`)。
+- **TTL は DO 側で決める**: キーにターン数は含めず (`v1:<gameId>:top` / `v1:<gameId>:island:<islandId>`)、invalidate 処理も作らずすべて TTL 任せです。過去のゲーム (`vm.game.isCurrent === false`) は記帳もできず完全に不変なので長期 TTL (既定 30 日、`HAKONIWA_SNAPSHOT_TTL_IMMUTABLE_SEC`)。現在のゲームでも終了済み (`season.state === 'finished'`) のトップは不変なので同じく長期。終了済みの島ページだけは掲示板の記帳が入りうるため短期 (既定 60 秒、`HAKONIWA_SNAPSHOT_TTL_SEC`。Workers KV の最小 TTL が 60 秒のためこれ未満は指定できない)。進行中/開始前のゲームは短期 TTL を基本に、次のターンまでの残り時間がそれより短ければそちらを優先します。
+- **応答ヘッダ**: `Cache-Control` は HTML なので従来どおり `private, no-store` です。動作確認用に `X-Hakoniwa-Snapshot: hit`(KV から応答) `| miss`(DO から取得して KV に書いた) `| bypass`(DO への通常転送) を付けます。
+- **運用上の注意**: 管理者がバックアップから過去のゲームのデータを復元すると、復元前にキャッシュされていたページが最大 TTL 分だけ古いまま見えることがあります (`docs/setup-guide.md` にも記載)。
 
 ## バックアップ
 

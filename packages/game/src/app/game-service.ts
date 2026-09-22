@@ -16,6 +16,7 @@ import {
 import type { GameMeta, GameRepository, IslandSummary, UserPrefs } from "./ports.ts";
 import type { Clock } from "./ports.ts";
 import { buildSeasonVM, isFinished } from "./season.ts";
+import type { SeasonVM } from "./season.ts";
 import { buildIslandOgpVM, buildMoneyDisplay } from "./view-models.ts";
 import type {
   GameHeaderVM,
@@ -312,14 +313,25 @@ export class GameService {
   /**
    * OGP 画像 (地図 PNG) 生成用。tmp/17-ogp.md。認証・セッションに依存しない (誰でも同じ画像)。
    * Perl 版には無い (v2 独自の追加)。
+   * `game`/`season` は tmp/21-kv-snapshot-cache.md「OGP 画像のキャッシュ期間」節向け:
+   * 過去のゲーム/終了済みのゲームの画像は不変なので、呼び出し側 (routes/islands.tsx) が
+   * `Cache-Control` を長期 (immutable) にするかどうかの判定に使う。
    */
-  getIslandOgp(gameId: number, id: number): { island: Island; turn: number } {
+  getIslandOgp(
+    gameId: number,
+    id: number,
+  ): { island: Island; turn: number; game: GameHeaderVM; season: SeasonVM } {
     const meta = this.#requireExistingGame(gameId);
     const island = this.#deps.repo.findIsland(gameId, id);
     if (island === undefined) {
       throw new AppError("island_not_found");
     }
-    return { island, turn: meta.turn };
+    return {
+      island,
+      turn: meta.turn,
+      game: this.#buildGameHeader(meta),
+      season: buildSeasonVM(meta),
+    };
   }
 
   /**
