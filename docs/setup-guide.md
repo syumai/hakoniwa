@@ -23,7 +23,7 @@
 
 `HAKONIWA_BASE_URL` はここでは設定不要です (未設定ならリクエストから自動判定されます)。カスタムドメインを使う場合だけ、あとから Variables and Secrets に追加してください。
 
-未ログインのトップ・観光ページを高速化する KV スナップショットキャッシュ (下記「KV スナップショットキャッシュ (任意)」節) は、`wrangler.jsonc` の `kv_namespaces` に `id` を書いていない状態でもデプロイできます (その場合は単にキャッシュが効かないだけです)。有効にしたい場合は、デプロイ後に手順を実施してください。
+トップ・観光ページを高速化する KV スナップショットキャッシュ (下記「KV スナップショットキャッシュ (任意)」節。ログイン中のアクセスにも効きます) は、`wrangler.jsonc` の `kv_namespaces` に `id` を書いていない状態でもデプロイできます (その場合は単にキャッシュが効かないだけです)。有効にしたい場合は、デプロイ後に手順を実施してください。
 
 ## 2. Cloudflare Workers への手動デプロイ
 
@@ -46,7 +46,7 @@ pnpm deploy
 
 ### KV スナップショットキャッシュ (任意)
 
-未ログインのトップ・観光ページ (`GET /games/:gameId`、`GET /games/:gameId/islands/:id`) は、Workers KV に View Model をキャッシュすることで Durable Object への往復を省略できます (`docs/development.md`「KV スナップショットキャッシュ」節)。**設定しなくても動作します** (`wrangler.jsonc` の `kv_namespaces` に `id` が無ければ、Worker は常に Durable Object へ転送します)。有効にする場合は次の手順で名前空間を作成してください。
+トップ・観光ページ (`GET /games/:gameId`、`GET /games/:gameId/islands/:id`) は、Workers KV に View Model をキャッシュすることで Durable Object への往復を省略できます (`docs/development.md`「KV スナップショットキャッシュ」節)。**ログイン中のアクセスにも効きます** (ナビの名前・管理者リンク・CSRF トークン・「自分の島」導線の判定に使うセッションの解決結果も、同じ Workers KV に短期キャッシュします)。**設定しなくても動作します** (`wrangler.jsonc` の `kv_namespaces` に `id` が無ければ、Worker は常に Durable Object へ転送します)。有効にする場合は次の手順で名前空間を作成してください。
 
 ```sh
 wrangler kv namespace create SNAPSHOT
@@ -66,6 +66,12 @@ TTL は `wrangler.jsonc` の `vars` に既定値付きで入っているので�
 - `HAKONIWA_SNAPSHOT_TTL_IMMUTABLE_SEC` (既定 2592000 = 30 日): 過去のゲーム (二度と更新されない)、現在のゲームで終了済みのトップページ (掲示板が出ないため実質不変) の長期キャッシュ。
 
 **注意**: 管理者がバックアップから過去のデータを復元した場合、復元前の内容が最大 TTL 分だけキャッシュに残ることがあります (このキャッシュに invalidate 処理は無いため)。復元直後に古い表示が気になる場合は、該当ページが再びキャッシュされるまで (既定で最大 30 日) 待つか、TTL を短くしてから復元してください。
+
+**ログイン中の閲覧に関する注意** (詳しくは `docs/development.md`「KV スナップショットキャッシュ」節):
+
+- キャッシュしたセッションは、このキャッシュ対象のページ (読み取り専用のトップ・観光ページ) の表示にしか使いません。ページ内のフォーム送信 (POST) は毎回 Durable Object が改めてセッションを検証するので、ログアウト済みのセッションで操作ができてしまうことはありません。
+- 影響は表示だけです。ログアウトした後、最大 `HAKONIWA_SNAPSHOT_TTL_SEC` 秒 (既定 60 秒) のあいだ、共用端末などで直前にログインしていたユーザーの名前がナビに残る可能性があります。気になる場合は `HAKONIWA_SNAPSHOT_TTL_SEC` を既定の 60 秒 (Workers KV で指定できる最小値) のままにしてください。
+- 島を見つけた・放棄した直後は、「自分の島」導線の出し分け (`hasIsland`) が最大 `HAKONIWA_SNAPSHOT_TTL_SEC` 秒だけ古い状態になることがあります。操作自体は Durable Object 側で正しく処理されるので、表示が追いつくのを少し待てば直ります。
 
 ## 3. Node.js で自前のサーバーに設置
 

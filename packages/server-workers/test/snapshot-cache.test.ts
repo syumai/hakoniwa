@@ -1,5 +1,6 @@
-// tmp/21-kv-snapshot-cache.md「テスト」節の 5 項目 + 「キャッシュ期間の区別」節の TTL 選択を
-// 確認する。`packages/server-workers/src/worker.ts` の `export default` (`fetch`) を直接呼び出し、
+// tmp/21-kv-snapshot-cache.md「テスト」節 + 「キャッシュ期間の区別」節の TTL 選択 +
+// 「ログイン中も KV から返す」節のテストを確認する。
+// `packages/server-workers/src/worker.ts` の `export default` (`fetch`) を直接呼び出し、
 // KV スナップショットキャッシュの経路を検証する (他のテストファイルのように DO の `fetch` を
 // 直接叩くだけでは worker.ts のキャッシュ経路を経由しないため)。
 //
@@ -50,6 +51,32 @@ async function loginAsAdmin(): Promise<{ cookie: string; csrfToken: string }> {
   }
   const adminRes = await stub.fetch("http://example.com/admin", { headers: { cookie } });
   const csrfToken = (await adminRes.text()).match(/name="_csrf" value="([^"]+)"/)?.[1];
+  if (csrfToken === undefined) {
+    throw new Error("csrf token not found");
+  }
+  return { cookie, csrfToken };
+}
+
+/**
+ * 開発ログイン (管理者以外) して Cookie と CSRF トークンを取り出す。DO への直接 fetch。
+ * `HAKONIWA_ADMIN_EMAILS` は `admin@example.com` のみ (`vitest.config.ts`) なので、それ以外の
+ * メールアドレスは常に非管理者になる。CSRF トークンはどのページの Nav (ログアウトフォーム) にも
+ * 埋め込まれているため、`/account` から取り出す。
+ */
+async function loginAs(email: string): Promise<{ cookie: string; csrfToken: string }> {
+  const stub = mainGameStub();
+  const loginRes = await stub.fetch("http://example.com/auth/dev", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: `email=${encodeURIComponent(email)}`,
+    redirect: "manual",
+  });
+  const cookie = loginRes.headers.get("set-cookie")?.split(";")[0];
+  if (cookie === undefined) {
+    throw new Error("login failed");
+  }
+  const accountRes = await stub.fetch("http://example.com/account", { headers: { cookie } });
+  const csrfToken = (await accountRes.text()).match(/name="_csrf" value="([^"]+)"/)?.[1];
   if (csrfToken === undefined) {
     throw new Error("csrf token not found");
   }
@@ -129,13 +156,13 @@ describe("KV スナップショットキャッシュ (tmp/21-kv-snapshot-cache.m
     expect(stored).not.toBeNull();
     expect(stored).toBeDefined();
 
-    // 別のリクエスト (認証あり。DO へ直接行く) でコメントを更新する。キャッシュは invalidate
+    // DO への直接 fetch (worker.ts のキャッシュ経路を経由しない) でコメントを更新する。
+    // 誰も worker 経由でこのページに触れない限り、未ログインのキャッシュは invalidate
     // されない (設計どおり) ため、KV には古い値が残る。
     await updateComment(cookie, csrfToken, 1, "あたらしいコメント");
-    // DO 側では既に更新されていることを確認 (認証ありは常に DO へ行く。2. の確認を兼ねる)。
-    const authedRes = await fetchWorker("http://example.com/games/1", { headers: { cookie } });
-    expect(authedRes.headers.get("X-Hakoniwa-Snapshot")).toBe("bypass");
-    expect(await authedRes.text()).toContain("あたらしいコメント");
+    // DO 側では既に更新されていることを直接確認する。
+    const doRes = await mainGameStub().fetch("http://example.com/games/1", { headers: { cookie } });
+    expect(await doRes.text()).toContain("あたらしいコメント");
 
     // 未ログインの 2 回目は KV から返り (hit)、DO の最新値 (あたらしいコメント) ではなく
     // 1 回目にキャッシュした古い値のままになる。
@@ -155,19 +182,195 @@ describe("KV スナップショットキャッシュ (tmp/21-kv-snapshot-cache.m
     expect(islandSecond.headers.get("X-Hakoniwa-Snapshot")).toBe("hit");
   });
 
-  it("2. セッション Cookie 付きの GET は常に DO へ行く (bypass。KV の値は使われない)", async () => {
+  it("2. ログイン中の GET でも 1 回目は miss (RPC 経由)、2 回目は DO を呼ばず KV から hit で返る", async () => {
+    const { cookie, csrfToken } = await loginAsAdmin();
+    await startGame(cookie, csrfToken);
+    await createIsland(cookie, csrfToken, 1, "いちごう");
+    await updateComment(cookie, csrfToken, 1, "さいしょのコメント");
+
+    const first = await fetchWorker("http://example.com/games/1", { headers: { cookie } });
+    expect(first.status).toBe(200);
+    expect(first.headers.get("X-Hakoniwa-Snapshot")).toBe("miss");
+    const firstHtml = await first.text();
+    expect(firstHtml).toContain("さいしょのコメント");
+    // ログイン中のみ出るナビ (自分の島へのリンク・管理者リンク) が含まれる。
+    expect(firstHtml).toContain('href="/my-island"');
+    expect(firstHtml).toContain('href="/admin"');
+
+    // viewer もキャッシュされていることを直接確認する。
+    const viewerEntries = await env.SNAPSHOT?.list({ prefix: "viewer:" });
+    expect(viewerEntries?.keys.length).toBe(1);
+
+    // DO への直接 fetch (worker.ts のキャッシュ経路を経由しない) でコメントを更新する。
+    await updateComment(cookie, csrfToken, 1, "あたらしいコメント");
+
+    // 2 回目は (ページ・viewer とも KV にあるため) DO を呼ばない。更新前の値のまま返る
+    // ことで DO が呼ばれていないことを確認する。
+    const second = await fetchWorker("http://example.com/games/1", { headers: { cookie } });
+    expect(second.status).toBe(200);
+    expect(second.headers.get("X-Hakoniwa-Snapshot")).toBe("hit");
+    const secondHtml = await second.text();
+    expect(secondHtml).toContain("さいしょのコメント");
+    expect(secondHtml).not.toContain("あたらしいコメント");
+
+    // 島ページも同様 (viewer キャッシュはゲームごとに共有されるため、ページだけが miss になる)。
+    const islandFirst = await fetchWorker("http://example.com/games/1/islands/1", {
+      headers: { cookie },
+    });
+    expect(islandFirst.headers.get("X-Hakoniwa-Snapshot")).toBe("miss");
+    const islandSecond = await fetchWorker("http://example.com/games/1/islands/1", {
+      headers: { cookie },
+    });
+    expect(islandSecond.headers.get("X-Hakoniwa-Snapshot")).toBe("hit");
+  });
+
+  it("2a. ログイン中に Worker が返す HTML が DO が返す HTML と (_csrf を含めて) 一致する (トップ・島ページ)", async () => {
+    const { cookie, csrfToken } = await loginAsAdmin();
+    await startGame(cookie, csrfToken);
+    await createIsland(cookie, csrfToken, 1, "にごう");
+    const islandId = 1;
+
+    const workerTop = await fetchWorker("http://example.com/games/1", { headers: { cookie } });
+    expect(workerTop.headers.get("X-Hakoniwa-Snapshot")).toBe("miss");
+    const workerTopHtml = await workerTop.text();
+    const doTopHtml = await (
+      await mainGameStub().fetch("http://example.com/games/1", { headers: { cookie } })
+    ).text();
+    expect(workerTopHtml).toBe(doTopHtml);
+    // _csrf が実際にレンダリングされていることも確認する (空文字列でないこと)。
+    expect(workerTopHtml).toContain(`value="${csrfToken}"`);
+
+    const workerIsland = await fetchWorker(`http://example.com/games/1/islands/${islandId}`, {
+      headers: { cookie },
+    });
+    expect(workerIsland.headers.get("X-Hakoniwa-Snapshot")).toBe("miss");
+    const workerIslandHtml = await workerIsland.text();
+    const doIslandHtml = await (
+      await mainGameStub().fetch(`http://example.com/games/1/islands/${islandId}`, {
+        headers: { cookie },
+      })
+    ).text();
+    expect(workerIslandHtml).toBe(doIslandHtml);
+  });
+
+  it("2b. 別のユーザーのセッションでアクセスすると、そのユーザー自身のナビ (名前) が出る (他人の名前は出ない)", async () => {
+    const { cookie: adminCookie, csrfToken } = await loginAsAdmin();
+    await startGame(adminCookie, csrfToken);
+    const { cookie: playerCookie } = await loginAs("player1@example.com");
+
+    const adminRes = await fetchWorker("http://example.com/games/1", {
+      headers: { cookie: adminCookie },
+    });
+    expect(adminRes.headers.get("X-Hakoniwa-Snapshot")).toBe("miss");
+    const adminHtml = await adminRes.text();
+    expect(adminHtml).toContain("adminさん");
+    expect(adminHtml).not.toContain("player1さん");
+
+    const playerRes = await fetchWorker("http://example.com/games/1", {
+      headers: { cookie: playerCookie },
+    });
+    expect(playerRes.headers.get("X-Hakoniwa-Snapshot")).toBe("miss");
+    const playerHtml = await playerRes.text();
+    expect(playerHtml).toContain("player1さん");
+    expect(playerHtml).not.toContain("adminさん");
+    // 非管理者には「管理」リンクが出ない。
+    expect(playerHtml).not.toContain('href="/admin"');
+
+    // 2 回目 (KV から hit) でも取り違えないことを確認する。
+    const adminRes2 = await fetchWorker("http://example.com/games/1", {
+      headers: { cookie: adminCookie },
+    });
+    expect(adminRes2.headers.get("X-Hakoniwa-Snapshot")).toBe("hit");
+    expect(await adminRes2.text()).toContain("adminさん");
+
+    const playerRes2 = await fetchWorker("http://example.com/games/1", {
+      headers: { cookie: playerCookie },
+    });
+    expect(playerRes2.headers.get("X-Hakoniwa-Snapshot")).toBe("hit");
+    expect(await playerRes2.text()).toContain("player1さん");
+  });
+
+  it("2c. 管理者のセッションでは「管理」リンクが出る (isAdmin がキャッシュされる)", async () => {
     const { cookie, csrfToken } = await loginAsAdmin();
     await startGame(cookie, csrfToken);
 
-    // 先に未ログインでキャッシュを作っておく。
-    const cached = await fetchWorker("http://example.com/games/1");
-    expect(cached.headers.get("X-Hakoniwa-Snapshot")).toBe("miss");
+    const first = await fetchWorker("http://example.com/games/1", { headers: { cookie } });
+    expect(first.headers.get("X-Hakoniwa-Snapshot")).toBe("miss");
+    expect(await first.text()).toContain('href="/admin"');
 
-    const authedRes = await fetchWorker("http://example.com/games/1", { headers: { cookie } });
-    expect(authedRes.status).toBe(200);
-    expect(authedRes.headers.get("X-Hakoniwa-Snapshot")).toBe("bypass");
-    // ログイン中のみ出るナビ (自分の島へのリンク) が含まれる = DO からそのまま返っている証拠。
-    expect(await authedRes.text()).toContain('href="/my-island"');
+    // KV から返るとき (hit) も admin リンクが維持されることを確認する。
+    const second = await fetchWorker("http://example.com/games/1", { headers: { cookie } });
+    expect(second.headers.get("X-Hakoniwa-Snapshot")).toBe("hit");
+    expect(await second.text()).toContain('href="/admin"');
+  });
+
+  it("2d. 無効・期限切れの Cookie では匿名として描画される (authenticated: false としてキャッシュされる)", async () => {
+    const { cookie, csrfToken } = await loginAsAdmin();
+    await startGame(cookie, csrfToken);
+
+    // ログアウトしてセッションを DB 上失効させる (Cookie の値自体は手元に残しておくことで
+    // 「無効・期限切れの Cookie」を再現する)。
+    const logoutRes = await mainGameStub().fetch("http://example.com/logout", {
+      method: "POST",
+      headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
+      body: `_csrf=${encodeURIComponent(csrfToken)}`,
+      redirect: "manual",
+    });
+    expect(logoutRes.status).toBe(302);
+
+    const first = await fetchWorker("http://example.com/games/1", { headers: { cookie } });
+    expect(first.status).toBe(200);
+    expect(first.headers.get("X-Hakoniwa-Snapshot")).toBe("miss");
+    const firstHtml = await first.text();
+    expect(firstHtml).toContain('href="/login"');
+    expect(firstHtml).not.toContain('href="/my-island"');
+    expect(firstHtml).not.toContain("adminさん");
+
+    // 2 回目も (authenticated: false がキャッシュされているため) DO を呼ばず匿名のまま。
+    const second = await fetchWorker("http://example.com/games/1", { headers: { cookie } });
+    expect(second.headers.get("X-Hakoniwa-Snapshot")).toBe("hit");
+    expect(await second.text()).toContain('href="/login"');
+  });
+
+  it("2e. __Secure- 接頭辞つきのセッション Cookie (本番の https 環境) でもログイン中として描画される", async () => {
+    // 本番 (https://hakoniwa.syumai.dev) では better-auth が実際のセッション Cookie 名の先頭に
+    // `__Secure-` を付ける (`useSecureCookies` の既定挙動。worker.ts の `SESSION_COOKIE_NAMES`
+    // のコメント参照)。
+    //
+    // 注意: このローカル Workers テスト環境 (@cloudflare/vitest-pool-workers) では、
+    // better-auth 自身のセッション検証 (DO 側の `auth.api.getSession`) が実行環境の判定上、
+    // 常に接頭辞無しの名前を期待する (http/https どちらの URL でリクエストしても変わらないことを
+    // 確認済み)。そのため `__Secure-` 付きの Cookie だけを送ると DO 側の検証自体が失敗し、
+    // 「ログイン中として描画される」ところまでは確認できない。ここでは素の Cookie も同じ
+    // ヘッダに含めることで DO 側のセッション検証を成立させつつ、`__Secure-` 側を先に置いて
+    // worker.ts がその Cookie を拾ってキャッシュ/RPC の経路に正しく載せることを検証する
+    // (末尾に置いた `hako.session_token` を無視しているわけではない点は、
+    // `extractSessionCookieValue` の挙動を直接検証する `test/worker-cookie.test.ts` の方が
+    // 厳密に確認できる。そちらが本番バグの回帰テストの本体で、このテストは統合経路の疎通確認)。
+    const { cookie, csrfToken } = await loginAsAdmin();
+    await startGame(cookie, csrfToken);
+    const sessionTokenValue = cookie.slice(cookie.indexOf("=") + 1);
+    const cookieWithSecurePrefix = `__Secure-hako.session_token=${sessionTokenValue}; ${cookie}`;
+
+    const first = await fetchWorker("http://example.com/games/1", {
+      headers: { cookie: cookieWithSecurePrefix },
+    });
+    expect(first.status).toBe(200);
+    expect(first.headers.get("X-Hakoniwa-Snapshot")).toBe("miss");
+    const firstHtml = await first.text();
+    expect(firstHtml).toContain("adminさん");
+    expect(firstHtml).toContain('href="/admin"');
+    expect(firstHtml).toContain('href="/my-island"');
+    expect(firstHtml).toContain(`value="${csrfToken}"`);
+
+    // 2 回目は (ページ・viewer とも KV にあるため) DO を呼ばず hit で返る。
+    const second = await fetchWorker("http://example.com/games/1", {
+      headers: { cookie: cookieWithSecurePrefix },
+    });
+    expect(second.headers.get("X-Hakoniwa-Snapshot")).toBe("hit");
+    const secondHtml = await second.text();
+    expect(secondHtml).toContain("adminさん");
+    expect(secondHtml).toContain(`value="${csrfToken}"`);
   });
 
   it("3. env.SNAPSHOT 未バインドでも 200 が返る (常に DO へ転送)", async () => {
@@ -236,7 +439,17 @@ describe("KV スナップショットキャッシュ (tmp/21-kv-snapshot-cache.m
     const hit = await fetchWorker("http://example.com/games/1");
     expect(hit.headers.get("X-Hakoniwa-Snapshot")).toBe("hit");
     expect(hit.headers.get("Cache-Control")).toBe("private, no-store");
-    const bypass = await fetchWorker("http://example.com/games/1", { headers: { cookie } });
+
+    // ログイン中の GET も (今は miss/hit でキャッシュ経路に入るが) Cache-Control は変わらない。
+    const authedMiss = await fetchWorker("http://example.com/games/1", { headers: { cookie } });
+    expect(authedMiss.headers.get("X-Hakoniwa-Snapshot")).toBe("miss");
+    expect(authedMiss.headers.get("Cache-Control")).toBe("private, no-store");
+
+    // 実際の bypass 経路 (/my-island はキャッシュ対象外) も同じヘッダになることを確認する。
+    const bypass = await fetchWorker("http://example.com/games/1/my-island", {
+      headers: { cookie },
+    });
+    expect(bypass.headers.get("X-Hakoniwa-Snapshot")).toBe("bypass");
     expect(bypass.headers.get("Cache-Control")).toBe("private, no-store");
   });
 

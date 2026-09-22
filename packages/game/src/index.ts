@@ -138,7 +138,7 @@ export type {
 export type { AppErrorKind } from "./app/errors.ts";
 export { AppError } from "./app/errors.ts";
 
-export type { AuthUser, SessionUserLike } from "./app/auth.ts";
+export type { AuthUser, AuthUserRef, SessionUserLike } from "./app/auth.ts";
 export { isAdminEmail, toAuthUser } from "./app/auth.ts";
 
 export type { AuthMethodKind, AuthMethodsFlags, AuthMethodPolicyDeps } from "./app/auth-methods.ts";

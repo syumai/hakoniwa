@@ -17,6 +17,17 @@ export interface AuthUser {
 }
 
 /**
+ * tmp/21-kv-snapshot-cache.md「ログイン中も KV から返す」節: `AuthUser` のうち、ナビ表示
+ * (`Layout`) と「自分の島」導線の出し分け (`ViewerVM.user` の有無) に必要な最小限のフィールド。
+ * email を含まない (KV スナップショットキャッシュに email を保存しないため)。
+ */
+export interface AuthUserRef {
+  id: string;
+  name: string;
+  isAdmin: boolean;
+}
+
+/**
  * email が管理者メール一覧に含まれるか判定する。
  * - 大文字小文字を無視して比較する。
  * - `.invalid` で終わるプレースホルダメール (X 等、メールを返さないプロバイダ用) は常に false。
