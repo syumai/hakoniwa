@@ -172,31 +172,15 @@ Workers Cache は `Cache-Control` の無い応答も RFC 9111 のヒューリス
 
 ## KV スナップショットキャッシュ (Cloudflare Workers)
 
-tmp/21-kv-snapshot-cache.md。`GET /games/:gameId` (トップ) と `GET /games/:gameId/islands/:id` (観光) は、DO への往復 (実測で 200ms 以上) を省くため、ページの View Model (DB から組み立てた `TopPageVM`/`IslandPageVM` の JSON。HTML そのものではない) を Workers KV (`env.SNAPSHOT`) に TTL 付きで保存し、Worker (`packages/server-workers/src/worker.ts`) 側でレンダリングして応答します。HTML はキャッシュしないため、「次のターンまであと N 分」のような表示はリクエスト時刻で再計算され、キャッシュしても古くなりません。**ログイン中の GET もこの経路の対象です** (下記「ログイン中の viewer キャッシュ」節)。
+tmp/21-kv-snapshot-cache.md。未ログイン (セッション Cookie 無し) の `GET /games/:gameId` (トップ) と `GET /games/:gameId/islands/:id` (観光) は、DO への往復 (実測で 200ms 以上) を省くため、ページの View Model (DB から組み立てた `TopPageVM`/`IslandPageVM` の JSON。HTML そのものではない) を Workers KV (`env.SNAPSHOT`) に TTL 付きで保存し、Worker (`packages/server-workers/src/worker.ts`) 側でレンダリングして応答します。HTML はキャッシュしないため、「次のターンまであと N 分」のような表示はリクエスト時刻で再計算され、キャッシュしても古くなりません。
 
-- **対象外はすべて DO へ転送**: POST、`/`、`/games`、`/my-island`、`/admin`、`/account`、`/api/auth/*`、開発画面、OGP 画像、クエリ文字列付きの GET などは従来どおり `HakoniwaGame` (DO) への HTTP 転送のままです。フォーム送信 (コメント更新・記帳・島の発見など) は必ず DO まで届いて即座に反映されます。閲覧 (トップ・観光ページの GET) だけが最大 TTL 分だけ古くなる可能性があります。
+- **対象外はすべて DO へ転送**: ログイン中 (Cookie に `hako` を含む)、POST、`/`、`/games`、開発画面、管理画面、OGP 画像などは従来どおり `HakoniwaGame` (DO) への HTTP 転送のままです。ログイン中のユーザーは常に DO から最新を見られるため、自分のコメント・記帳・島の発見は即座に反映されます。未ログインの閲覧だけが最大 TTL 分だけ古くなる可能性があります。
 - **`env.SNAPSHOT` は省略可能**: 未バインドなら `worker.ts` は常に DO へ転送します (Node 版・KV 名前空間を作る前のデプロイ・テストに影響しません)。
-- **レンダリングは Worker 側**: `@hakoniwa/game` が公開する `renderTopPageHtml`/`renderIslandPageHtml` (`packages/game/src/web/render-snapshot.tsx`) が、DO 側の `routes/render.tsx` (`renderPage`) と同じ `Layout`/`TopPage`/`IslandPage` の JSX を描画します。`user`/`csrfToken` (ログイン中は viewer キャッシュの値、未ログインは `undefined`) を渡せるようにしており、hono/jsx の要素から文字列を得る処理 (`resolveCallback`) は `c.html()` の内部実装と同じものを使っているため、出力が一致することを `packages/server-workers/test/snapshot-cache.test.ts` の「Worker が返す HTML と DO が返す HTML が一致する」テスト (未ログイン・ログイン中の両方) で確認しています。
-- **DO 側の RPC**: `HakoniwaGame.pageSnapshot({ kind, gameId, islandId? }, cookieHeader?)` (`packages/server-workers/src/game-object.ts`) が `{ kind, vm, nextTurnAt, ttl, viewer? }` を返します (対象のゲーム/島が無ければ `undefined`)。`vm` の `terrain` は RPC 越しにクラスインスタンスのメソッドを渡せないため、`Terrain.toJSON()` (`number[][]`) にした形 (`IslandPageSnapshotVM`) で受け渡し、Worker 側で `terrainFromJSON` により復元します (`packages/server-workers/src/snapshot.ts`)。`cookieHeader` (Cookie ヘッダの値) を渡したときだけ、この同じ 1 回の呼び出しの中でセッションもあわせて解決し `viewer` を返します (ページ用と viewer 用で RPC を分けないため、**DO への往復は未ログイン時と同じ 1 回のまま**です)。
+- **レンダリングは Worker 側**: `@hakoniwa/game` が公開する `renderTopPageHtml`/`renderIslandPageHtml` (`packages/game/src/web/render-snapshot.tsx`) が、DO 側の `routes/render.tsx` (`renderPage`) と同じ `Layout`/`TopPage`/`IslandPage` の JSX を `user`/`csrfToken` を `undefined` にして描画します。hono/jsx の要素から文字列を得る処理 (`resolveCallback`) は `c.html()` の内部実装と同じものを使っており、出力が一致することを `packages/server-workers/test/snapshot-cache.test.ts` の「Worker が返す HTML と DO が返す HTML が一致する」テストで確認しています。
+- **DO 側の RPC**: `HakoniwaGame.pageSnapshot({ kind, gameId, islandId? })` (`packages/server-workers/src/game-object.ts`) が `{ kind, vm, nextTurnAt, ttl }` を返します (対象のゲーム/島が無ければ `undefined`)。`vm` の `terrain` は RPC 越しにクラスインスタンスのメソッドを渡せないため、`Terrain.toJSON()` (`number[][]`) にした形 (`IslandPageSnapshotVM`) で受け渡し、Worker 側で `terrainFromJSON` により復元します (`packages/server-workers/src/snapshot.ts`)。
 - **TTL は DO 側で決める**: キーにターン数は含めず (`v1:<gameId>:top` / `v1:<gameId>:island:<islandId>`)、invalidate 処理も作らずすべて TTL 任せです。過去のゲーム (`vm.game.isCurrent === false`) は記帳もできず完全に不変なので長期 TTL (既定 30 日、`HAKONIWA_SNAPSHOT_TTL_IMMUTABLE_SEC`)。現在のゲームでも終了済み (`season.state === 'finished'`) のトップは不変なので同じく長期。終了済みの島ページだけは掲示板の記帳が入りうるため短期 (既定 60 秒、`HAKONIWA_SNAPSHOT_TTL_SEC`。Workers KV の最小 TTL が 60 秒のためこれ未満は指定できない)。進行中/開始前のゲームは短期 TTL を基本に、次のターンまでの残り時間がそれより短ければそちらを優先します。
-- **応答ヘッダ**: `Cache-Control` は HTML なので従来どおり `private, no-store` です。動作確認用に `X-Hakoniwa-Snapshot: hit`(KV から応答。DO を呼んでいない) `| miss`(DO から取得して KV に書いた) `| bypass`(DO への通常転送) を付けます。
+- **応答ヘッダ**: `Cache-Control` は HTML なので従来どおり `private, no-store` です。動作確認用に `X-Hakoniwa-Snapshot: hit`(KV から応答) `| miss`(DO から取得して KV に書いた) `| bypass`(DO への通常転送) を付けます。
 - **運用上の注意**: 管理者がバックアップから過去のゲームのデータを復元すると、復元前にキャッシュされていたページが最大 TTL 分だけ古いまま見えることがあります (`docs/setup-guide.md` にも記載)。
-
-### ログイン中の viewer キャッシュ
-
-トップ・観光ページの View Model 自体は閲覧者に依存しません (`getIslandPage` は actor を取らず、`getTopPage(undefined, gameId)` の `viewer` は常に `{ hasIsland: false }`)。ログイン中の描画に追加で要るのは、ナビの `user.name`/`user.isAdmin`、フォームの `_csrf`、トップページの `viewer.hasIsland` (「自分の島」導線の出し分け) の 3 つだけです。そこでセッションの解決結果だけを別途 Workers KV にキャッシュし、ページの View Model キャッシュと組み合わせて描画します。
-
-- **キー**: `viewer:v1:<sha256(セッション Cookie の値)>:<gameId>` (`packages/server-workers/src/snapshot.ts` の `hashSessionCookieValue`/`viewerSnapshotKey`)。セッション Cookie (`hako.session_token`) の値そのものを SHA-256 でハッシュしたものを使い、**生のセッショントークンはキーにも値にも入れません**。`gameId` を含めるのは `hasIsland` がゲームごとに異なるためです。
-- **値**: `{ sessionId, user: { id, name, isAdmin }, hasIsland }` (email は描画に使わないので含めません)。Cookie が不正・期限切れで DO のセッション検証が失敗した場合は `{ authenticated: false }` を保存し、以後は匿名として KV から応答します (無効な Cookie で毎回 DO を叩き続けることを防ぎます)。
-- **TTL**: 常に短期 (`HAKONIWA_SNAPSHOT_TTL_SEC`。既定 60 秒)。ページ側のような長期 TTL は使いません。
-- **流れ**: Cookie があるログイン中の GET では、ページと viewer の両方を Workers KV から並行に読みます。両方ヒットすれば DO を呼ばずに描画します (`_csrf` は `HAKONIWA_AUTH_SECRET` があれば Worker 側で再計算できるため、`createCsrfToken(secret, sessionId)` をその場で計算します)。どちらか欠けていれば `pageSnapshot` に Cookie ヘッダを渡して 1 回だけ呼び、返ってきたページ・viewer の両方を Workers KV に書き込みます。
-
-**安全性について**:
-
-- キャッシュしたセッションは、この対象の読み取り専用ページ (トップ・観光ページ) の描画にしか使いません。POST を含む他のすべてのルートは従来どおり DO まで届き、better-auth が毎回セッションを検証します。したがって、ログアウト済みのセッションでキャッシュ経由の操作ができてしまうことはありません。
-- 影響は表示だけです。ログアウト後、最大 TTL (既定 60 秒) のあいだ、トップ・観光ページのナビに直前のユーザー名が残る可能性があります。共用端末での利用を気にする場合は `HAKONIWA_SNAPSHOT_TTL_SEC` を既定の 60 秒 (指定できる最小値) のままにしてください。
-- `_csrf` は `HMAC(secret, sessionId)` なので、キャッシュされた古いトークンが漏れても、POST 時に DO 側で実在するセッションの `sessionId` と突き合わされるため単独では何もできません。
-- 島の発見・放棄の直後は `hasIsland` (「自分の島」導線の出し分け) が最大 TTL 分だけ古い可能性があります。表示の出し分けが遅れるだけで、操作自体は DO 側で正しく判定されます。
 
 ## バックアップ
 

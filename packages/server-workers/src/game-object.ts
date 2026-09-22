@@ -2,24 +2,13 @@
 // 1 インスタンス = ゲーム世界 1 つ。DO の SQLite ストレージに Node 版と同じスキーマを構築し、
 // @hakoniwa/game の buildDeps で組み立てた Hono app にそのまま委譲する。
 import { DurableObject } from "cloudflare:workers";
-import {
-  AppError,
-  buildDeps,
-  buildSeasonVM,
-  loadConfigFromEnv,
-  migrate,
-  toAuthUser,
-} from "@hakoniwa/game";
-import type { AuthUserRef, BuiltDeps } from "@hakoniwa/game";
+import { AppError, buildDeps, buildSeasonVM, loadConfigFromEnv, migrate } from "@hakoniwa/game";
+import type { BuiltDeps } from "@hakoniwa/game";
 import { BookmarkBackupStore } from "./backup.ts";
 import { DurableObjectSqlDriver } from "./driver.ts";
 import type { Env } from "./env.ts";
 import { computeSnapshotTtl, loadSnapshotTtlConfig, toIslandPageSnapshotVM } from "./snapshot.ts";
-import type {
-  PageSnapshotRequest,
-  PageSnapshotResult,
-  ViewerSnapshotEnvelope,
-} from "./snapshot.ts";
+import type { PageSnapshotRequest, PageSnapshotResult } from "./snapshot.ts";
 
 /**
  * ゲーム世界を 1 つ保持する Durable Object。
@@ -56,20 +45,12 @@ export class HakoniwaGame extends DurableObject<Env> {
   }
 
   /**
-   * tmp/21-kv-snapshot-cache.md: トップ/観光ページ用の RPC。worker.ts が KV キャッシュを
-   * 外した (ミスした) ときに呼ぶ。対象のゲーム/島が無ければ `undefined` を返し、
+   * tmp/21-kv-snapshot-cache.md: 未ログイン GET のトップ/観光ページ用の RPC。worker.ts が
+   * KV キャッシュを外した (ミスした) ときに呼ぶ。対象のゲーム/島が無ければ `undefined` を返し、
    * 呼び出し側は従来どおり `fetch` (DO への HTTP 転送) にフォールバックする。
    * TTL はここ (DO 側) で決める (Worker 側に「不変かどうか」の判定を持たせないため)。
-   *
-   * 「ログイン中も KV から返す」節: `cookieHeader` (Cookie ヘッダの値) を渡すと、ページの vm と
-   * 同じこの 1 回の呼び出しでセッションもあわせて解決し、結果の `viewer` を返す
-   * (ページ用と viewer 用で RPC を 2 回呼ばないため。DO への往復は従来と同じ 1 回のまま)。
-   * `cookieHeader` を渡さなければ `viewer` は返さない (undefined のまま)。
    */
-  async pageSnapshot(
-    input: PageSnapshotRequest,
-    cookieHeader?: string,
-  ): Promise<PageSnapshotResult | undefined> {
+  pageSnapshot(input: PageSnapshotRequest): PageSnapshotResult | undefined {
     const deps = this.#requireDeps();
     const { ttlSec, ttlImmutableSec } = loadSnapshotTtlConfig(this.env);
     const now = Math.floor(Date.now() / 1000);
@@ -86,8 +67,7 @@ export class HakoniwaGame extends DurableObject<Env> {
           ttlSec,
           ttlImmutableSec,
         });
-        const viewer = await this.#resolveViewer(deps, input.gameId, cookieHeader);
-        return { kind: "top", vm, nextTurnAt, ttl, ...(viewer !== undefined ? { viewer } : {}) };
+        return { kind: "top", vm, nextTurnAt, ttl };
       }
       const vm = deps.gameService.getIslandPage(input.gameId, input.islandId);
       // IslandPageVM には season が無いため、TTL 判定用に別途取得する
@@ -102,13 +82,11 @@ export class HakoniwaGame extends DurableObject<Env> {
         ttlSec,
         ttlImmutableSec,
       });
-      const viewer = await this.#resolveViewer(deps, input.gameId, cookieHeader);
       return {
         kind: "island",
         vm: toIslandPageSnapshotVM(vm),
         nextTurnAt: season.nextTurnAt,
         ttl,
-        ...(viewer !== undefined ? { viewer } : {}),
       };
     } catch (err) {
       if (err instanceof AppError) {
@@ -118,33 +96,6 @@ export class HakoniwaGame extends DurableObject<Env> {
       }
       throw err;
     }
-  }
-
-  /**
-   * `cookieHeader` からセッションを解決する。`cookieHeader` が無ければ「viewer を要求していない」
-   * ことを表す `undefined` を返す (呼び出し側はこれを KV に書かない)。Cookie があっても
-   * セッションが不正・期限切れなら `{ authenticated: false }` を返す (匿名として同じキーに
-   * キャッシュしてよい値)。email はキャッシュしないため `AuthUserRef` (id/name/isAdmin) だけ
-   * 取り出す。
-   */
-  async #resolveViewer(
-    deps: BuiltDeps,
-    gameId: number,
-    cookieHeader: string | undefined,
-  ): Promise<ViewerSnapshotEnvelope | undefined> {
-    if (cookieHeader === undefined) {
-      return undefined;
-    }
-    const session = await deps.auth.api.getSession({
-      headers: new Headers({ cookie: cookieHeader }),
-    });
-    if (session === null) {
-      return { authenticated: false };
-    }
-    const authUser = toAuthUser(session.user, deps.config.auth.adminEmails);
-    const user: AuthUserRef = { id: authUser.id, name: authUser.name, isAdmin: authUser.isAdmin };
-    const hasIsland = deps.repo.findIslandByOwner(gameId, authUser.id) !== undefined;
-    return { authenticated: true, sessionId: session.session.id, user, hasIsland };
   }
 
   #requireDeps(): BuiltDeps {

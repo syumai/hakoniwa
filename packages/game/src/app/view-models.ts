@@ -1,7 +1,7 @@
 // 画面向け DTO。HTML は含めない (描画は Phase 3b の web/views が行う)。
 // tmp/06-web-routes-and-views.md 「画面」節、Perl 版 Top.pm / Map.pm の各 temp* 関数が
 // 表示していた情報を構造化したもの。
-import type { AuthUserRef } from "./auth.ts";
+import type { AuthUser } from "./auth.ts";
 import type { GameStatus, GameSummary, UserPrefs } from "./ports.ts";
 import type { SeasonVM } from "./season.ts";
 import type { GameConfig } from "../core/config.ts";
@@ -73,15 +73,9 @@ export interface IslandRowVM {
   abandoned: boolean;
 }
 
-/**
- * ログイン状態と自分の島の有無。14「ルート」節の GET / 表示の出し分けに使う。
- * `user` は `views/top.tsx` (`MyIslandSection`) では存在確認 (`viewer.user === undefined`) に
- * しか使わない。tmp/21-kv-snapshot-cache.md「ログイン中も KV から返す」節: KV スナップショット
- * キャッシュの viewer には email を含めないため、`AuthUser` ではなく `AuthUserRef` (id/name/
- * isAdmin のみ) にしている (実際の actor は `AuthUser` なので代入側は互換)。
- */
+/** ログイン状態と自分の島の有無。14「ルート」節の GET / 表示の出し分けに使う。 */
 export interface ViewerVM {
-  user?: AuthUserRef;
+  user?: AuthUser;
   hasIsland: boolean;
 }
 

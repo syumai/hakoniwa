@@ -2,17 +2,13 @@
 // ライセンス上必須の配布元リンク (tmp/01-overview.md) を本文先頭に固定で埋め込む。
 // tmp/14-users-auth.md によりログイン状態のナビゲーションを追加する (Phase 6b)。
 import type { Child, PropsWithChildren } from "hono/jsx";
-import type { AuthUserRef } from "../../app/auth.ts";
+import type { AuthUser } from "../../app/auth.ts";
 import type { GameConfig } from "../../core/config.ts";
 
 export interface LayoutProps {
   config: GameConfig;
-  /**
-   * ログイン中のユーザー。未ログインなら undefined。ナビ表示には name/isAdmin しか使わない
-   * ため `AuthUserRef` (email を含まない) にしている (tmp/21-kv-snapshot-cache.md「ログイン中も
-   * KV から返す」節。実際の `AuthUser` は上位互換なのでそのまま渡せる)。
-   */
-  user?: AuthUserRef | undefined;
+  /** ログイン中のユーザー。未ログインなら undefined。 */
+  user?: AuthUser | undefined;
   /** ログアウトフォーム用。未ログインなら undefined。 */
   csrfToken?: string | undefined;
   /** `<head>` に追加する要素 (OGP メタタグ等)。tmp/17-ogp.md。 */
@@ -106,7 +102,7 @@ function Nav({
   csrfToken,
 }: {
   config: GameConfig;
-  user: AuthUserRef | undefined;
+  user: AuthUser | undefined;
   csrfToken: string | undefined;
 }) {
   return (

@@ -1,9 +1,8 @@
-// tmp/21-kv-snapshot-cache.md: 読み取りページの View Model (トップ/観光) と、ログイン中の
-// セッション解決結果 (viewer) を Workers KV にキャッシュするための型・キー・TTL 計算。
-// HTML はキャッシュしない (レンダリングは @hakoniwa/game の
-// renderTopPageHtml/renderIslandPageHtml を worker.ts が呼ぶ)。
+// tmp/21-kv-snapshot-cache.md: 未ログイン GET のトップ/観光ページの View Model を
+// Workers KV にキャッシュするための型・キー・TTL 計算。HTML はキャッシュしない
+// (レンダリングは @hakoniwa/game の renderTopPageHtml/renderIslandPageHtml を worker.ts が呼ぶ)。
 import { terrainFromJSON } from "@hakoniwa/game";
-import type { AuthUserRef, IslandPageVM, SeasonState, TopPageVM } from "@hakoniwa/game";
+import type { IslandPageVM, SeasonState, TopPageVM } from "@hakoniwa/game";
 
 /** KV キーの版数。保存形式を変えるときはこれを上げる (invalidate 処理は作らないため)。 */
 const SNAPSHOT_KEY_VERSION = "v1";
@@ -14,31 +13,6 @@ export function topSnapshotKey(gameId: number): string {
 
 export function islandSnapshotKey(gameId: number, islandId: number): string {
   return `${SNAPSHOT_KEY_VERSION}:${gameId}:island:${islandId}`;
-}
-
-/**
- * `sessionCookieValue` (better-auth の `hako.session_token` Cookie の値そのもの) を
- * SHA-256 でハッシュした 16 進数文字列。KV のキー・値のどちらにも生のトークンを入れない
- * ため (tmp/21-kv-snapshot-cache.md「ログイン中も KV から返す」節)。Web Crypto
- * (`crypto.subtle`) のみに依存する (bootstrap/csrf.ts と同じ方針)。
- */
-export async function hashSessionCookieValue(sessionCookieValue: string): Promise<string> {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(sessionCookieValue),
-  );
-  return Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-/**
- * セッション解決結果 (viewer) の KV キー。`gameId` を含めるのは `hasIsland` がゲームごとに
- * 異なるため。ページのキー (`topSnapshotKey`/`islandSnapshotKey`) とは独立した名前空間
- * (`viewer:` 接頭辞) にする。
- */
-export function viewerSnapshotKey(sessionCookieHash: string, gameId: number): string {
-  return `viewer:${SNAPSHOT_KEY_VERSION}:${sessionCookieHash}:${gameId}`;
 }
 
 /**
@@ -69,17 +43,6 @@ export interface SnapshotEnvelope<T> {
 export type TopPageSnapshotEnvelope = SnapshotEnvelope<TopPageVM>;
 export type IslandPageSnapshotEnvelope = SnapshotEnvelope<IslandPageSnapshotVM>;
 
-/**
- * viewer (セッション解決結果) の KV 値、および DO の RPC `pageSnapshot` が返す viewer の形。
- * tmp/21-kv-snapshot-cache.md「ログイン中も KV から返す」節:
- * - `sessionId`/`user`/`hasIsland` のみを持つ (email や生のセッショントークンは含めない)。
- * - Cookie が不正・期限切れなら DO は `{ authenticated: false }` を返す。これも匿名として
- *   同じキーにキャッシュしてよい (無効な Cookie で毎回 DO を叩き続けるのを防ぐ)。
- */
-export type ViewerSnapshotEnvelope =
-  | { authenticated: false }
-  | { authenticated: true; sessionId: string; user: AuthUserRef; hasIsland: boolean };
-
 /** DO の RPC `pageSnapshot` への入力。 */
 export type PageSnapshotRequest =
   | { kind: "top"; gameId: number }
@@ -90,25 +53,10 @@ export type PageSnapshotRequest =
  * (呼び出し側は従来どおり DO への HTTP 転送にフォールバックする)。
  * `vm` は RPC 越しにクラスインスタンスを渡せないため、island は常に `IslandPageSnapshotVM`
  * (terrain が number[][]) にした形で返す。
- * `viewer` は、呼び出し側 (worker.ts) が `pageSnapshot` の第 2 引数 (Cookie ヘッダ) を渡した
- * ときだけ含まれる。渡さなかった場合は `undefined` のまま (「viewer を要求していない」ことと
- * 「解決した結果ログインしていなかった」(`{ authenticated: false }`) を区別するため)。
  */
 export type PageSnapshotResult =
-  | {
-      kind: "top";
-      vm: TopPageVM;
-      nextTurnAt: number | null;
-      ttl: number;
-      viewer?: ViewerSnapshotEnvelope;
-    }
-  | {
-      kind: "island";
-      vm: IslandPageSnapshotVM;
-      nextTurnAt: number | null;
-      ttl: number;
-      viewer?: ViewerSnapshotEnvelope;
-    };
+  | { kind: "top"; vm: TopPageVM; nextTurnAt: number | null; ttl: number }
+  | { kind: "island"; vm: IslandPageSnapshotVM; nextTurnAt: number | null; ttl: number };
 
 // ----------------------------------------------------------------------
 // TTL (tmp/21-kv-snapshot-cache.md「キャッシュ期間の区別」節)
