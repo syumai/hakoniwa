@@ -146,7 +146,7 @@ export class FakeGameRepository implements GameRepository {
 
   tryBumpTurn(gameId: number, expectedTurn: number, next: GameMeta): boolean {
     const meta = this.#games.get(gameId);
-    if (meta === undefined || meta.turn !== expectedTurn) {
+    if (meta === undefined || meta.turn !== expectedTurn || meta.status !== "running") {
       return false;
     }
     this.#games.set(gameId, { ...next, id: gameId });

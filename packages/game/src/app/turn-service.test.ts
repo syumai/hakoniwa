@@ -71,6 +71,24 @@ class NeverAdvanceRepo extends FakeGameRepository {
   }
 }
 
+/**
+ * 呼び出し元の `getMeta` から進行トランザクション開始までの間に他の書き込みが入った状況を
+ * 再現するリポジトリ (server-node のサーバと CLI のように、同じ DB を触る別プロセスの
+ * `game finish`/`game set-final-turn`/`time set` 等を模す)。transaction 開始時にフックを差し込む。
+ */
+class ConcurrentWriteRepo extends FakeGameRepository {
+  #beforeTransaction: (() => void) | undefined;
+
+  onBeforeTransaction(fn: () => void): void {
+    this.#beforeTransaction = fn;
+  }
+
+  override transaction<T>(fn: () => T): T {
+    this.#beforeTransaction?.();
+    return fn();
+  }
+}
+
 describe("TurnService.advanceTurnIfDue", () => {
   it("期限前なら 0 を返し、meta は変わらない", () => {
     const repo = new FakeGameRepository();
@@ -536,5 +554,83 @@ describe("tmp/16-season.md: 開始前の状態 = ターン 0", () => {
     expect(meta.firstTurn).toBe(1);
     expect(meta.status).toBe("finished");
     expect(buildSeasonVM(meta).finishedAtTurn).toBe(5);
+  });
+});
+
+// getMeta (トランザクション外) と tryBumpTurn (トランザクション内) の間に別の書き込みが入ると、
+// tryBumpTurn が status/final_turn/finished_at 等を古い値で上書きしてしまう問題の回帰テスト。
+// 実際には server-node のサーバ (setInterval/middleware) と CLI (`game finish` 等) のように
+// 同じ DB を別プロセスから触った場合に起きる。
+describe("TurnService: 進行トランザクション開始前の別書き込み", () => {
+  it("進行前に別経路で終了されたゲームを 'running' に戻さず、ターンも進めない", () => {
+    const repo = new ConcurrentWriteRepo();
+    const gameId = setupGame(repo, { turn: 3, lastTime: 0, nextIslandId: 2 });
+    repo.insertIsland(gameId, makeIsland(defaultConfig, createSeededRng(1), 1), 0);
+    // `getMeta` (status='running' を読む) と進行トランザクション開始の間に `game finish` が入る。
+    repo.onBeforeTransaction(() => repo.finishGame(gameId, 5000));
+    const turnService = new TurnService({
+      repo,
+      config: defaultConfig,
+      rng: createSeededRng(2),
+      backupStore: new FakeBackupStore(),
+      logger: new FakeLogger(),
+    });
+
+    turnService.advanceTurn(5000);
+
+    const meta = repo.getMeta(gameId);
+    expect(meta.turn).toBe(3);
+    expect(meta.status).toBe("finished");
+    expect(meta.finishedAt).toBe(5000);
+  });
+
+  it("advanceTurnIfDue も同様に、進行前に終了されたゲームは進めない", () => {
+    const repo = new ConcurrentWriteRepo();
+    const gameId = setupGame(repo, { turn: 3, lastTime: 0, nextIslandId: 2 });
+    repo.insertIsland(gameId, makeIsland(defaultConfig, createSeededRng(1), 1), 0);
+    repo.onBeforeTransaction(() => repo.finishGame(gameId, 5000));
+    const turnService = new TurnService({
+      repo,
+      config: defaultConfig,
+      rng: createSeededRng(2),
+      backupStore: new FakeBackupStore(),
+      logger: new FakeLogger(),
+    });
+
+    const advanced = turnService.advanceTurnIfDue(defaultConfig.unitTimeSec * 100);
+
+    expect(advanced).toBe(0);
+    const meta = repo.getMeta(gameId);
+    expect(meta.turn).toBe(3);
+    expect(meta.status).toBe("finished");
+  });
+
+  it("進行中に別経路で設定された finalTurn を古い値で上書きせず、最終ターンで止まる", () => {
+    const repo = new ConcurrentWriteRepo();
+    // finalTurn 未設定 (無期限) のゲームを、進行トランザクション開始直前に
+    // `game set-final-turn 5` で最終ターンを設定した状況を模す。
+    const gameId = setupGame(repo, { turn: 4, lastTime: 0, nextIslandId: 2, finalTurn: null });
+    repo.insertIsland(gameId, makeIsland(defaultConfig, createSeededRng(1), 1), 0);
+    repo.onBeforeTransaction(() => {
+      const meta = repo.getMeta(gameId);
+      repo.saveMeta({ ...meta, finalTurn: 5 });
+    });
+    const turnService = new TurnService({
+      repo,
+      config: defaultConfig,
+      rng: createSeededRng(2),
+      backupStore: new FakeBackupStore(),
+      logger: new FakeLogger(),
+    });
+
+    const advanced = turnService.advanceTurnIfDue(defaultConfig.unitTimeSec * 100);
+
+    // 新しい finalTurn=5 に従って turn=5 で終了する (final_turn が null に戻されて
+    // 無期限に進み続けることがない)。
+    expect(advanced).toBe(1);
+    const meta = repo.getMeta(gameId);
+    expect(meta.turn).toBe(5);
+    expect(meta.finalTurn).toBe(5);
+    expect(meta.status).toBe("finished");
   });
 });

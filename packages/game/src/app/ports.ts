@@ -137,7 +137,10 @@ export interface GameRepository {
   createGame(input: CreateGameInput, now: number): number;
   /** ゲームを終了状態にする (status='finished', finished_at=now)。 */
   finishGame(gameId: number, now: number): void;
-  /** 楽観ロック: 現在の turn が expectedTurn のときだけ更新し、成功可否を返す。 */
+  /**
+   * 楽観ロック: 現在の turn が expectedTurn で status が 'running' のときだけ更新し、
+   * 成功可否を返す (終了済みゲームを 'running' に戻す書き込みを防ぐ)。
+   */
   tryBumpTurn(gameId: number, expectedTurn: number, next: GameMeta): boolean;
 
   /** 一覧用: rank 昇順 (0 が 1 位)。 */
