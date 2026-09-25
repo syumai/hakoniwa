@@ -204,7 +204,7 @@ export class SqliteGameRepository implements GameRepository {
     this.#driver.run(
       `UPDATE games SET name = ?, status = ?, turn = ?, first_turn = ?, last_time = ?, start_at = ?,
        final_turn = ?, unit_time_sec = ?, next_island_id = ?, finished_at = ?
-       WHERE id = ? AND turn = ?`,
+       WHERE id = ? AND turn = ? AND status = 'running'`,
       next.name,
       next.status,
       next.turn,

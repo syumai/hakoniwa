@@ -15,6 +15,20 @@ export interface TurnServiceDeps {
   logger: Logger;
 }
 
+// tmp/16-season.md「開始前の状態 = ターン 0 (改訂 2026-09-20)」節「進行判定」:
+// turn===0 (開始前) は `now >= startAt` で期限到来とみなす (lastTime は見ない)。
+// turn>=1 は従来どおり `now - lastTime >= unitTimeSec`。
+// tmp/16-season.md「ターンの長さも DB に持つ」節: 期限判定は config ではなく
+// meta.unitTimeSec (管理画面「ゲーム設定」/ CLI `game set-unit-time` で変更された値) を使う。
+function isDue(meta: GameMeta, now: number): boolean {
+  return meta.turn === 0 ? now >= meta.startAt : now - meta.lastTime >= meta.unitTimeSec;
+}
+
+// 管理者の手動進行 (advanceTurn) も、開始前 (turn===0) で `now < startAt` のときは進めない。
+function mayManuallyAdvance(meta: GameMeta, now: number): boolean {
+  return meta.turn !== 0 || now >= meta.startAt;
+}
+
 /**
  * ターン進行。08 のアルゴリズムどおり `advanceTurnIfDue`/`advanceTurn` は同期関数として保つ。
  * tmp/18-games.md「TurnService」節: 現在のゲーム (`repo.getCurrentGameId()`) だけを対象にする。
@@ -44,22 +58,10 @@ export class TurnService {
       }
       const meta = repo.getMeta(gameId);
       // tmp/16-season.md「ターン進行」節 + tmp/18-games.md: 終了後はそれ以上進めない。
-      if (isFinished(meta)) {
+      if (isFinished(meta) || !isDue(meta, now)) {
         break;
       }
-      // tmp/16-season.md「開始前の状態 = ターン 0 (改訂 2026-09-20)」節「進行判定」:
-      // turn===0 (開始前) は `now >= startAt` で期限到来とみなす (lastTime は見ない)。
-      // turn>=1 は従来どおり `now - lastTime >= unitTimeSec` (下の判定)。
-      if (meta.turn === 0) {
-        if (now < meta.startAt) {
-          break;
-        }
-      } else if (now - meta.lastTime < meta.unitTimeSec) {
-        // tmp/16-season.md「ターンの長さも DB に持つ」節: 期限判定は config ではなく
-        // meta.unitTimeSec (管理画面「ゲーム設定」/ CLI `game set-unit-time` で変更された値) を使う。
-        break;
-      }
-      const advancedTurn = this.#advanceOnce(gameId, meta, now);
+      const advancedTurn = this.#advanceOnce(gameId, now, isDue);
       if (advancedTurn === undefined) {
         break;
       }
@@ -76,15 +78,11 @@ export class TurnService {
       return;
     }
     const meta = repo.getMeta(gameId);
-    if (isFinished(meta)) {
+    // tmp/16-season.md「ターン進行」節 + tmp/18-games.md: 終了後はそれ以上進めない。
+    if (isFinished(meta) || !mayManuallyAdvance(meta, now)) {
       return;
     }
-    // tmp/16-season.md「開始前の状態 = ターン 0 (改訂 2026-09-20)」節「進行判定」:
-    // 管理者の手動進行も、開始前 (turn===0) で `now < startAt` のときは進めない。
-    if (meta.turn === 0 && now < meta.startAt) {
-      return;
-    }
-    this.#advanceOnce(gameId, meta, now);
+    this.#advanceOnce(gameId, now, mayManuallyAdvance);
   }
 
   /**
@@ -92,12 +90,31 @@ export class TurnService {
    * 成功したら進行後の turn 番号を返す (呼び出し元がバックアップ要否の判定に使う)。
    * 進行後に最終ターンへ達したら、同じトランザクション内で `finishGame` を呼ぶ
    * (tmp/18-games.md「TurnService」節、tmp/16-season.md「開始前の状態 = ターン 0」節)。
+   *
+   * 終了・期限の判定と `next`/`world` の構築はトランザクション内で読み直した meta を使う:
+   * 呼び出し元の `getMeta` からトランザクション開始までの間に他の書き込み (CLI の
+   * `game finish`/`game set-final-turn`/`time set` 等) が入っても、古い
+   * `status`/`final_turn`/`finished_at`/`last_time` で上書きして戻さないようにするため。
    */
-  #advanceOnce(gameId: number, meta: GameMeta, now: number): number | undefined {
+  #advanceOnce(
+    gameId: number,
+    now: number,
+    mayAdvance: (meta: GameMeta, now: number) => boolean,
+  ): number | undefined {
     const { repo, config, rng } = this.#deps;
     let newTurn: number | undefined;
 
     const advanced = repo.transaction(() => {
+      const meta = repo.getMeta(gameId);
+      if (isFinished(meta) || !mayAdvance(meta, now)) {
+        return false;
+      }
+      // 既に finalTurn 以上の turn に達している実行中ゲーム (firstTurn=1 の旧方式で
+      // `turn > finalTurn` を待って残っていたもの等) はこれ以上進めず、終了だけ行う。
+      if (meta.finalTurn !== null && meta.turn >= meta.finalTurn) {
+        repo.finishGame(gameId, now);
+        return false;
+      }
       const next: GameMeta = {
         ...meta,
         turn: meta.turn + 1,
@@ -130,9 +147,9 @@ export class TurnService {
       repo.deleteLogsBefore(gameId, result.world.turn - config.logKeepTurns + 1);
       repo.trimHistory(gameId, config.historyMax);
 
-      // tmp/16-season.md「開始前の状態 = ターン 0」節「既存ゲームとの互換」: 実行済みの処理回数は
-      // `turn - firstTurn`。旧方式 (firstTurn=1) では従来の `turn > finalTurn` と同値になる。
-      if (next.finalTurn !== null && next.turn - next.firstTurn >= next.finalTurn) {
+      // 最終ターンに達したら同じトランザクション内で終了する。判定は `turn >= finalTurn`
+      // (firstTurn の新旧に関係なく、カウンタが finalTurn を超えないように止める)。
+      if (next.finalTurn !== null && next.turn >= next.finalTurn) {
         repo.finishGame(gameId, now);
       }
 
