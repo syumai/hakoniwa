@@ -21,8 +21,7 @@ export interface GameMeta {
    * ゲーム開始直後のターン番号。tmp/16-season.md「開始前の状態 = ターン 0 (改訂 2026-09-20)」節。
    * 新方式のゲームは 0 (`createGame` が設定する)。スキーマ v7 移行前から動いていた旧方式の
    * ゲームは 1 のまま変わらない (番号・ログ・終了時刻を変えないため)。実行済みの処理回数は
-   * `turn - firstTurn`。終了判定 (`next.turn - firstTurn >= finalTurn`) と `finishedAtTurn` の
-   * 計算にのみ使う。
+   * `turn - firstTurn`。終了判定は新旧どちらも `turn >= finalTurn` (firstTurn は参照しない)。
    */
   firstTurn: number;
   lastTime: number;

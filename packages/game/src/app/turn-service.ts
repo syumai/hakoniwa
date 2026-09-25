@@ -109,6 +109,12 @@ export class TurnService {
       if (isFinished(meta) || !mayAdvance(meta, now)) {
         return false;
       }
+      // 既に finalTurn 以上の turn に達している実行中ゲーム (firstTurn=1 の旧方式で
+      // `turn > finalTurn` を待って残っていたもの等) はこれ以上進めず、終了だけ行う。
+      if (meta.finalTurn !== null && meta.turn >= meta.finalTurn) {
+        repo.finishGame(gameId, now);
+        return false;
+      }
       const next: GameMeta = {
         ...meta,
         turn: meta.turn + 1,
@@ -141,9 +147,9 @@ export class TurnService {
       repo.deleteLogsBefore(gameId, result.world.turn - config.logKeepTurns + 1);
       repo.trimHistory(gameId, config.historyMax);
 
-      // tmp/16-season.md「開始前の状態 = ターン 0」節「既存ゲームとの互換」: 実行済みの処理回数は
-      // `turn - firstTurn`。旧方式 (firstTurn=1) では従来の `turn > finalTurn` と同値になる。
-      if (next.finalTurn !== null && next.turn - next.firstTurn >= next.finalTurn) {
+      // 最終ターンに達したら同じトランザクション内で終了する。判定は `turn >= finalTurn`
+      // (firstTurn の新旧に関係なく、カウンタが finalTurn を超えないように止める)。
+      if (next.finalTurn !== null && next.turn >= next.finalTurn) {
         repo.finishGame(gameId, now);
       }
 

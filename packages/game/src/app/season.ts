@@ -64,10 +64,10 @@ export interface SeasonVM {
 export function buildSeasonVM(meta: GameMeta): SeasonVM {
   const finished = isFinished(meta);
   const state: SeasonState = finished ? "finished" : isBeforeStart(meta) ? "before" : "running";
-  // tmp/16-season.md「開始前の状態 = ターン 0」節「状態判定」: 終了判定は `firstTurn` を使う
-  // (`turn - firstTurn >= finalTurn`。旧方式 `firstTurn=1` では従来の `turn > finalTurn` と同値)。
+  // 終了判定は `turn >= finalTurn` (firstTurn の新旧に関係なく最終ターンで止める)。
+  // それ未満で終了した場合 (手動終了など) は終了時点の turn を返す。
   const finishedAtTurn = finished
-    ? meta.finalTurn !== null && meta.turn - meta.firstTurn >= meta.finalTurn
+    ? meta.finalTurn !== null && meta.turn >= meta.finalTurn
       ? meta.finalTurn
       : meta.turn
     : null;

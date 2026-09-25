@@ -525,9 +525,9 @@ describe("tmp/16-season.md: 開始前の状態 = ターン 0", () => {
     expect(buildSeasonVM(meta).finishedAtTurn).toBe(3);
   });
 
-  // tmp/16-season.md「既存ゲームとの互換」節: firstTurn=1 の旧方式ゲームは番号・終了時刻を
-  // 変えない (`turn > finalTurn` になった時点で終了する従来挙動のまま)。
-  it("(d) firstTurn=1 の旧方式ゲームは turn > finalTurn で終了する (従来挙動)", () => {
+  // 終了判定は `turn >= finalTurn`。firstTurn=1 の旧方式ゲームも、カウンタが finalTurn を
+  // 超えないよう同じ位置で止める (従来の `turn > finalTurn` ではなく)。
+  it("(d) firstTurn=1 の旧方式ゲームも turn >= finalTurn で終了する", () => {
     const repo = new FakeGameRepository();
     const gameId = setupGame(repo, {
       turn: 4,
@@ -545,15 +545,50 @@ describe("tmp/16-season.md: 開始前の状態 = ターン 0", () => {
       logger: new FakeLogger(),
     });
 
-    // turn=4 → 5 (5 > 5 は false、続行) → 6 (6 > 5 で終了)。
+    // turn=4 → 5 (5 >= 5 で終了)。旧方式の turn=6 には進まない。
     const advanced = turnService.advanceTurnIfDue(defaultConfig.unitTimeSec * 100);
 
-    expect(advanced).toBe(2);
+    expect(advanced).toBe(1);
     const meta = repo.getMeta(gameId);
-    expect(meta.turn).toBe(6);
+    expect(meta.turn).toBe(5);
     expect(meta.firstTurn).toBe(1);
     expect(meta.status).toBe("finished");
     expect(buildSeasonVM(meta).finishedAtTurn).toBe(5);
+  });
+
+  // 既に turn >= finalTurn の実行中ゲーム (旧方式で `turn > finalTurn` を待って残っていた
+  // もの等) は、これ以上進めずにその場で終了だけ行う。
+  it("(e) 既に turn >= finalTurn の旧方式ゲームは進めずにその場で終了する", () => {
+    const repo = new FakeGameRepository();
+    const gameId = setupGame(repo, {
+      turn: 5,
+      firstTurn: 1,
+      lastTime: 0,
+      finalTurn: 5,
+      nextIslandId: 2,
+    });
+    repo.insertIsland(gameId, makeIsland(defaultConfig, createSeededRng(1), 1), 0);
+    const turnService = new TurnService({
+      repo,
+      config: { ...defaultConfig, maxCatchUpTurns: 10 },
+      rng: createSeededRng(2),
+      backupStore: new FakeBackupStore(),
+      logger: new FakeLogger(),
+    });
+
+    // 期限は来ているが、turn=6 に進まず終了だけする。
+    const advanced = turnService.advanceTurnIfDue(defaultConfig.unitTimeSec * 100);
+
+    expect(advanced).toBe(0);
+    const meta = repo.getMeta(gameId);
+    expect(meta.turn).toBe(5);
+    expect(meta.status).toBe("finished");
+    expect(meta.finishedAt).not.toBeNull();
+    expect(buildSeasonVM(meta).finishedAtTurn).toBe(5);
+
+    // advanceTurn (手動進行) でも進まない。
+    turnService.advanceTurn(defaultConfig.unitTimeSec * 200);
+    expect(repo.getMeta(gameId).turn).toBe(5);
   });
 });
 

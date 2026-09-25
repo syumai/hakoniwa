@@ -158,8 +158,8 @@ describe("buildSeasonVM", () => {
     expect(vm.nextTurnAt).toBeNull();
   });
 
-  // tmp/16-season.md「既存ゲームとの互換」節: 旧方式 (firstTurn=1) は従来どおり
-  // `turn > finalTurn` と同値の判定になる。
+  // 終了判定は新旧どちらも `turn >= finalTurn`。旧方式 (firstTurn=1) で
+  // 最終ターン到達後に終了した場合も finishedAtTurn は finalTurn。
   it("終了後 (旧方式 firstTurn=1、最終ターン到達): finishedAtTurn は finalTurn", () => {
     const vm = buildSeasonVM(
       meta({
