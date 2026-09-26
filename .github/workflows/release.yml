@@ -1,0 +1,101 @@
+name: release
+
+on:
+  push:
+    branches: [main]
+  # publish だけ失敗したとき等に、既存タグを指定して publish をやり直せるようにする。
+  # (tagpr が出力するタグはタグを作った run でしか取れないため、push トリガーの
+  #  再実行では代替できない)
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "公開し直す既存タグ (例: v0.1.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: read
+  id-token: write # npm Trusted Publishing (OIDC) 用
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # push イベントでは tagpr がリリース PR を作成・更新する。
+      # リリース PR のマージ時は tagpr がタグと GitHub Release を作り、
+      # outputs.tag にタグ名が入る。
+      - name: Run tagpr
+        id: tagpr
+        if: github.event_name == 'push'
+        uses: Songmu/tagpr@v1
+        env:
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+
+      # push 時は tagpr が作ったタグ、dispatch 時は入力されたタグが publish 対象。
+      # publish をこのジョブに同居させているのは、GITHUB_TOKEN で作られた
+      # タグ/Release は後続 workflow を起動しない (GitHub の仕様) ため。
+      - name: Resolve tag
+        id: resolve
+        env:
+          DISPATCH_TAG: "${{ inputs.tag }}"
+          TAGPR_TAG: "${{ steps.tagpr.outputs.tag }}"
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if ! git rev-parse "refs/tags/$DISPATCH_TAG" >/dev/null 2>&1; then
+              echo "::error::tag $DISPATCH_TAG does not exist"
+              exit 1
+            fi
+            git checkout "$DISPATCH_TAG"
+            echo "tag=$DISPATCH_TAG" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=$TAGPR_TAG" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up toolchain
+        if: steps.resolve.outputs.tag != ''
+        uses: jdx/mise-action@v3
+
+      # pnpm publish は内部で npm CLI を呼ぶため、Trusted Publishing 対応の
+      # npm (11.5.1+) を明示的に入れる
+      - name: Ensure npm supports Trusted Publishing
+        if: steps.resolve.outputs.tag != ''
+        run: npm install -g npm@latest && npm --version
+
+      - name: Install dependencies
+        if: steps.resolve.outputs.tag != ''
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        if: steps.resolve.outputs.tag != ''
+        run: pnpm -r run build
+
+      # npm Trusted Publishing (OIDC) で認証する (NPM_TOKEN 不要)。
+      # 事前に npmjs.com で各パッケージ (@hakoniwajs/{core,node,cloudflare}) の
+      # Trusted Publisher にこのリポジトリの release.yml を登録しておくこと。
+      # publishConfig.access = public は各パッケージ側で設定済み。
+      # workspace:* 依存は publish 時に実バージョンへ書き換えられる。
+      - name: Publish to npm
+        if: steps.resolve.outputs.tag != ''
+        run: pnpm -r publish --no-git-checks
+
+      # dispatch 時は Release が無い場合に備えて作る (push 時は tagpr が作成済み)
+      - name: Ensure GitHub Release exists
+        if: steps.resolve.outputs.tag != '' && github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          TAG: "${{ steps.resolve.outputs.tag }}"
+        run: gh release view "$TAG" || gh release create "$TAG" --title "$TAG" --notes "See CHANGELOG.md"
