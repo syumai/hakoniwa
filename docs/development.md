@@ -204,6 +204,8 @@ pnpm -r publish --access public   # 各パッケージの publishConfig.access =
 
 認証は npm Trusted Publishing (OIDC) で、NPM_TOKEN は不要です。npmjs.com 側で各パッケージの Trusted Publisher にこのリポジトリの `release.yml` を登録しておく必要があります (新規パッケージの初回公開は token または手動 publish が必要な場合があります)。publish だけ失敗した場合は Actions から `release` ワークフローを `workflow_dispatch` で既存タグを指定して再実行できます。
 
+publish 成功後、同じジョブでテンプレートリポジトリ (既定 `hakoniwajs/template-cloudflare`、`vars.TEMPLATE_REPO` で変更可) の `@hakoniwajs/*` 依存を新バージョンに更新して push します (syumai/workers-go → syumai/workers のミラー同期と同じ構成)。GITHUB_TOKEN は他リポジトリへ push できないため、テンプレートリポジトリに発行した deploy key (書き込み可) の秘密鍵をこのリポジトリの `TEMPLATE_CLOUDFLARE_DEPLOY_KEY` secret に登録しておく必要があります。未設定の場合は追従ステップがすべてスキップされます。
+
 ## 設計書
 
 実装の設計の詳細は `tmp/` (gitignore 対象。リポジトリのソースにのみ存在) の設計書にまとめています。
