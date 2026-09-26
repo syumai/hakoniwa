@@ -1,5 +1,12 @@
 # Changelog
 
+## [v0.1.3](https://github.com/hakoniwajs/hakoniwa/compare/v0.1.2...v0.1.3) - 2026-09-26
+
+- fix: npx / npm .bin 経由で hakoniwa CLI が起動しない問題を修正 by @devin-ai-integration[bot] in https://github.com/hakoniwajs/hakoniwa/pull/9
+- release 時に template-cloudflare の @hakoniwajs/* 依存を自動追従 by @devin-ai-integration[bot] in https://github.com/hakoniwajs/hakoniwa/pull/11
+- fix: テンプレート追従を secret 必須の無条件実行に変更 by @devin-ai-integration[bot] in https://github.com/hakoniwajs/hakoniwa/pull/12
+- mise-action を v4.3.0 に更新 (node24 ランタイム対応) by @devin-ai-integration[bot] in https://github.com/hakoniwajs/hakoniwa/pull/14
+
 ## [v0.1.2](https://github.com/hakoniwajs/hakoniwa/compare/v0.1.1...v0.1.2) - 2026-09-26
 
 - 依存更新・GitHub Actions の SHA pin・パッケージ README 追加 by @devin-ai-integration[bot] in https://github.com/hakoniwajs/hakoniwa/pull/6
