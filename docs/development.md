@@ -198,7 +198,11 @@ pnpm -r run build
 pnpm -r publish --access public   # 各パッケージの publishConfig.access = public 済み
 ```
 
-`workspace:*` 依存は publish 時に実バージョンへ自動で書き換えられます。GitHub Actions の `publish` ワークフロー (`.github/workflows/publish.yml`) からも公開できます。
+`workspace:*` 依存は publish 時に実バージョンへ自動で書き換えられます。
+
+リリースは tagpr で自動化しています (`.tagpr` + `.github/workflows/tagpr.yml`)。main への push ごとに tagpr がリリース PR を作成・更新し、その PR をマージするとタグと GitHub Release が作られます。3 パッケージの `version` は tagpr が一括で更新します。
+
+GitHub Release の公開をトリガーに `publish` ワークフロー (`.github/workflows/publish.yml`) が `pnpm -r publish` を実行します。認証は npm Trusted Publishing (OIDC) で、NPM_TOKEN は不要です。npmjs.com 側で各パッケージの Trusted Publisher にこのリポジトリの `publish.yml` を登録しておく必要があります (新規パッケージの初回公開は token または手動 publish が必要な場合があります)。
 
 ## 設計書
 

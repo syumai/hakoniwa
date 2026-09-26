@@ -1,0 +1,6 @@
+[tagpr]
+	vPrefix = true
+	releaseBranch = main
+	# 3 パッケージは同じバージョンで公開する (tagpr が一括で version を更新する)
+	versionFile = packages/core/package.json,packages/node/package.json,packages/cloudflare/package.json
+	changelog = true
