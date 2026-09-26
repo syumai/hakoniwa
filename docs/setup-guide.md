@@ -4,14 +4,14 @@
 
 ## 1. Cloudflare Workers にワンクリックでデプロイ
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/syumai/hakoniwa)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/hakoniwajs/template-cloudflare)
 
 一番手軽な方法です。[Cloudflare アカウント](https://dash.cloudflare.com/sign-up) が必要です (ワンクリックデプロイはブラウザ上の GitHub 連携のみで完結し、ログインは不要です)。
 
-デプロイ画面に表示される入力項目は、`wrangler.jsonc` の `vars` (環境変数) と `.dev.vars.example` (secret) から決まり、各項目の説明は `package.json` の `cloudflare.bindings` に書いてあります。デプロイ時に入力する secret は必須の `HAKONIWA_AUTH_SECRET` だけです。X / Discord / Resend の secret は任意なので、デプロイ後にダッシュボード (Settings → Variables and Secrets) か `wrangler secret put` で追加します。
+デプロイ画面に表示される入力項目は、テンプレートリポジトリ ([hakoniwajs/template-cloudflare](https://github.com/hakoniwajs/template-cloudflare)) の `wrangler.jsonc` の `vars` (環境変数) と `.dev.vars.example` (secret) から決まり、各項目の説明は `package.json` の `cloudflare.bindings` に書いてあります。デプロイ時に入力する secret は必須の `HAKONIWA_AUTH_SECRET` だけです。X / Discord / Resend の secret は任意なので、デプロイ後にダッシュボード (Settings → Variables and Secrets) か `wrangler secret put` で追加します。
 
 1. 上のボタンを押す
-2. Cloudflare のダッシュボードに遷移するので、GitHub と連携してこのリポジトリを自分のアカウントにフォークする
+2. Cloudflare のダッシュボードに遷移するので、GitHub と連携してテンプレートリポジトリを自分のアカウントにコピーする
 3. 変数・secret の入力画面が出るので、最低限次の 2 つを入力する (他は空でもデプロイできる)
    - `HAKONIWA_AUTH_SECRET` (必須。`openssl rand -base64 32` などで生成したランダム文字列)
    - `HAKONIWA_ADMIN_EMAILS` (自分を管理者にするメールアドレス。X ログインはメールを返さないため、Discord かメールログインで使うアドレスを指定する)
@@ -27,18 +27,57 @@
 
 ## 2. Cloudflare Workers への手動デプロイ
 
+`@hakoniwajs/cloudflare` パッケージをインストールした小さな Worker プロジェクトを作ってデプロイします。[hakoniwajs/template-cloudflare](https://github.com/hakoniwajs/template-cloudflare) をそのまま使う (Use this template / リポジトリをコピー) のが手軽です。
+
 ```sh
-wrangler login
-wrangler secret put HAKONIWA_AUTH_SECRET
-wrangler secret put HAKONIWA_X_CLIENT_ID
-wrangler secret put HAKONIWA_X_CLIENT_SECRET
-wrangler secret put HAKONIWA_DISCORD_CLIENT_ID
-wrangler secret put HAKONIWA_DISCORD_CLIENT_SECRET
-wrangler secret put HAKONIWA_RESEND_API_KEY
-pnpm deploy
+npm install @hakoniwajs/cloudflare wrangler
 ```
 
-コマンドはすべてリポジトリ直下 (root) から実行してください (`wrangler.jsonc` が root にあるため)。`pnpm deploy` は root `package.json` の `deploy` スクリプト (`wrangler deploy`) です。`wrangler.jsonc` の `name` は必要に応じて自分の Workers サブドメインに合わせて書き換えてください。
+`src/worker.ts`:
+
+```ts
+import { createWorker } from "@hakoniwajs/cloudflare";
+
+export { HakoniwaGame } from "@hakoniwajs/cloudflare";
+
+export default createWorker();
+```
+
+`wrangler.jsonc` (完全版はテンプレートリポジトリを参照):
+
+```jsonc
+{
+  "name": "hakoniwa",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-08-22",
+  "compatibility_flags": ["nodejs_compat"],
+  // ゲームの静的ファイル (画像・CSS) は @hakoniwajs/core パッケージ内の public/ から配信する
+  "assets": { "directory": "./node_modules/@hakoniwajs/core/public" },
+  "durable_objects": {
+    "bindings": [{ "name": "GAME", "class_name": "HakoniwaGame" }],
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["HakoniwaGame"] }],
+  // ターン進行のトリガー (15 分ごと)
+  "triggers": { "crons": ["*/15 * * * *"] },
+  "vars": {
+    "HAKONIWA_ADMIN_EMAILS": "you@example.com",
+    "HAKONIWA_DEV_LOGIN": "false",
+  },
+}
+```
+
+```sh
+npx wrangler login
+npx wrangler secret put HAKONIWA_AUTH_SECRET
+npx wrangler secret put HAKONIWA_X_CLIENT_ID
+npx wrangler secret put HAKONIWA_X_CLIENT_SECRET
+npx wrangler secret put HAKONIWA_DISCORD_CLIENT_ID
+npx wrangler secret put HAKONIWA_DISCORD_CLIENT_SECRET
+npx wrangler secret put HAKONIWA_RESEND_API_KEY
+npx wrangler deploy
+```
+
+`wrangler.jsonc` の `name` は必要に応じて自分の Workers サブドメインに合わせて書き換えてください。
 
 非秘密の設定 (`HAKONIWA_UNIT_TIME_SEC`、`HAKONIWA_ADMIN_EMAILS` 等) は `wrangler.jsonc` の `vars` に書きます。`HAKONIWA_DEV_LOGIN` は本番の `vars` では必ず `false` のままにしてください。
 
@@ -69,23 +108,24 @@ TTL は `wrangler.jsonc` の `vars` に既定値付きで入っているので�
 
 ## 3. Node.js で自前のサーバーに設置
 
-Node.js 24 以降 (`node:sqlite` を使用) と pnpm が必要です。
+Node.js 22.13 以降 (`node:sqlite` を使用) が必要です。
 
 ```sh
-pnpm install
-pnpm run build
-HAKONIWA_AUTH_SECRET=xxxx HAKONIWA_ADMIN_EMAILS=you@example.com node packages/server-node/dist/server.js
+npm install @hakoniwajs/node
+HAKONIWA_AUTH_SECRET=xxxx HAKONIWA_ADMIN_EMAILS=you@example.com npx hakoniwa serve
 ```
 
-`packages/server-node/dist/` にサーバー (`server.js`)、CLI (`cli.js`)、静的ファイルが生成されます。少なくとも `HAKONIWA_AUTH_SECRET` (`openssl rand -base64 32` などで生成した 32 バイト以上のランダム文字列) の設定が必須です。管理画面 (`/admin`) を使うには `HAKONIWA_ADMIN_EMAILS` も設定してください。設定できる環境変数の一覧は次節を参照してください。
+`@hakoniwajs/node` をインストールすると `hakoniwa` CLI が使えるようになり、`serve` サブコマンドで HTTP サーバーが起動します (既定ポート 3000、`PORT` で変更可)。静的ファイル (画像・CSS) は `@hakoniwajs/core` パッケージ内の `public/` から配信されます (環境変数 `HAKONIWA_PUBLIC_DIR` で差し替え可能)。
+
+少なくとも `HAKONIWA_AUTH_SECRET` (`openssl rand -base64 32` などで生成した 32 バイト以上のランダム文字列) の設定が必須です。管理画面 (`/admin`) を使うには `HAKONIWA_ADMIN_EMAILS` も設定してください。設定できる環境変数の一覧は次節を参照してください。
 
 サーバー自体は HTTPS を扱いません。外部に公開する場合は nginx や Caddy などのリバースプロキシを前段に置いて HTTPS 終端してください。カスタムドメインや逆プロキシ配下で動かす場合は `HAKONIWA_BASE_URL` を設定してください。
 
-初回のゲーム開始やバックアップなどの運用は CLI (`node packages/server-node/dist/cli.js`) から行います。コマンドの一覧は [開発者向けドキュメント](development.md#cli-一覧) を参照してください。
+初回のゲーム開始やバックアップなどの運用は CLI (`npx hakoniwa <command>`) から行います。コマンドの一覧は [開発者向けドキュメント](development.md#cli-一覧) を参照してください。
 
 ## 4. 環境変数一覧
 
-`packages/game/src/bootstrap/config-from-env.ts` (ゲーム本体・両ランタイム共通)、`packages/server-node/src/config.ts` (Node 固有)、`packages/server-workers/src/snapshot.ts` (Workers の KV スナップショットキャッシュ専用) の一覧です。Node では `.env` (または環境変数) に、Workers では `wrangler.jsonc` の `vars` か `wrangler secret put` (secret) に設定します。
+`packages/core/src/bootstrap/config-from-env.ts` (ゲーム本体・両ランタイム共通)、`packages/node/src/config.ts` (Node 固有)、`packages/cloudflare/src/snapshot.ts` (Workers の KV スナップショットキャッシュ専用) の一覧です。Node では `.env` (または環境変数) に、Workers では `wrangler.jsonc` の `vars` か `wrangler secret put` (secret) に設定します。
 
 | 環境変数                                                        | 既定値                                    | 用途                                                                                                                                                                                                                                                                  | Node | Workers                                    |
 | --------------------------------------------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--: | ------------------------------------------ |

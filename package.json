@@ -3,9 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vp run --filter ./packages/server-node dev",
+    "dev": "vp run --filter ./packages/node dev",
     "build": "pnpm -r run build",
-    "start": "vp run --filter ./packages/server-node start",
+    "start": "vp run --filter ./packages/node start",
     "test": "vp test",
     "lint": "vp lint",
     "fmt": "vp fmt",

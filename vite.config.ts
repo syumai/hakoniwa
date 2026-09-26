@@ -10,20 +10,20 @@ const nonTypeScriptAssetPatterns = [
   "packages/*/public/**",
   // tmp/17-ogp.md: generate-ogp-tiles.ts の生成物 (GIF タイルのパレット/インデックス)。
   // 手で編集しないため fmt/lint の対象から外す。
-  "packages/game/src/ogp/tiles.generated.ts",
+  "packages/core/src/ogp/tiles.generated.ts",
 ];
 
 export default defineConfig({
   test: {
-    // packages/server-workers は除外する。vp test (vite-plus 同梱の vitest) は独自の
+    // packages/cloudflare は除外する。vp test (vite-plus 同梱の vitest) は独自の
     // VitestModuleRunner でテストを実行するが、@cloudflare/vitest-pool-workers の
     // cloudflareTest プラグインは実行中の vitest インスタンス (TestProject 等) に直接フックする
     // 実装のため、vite-plus 同梱の別インスタンス経由では `describe()` が
     // "Cannot read properties of undefined (reading 'config')" で落ちる
     // (tmp/12-workers-adapter.md 「実装時の指示」、tmp/09-tooling.md 参照。設計書との差異)。
-    // packages/server-workers 単体では `pnpm --filter @hakoniwa/server-workers test`
+    // packages/cloudflare 単体では `pnpm --filter @hakoniwajs/cloudflare test`
     // (実体は素の `vitest run`) で問題なく動く。
-    projects: ["packages/*", "!packages/server-workers"],
+    projects: ["packages/*", "!packages/cloudflare"],
   },
   fmt: {
     ignorePatterns: nonTypeScriptAssetPatterns,
@@ -34,7 +34,7 @@ export default defineConfig({
     overrides: [
       // ゲーム本体はランタイム非依存
       {
-        files: ["packages/game/**"],
+        files: ["packages/core/**"],
         rules: {
           "no-restricted-imports": [
             "error",
@@ -44,7 +44,7 @@ export default defineConfig({
       },
       // core は上位層と hono に依存しない
       {
-        files: ["packages/game/src/core/**"],
+        files: ["packages/core/src/core/**"],
         rules: {
           "no-restricted-imports": [
             "error",
@@ -64,7 +64,7 @@ export default defineConfig({
       },
       // tmp/17-ogp.md: scripts/** は Node 専用のタイル生成スクリプト。node:* を許可する。
       {
-        files: ["packages/game/scripts/**"],
+        files: ["packages/core/scripts/**"],
         rules: {
           "no-restricted-imports": "off",
         },

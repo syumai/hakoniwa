@@ -6,13 +6,13 @@
 
 pnpm workspace によるモノレポです。パッケージ化しているのは差し替え単位となる Adapter だけで、ゲーム本体は 1 パッケージです。
 
-| パッケージ                                             | 役割                                                                                                                                                                                                                                                             |
-| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/game` (`@hakoniwa/game`)                     | ゲーム本体。ランタイム非依存で、Node や Cloudflare 固有の API を使いません。`core` (ゲームロジック)、`app` (ユースケース)、`storage` (SQLite 用ストレージ抽象)、`web` (Hono + hono/jsx の画面)、`bootstrap` (組み立て) と、画像や CSS などの `public` を含みます |
-| `packages/server-node` (`@hakoniwa/server-node`)       | Node.js 向け Adapter。`node:sqlite` によるストレージ、HTTP サーバー、ファイルバックアップ、CLI                                                                                                                                                                   |
-| `packages/server-workers` (`@hakoniwa/server-workers`) | Cloudflare Workers (Durable Objects SQLite) 向け Adapter。DO のストレージ、Cron Trigger によるターン進行、PITR バックアップ                                                                                                                                      |
+| パッケージ                                       | 役割                                                                                                                                                                                                                                                             |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/core` (`@hakoniwajs/core`)             | ゲーム本体。ランタイム非依存で、Node や Cloudflare 固有の API を使いません。`core` (ゲームロジック)、`app` (ユースケース)、`storage` (SQLite 用ストレージ抽象)、`web` (Hono + hono/jsx の画面)、`bootstrap` (組み立て) と、画像や CSS などの `public` を含みます |
+| `packages/node` (`@hakoniwajs/node`)             | Node.js 向け Adapter。`node:sqlite` によるストレージ、HTTP サーバー、ファイルバックアップ、CLI                                                                                                                                                                   |
+| `packages/cloudflare` (`@hakoniwajs/cloudflare`) | Cloudflare Workers (Durable Objects SQLite) 向け Adapter。DO のストレージ、Cron Trigger によるターン進行、PITR バックアップ                                                                                                                                      |
 
-`packages/game` 内の層は依存方向が一方向になるよう分けています。
+`packages/core` 内の層は依存方向が一方向になるよう分けています。
 
 - `core`: ゲームロジック本体。上位層にも Hono にも依存しません
 - `app`: ユースケース (サービス層)。`core` を組み合わせてリクエスト単位の処理を組み立てます
@@ -20,7 +20,7 @@ pnpm workspace によるモノレポです。パッケージ化しているの�
 - `web`: Hono + hono/jsx によるルーティングと画面
 - `bootstrap`: 上記を組み立てて `app`/`web` を構成する層。環境変数の読み込み (`config-from-env.ts`) もここに含まれます
 
-`packages/server-node`・`packages/server-workers` は `SqlDriver`/`BackupStore` などランタイム固有の実装だけを持ち、ゲームロジックやスキーマは共通です。
+`packages/node`・`packages/cloudflare` は `SqlDriver`/`BackupStore` などランタイム固有の実装だけを持ち、ゲームロジックやスキーマは共通です。
 
 ## 必要なツール
 
@@ -60,11 +60,11 @@ vp run dev
 開発サーバーが http://localhost:5173/ で起動します。初回はゲームがまだ無いので、次のいずれかで開始してください。
 
 - `/login` を開き、開発ログインのフォームに任意のメールアドレス (`HAKONIWA_ADMIN_EMAILS` に指定したもの) を入力してログインし、`/admin` で「新しいゲームを開始」(ゲーム名・開始日時・最終ターン・1 ターンの長さを指定可能。名前は省略すると「第 N 回」になる) を実行する
-- CLI で開始する: `vp run --filter ./packages/server-node cli -- db init` (`game new` のエイリアス)
+- CLI で開始する: `vp run --filter ./packages/node cli -- db init` (`game new` のエイリアス)
 
 ゲームが終了したら (最終ターン到達、または管理画面の「このゲームを終了する」)、管理画面や CLI (`game new`) から次のゲームを開始できます。過去のゲームは `/games` から一覧・閲覧できます (読み取り専用。再開はできません)。
 
-データベースのスキーマ変更は、Node/Workers いずれも起動時に自動でマイグレーションされます。ただし初期のスキーマ (v1) で作られたデータベースファイルが残っている場合はスキーマに互換性が無いため、`vp run --filter ./packages/server-node cli -- db reset --yes` で一度削除してから初期化し直してください (`HAKONIWA_DB_PATH` を新しいパスにして作り直しても構いません)。
+データベースのスキーマ変更は、Node/Workers いずれも起動時に自動でマイグレーションされます。ただし初期のスキーマ (v1) で作られたデータベースファイルが残っている場合はスキーマに互換性が無いため、`vp run --filter ./packages/node cli -- db reset --yes` で一度削除してから初期化し直してください (`HAKONIWA_DB_PATH` を新しいパスにして作り直しても構いません)。
 
 ## ローカル開発 (`wrangler dev`)
 
@@ -81,9 +81,9 @@ HAKONIWA_ADMIN_EMAILS=you@example.com
 ```
 
 ```sh
-pnpm --filter @hakoniwa/server-workers dev
+pnpm --filter @hakoniwajs/cloudflare dev
 # もしくは
-cd packages/server-workers && vp run dev   # = wrangler dev --config ../../wrangler.jsonc
+cd packages/cloudflare && vp run dev   # = wrangler dev --config ../../wrangler.jsonc
 ```
 
 `.dev.vars` を作らずに一時的な値で試したい場合は `--var` オプションでも指定できます。
@@ -99,46 +99,48 @@ wrangler dev --port 8787 \
 
 ## CLI 一覧
 
+npm パッケージとしてインストールした環境では `npx hakoniwa <command>` で実行できます (`@hakoniwajs/node` の `bin`)。このリポジトリ内のビルド成果物では `node packages/node/dist/cli.js` が同等です。
+
 ```sh
-node packages/server-node/dist/cli.js --help
-node packages/server-node/dist/cli.js db init          # ゲームが無いときだけ新しいゲームを開始する (game new のエイリアス)
-node packages/server-node/dist/cli.js db init --start-at 2026-10-01T21:00:00+09:00 --final-turn 100 --unit-time 6h30m
-node packages/server-node/dist/cli.js db status        # 現在のゲーム名・状態・ターン数・最終更新時刻・開始時刻・最終ターン・1ターンの長さ・状態・島数・過去のゲーム数など
-node packages/server-node/dist/cli.js db reset --yes    # 全ゲームを削除する (古いスキーマの DB を作り直す場合にも使う)
-node packages/server-node/dist/cli.js turn check       # 期限が来ていればターンを進める (終了後は 0)
-node packages/server-node/dist/cli.js turn advance     # 強制的に 1 ターン進める (終了後は何もしない)
-node packages/server-node/dist/cli.js time set <unix|ISO8601>
-node packages/server-node/dist/cli.js game new         # 新しいゲームを開始する (現在のゲームが running なら失敗)
-node packages/server-node/dist/cli.js game new --name 第2回 --start-at 2026-10-01T21:00:00+09:00 --final-turn 100 --unit-time 6h30m
-node packages/server-node/dist/cli.js game finish      # 現在のゲームを終了する (running でなければ失敗)
-node packages/server-node/dist/cli.js game list        # ゲーム一覧 (現在 + 過去) を表示する
-node packages/server-node/dist/cli.js game set-final-turn <N|none>  # 現在のゲームの最終ターン数の変更 (none で無期限に戻す)
-node packages/server-node/dist/cli.js game set-unit-time <値>       # 現在のゲームの1ターンの長さの変更 (次のターン境界から効く。6h/90m/1h30m/3600 (数字のみは秒) を受け付ける)
-node packages/server-node/dist/cli.js backup list|create [label]|restore <label>|delete <label>
+node packages/node/dist/cli.js --help
+node packages/node/dist/cli.js db init          # ゲームが無いときだけ新しいゲームを開始する (game new のエイリアス)
+node packages/node/dist/cli.js db init --start-at 2026-10-01T21:00:00+09:00 --final-turn 100 --unit-time 6h30m
+node packages/node/dist/cli.js db status        # 現在のゲーム名・状態・ターン数・最終更新時刻・開始時刻・最終ターン・1ターンの長さ・状態・島数・過去のゲーム数など
+node packages/node/dist/cli.js db reset --yes    # 全ゲームを削除する (古いスキーマの DB を作り直す場合にも使う)
+node packages/node/dist/cli.js turn check       # 期限が来ていればターンを進める (終了後は 0)
+node packages/node/dist/cli.js turn advance     # 強制的に 1 ターン進める (終了後は何もしない)
+node packages/node/dist/cli.js time set <unix|ISO8601>
+node packages/node/dist/cli.js game new         # 新しいゲームを開始する (現在のゲームが running なら失敗)
+node packages/node/dist/cli.js game new --name 第2回 --start-at 2026-10-01T21:00:00+09:00 --final-turn 100 --unit-time 6h30m
+node packages/node/dist/cli.js game finish      # 現在のゲームを終了する (running でなければ失敗)
+node packages/node/dist/cli.js game list        # ゲーム一覧 (現在 + 過去) を表示する
+node packages/node/dist/cli.js game set-final-turn <N|none>  # 現在のゲームの最終ターン数の変更 (none で無期限に戻す)
+node packages/node/dist/cli.js game set-unit-time <値>       # 現在のゲームの1ターンの長さの変更 (次のターン境界から効く。6h/90m/1h30m/3600 (数字のみは秒) を受け付ける)
+node packages/node/dist/cli.js backup list|create [label]|restore <label>|delete <label>
 ```
 
-ローカル開発では `vp run --filter ./packages/server-node cli -- <command>` でビルド無しに実行できます。
+ローカル開発では `vp run --filter ./packages/node cli -- <command>` でビルド無しに実行できます。
 
 ## テストと静的検査
 
 ```sh
-vp test    # Vitest (packages/server-workers 以外)
-vp check   # フォーマット、lint、型チェック (packages/server-workers を含む全パッケージ)
+vp test    # Vitest (packages/cloudflare 以外)
+vp check   # フォーマット、lint、型チェック (packages/cloudflare を含む全パッケージ)
 vp fmt     # フォーマットの自動修正
 ```
 
-`packages/server-workers` のテストは `@cloudflare/vitest-pool-workers` (workerd 上で実行する Vitest プール) を使っていますが、`vp test` が内蔵する vitest ランナーとは別インスタンスのため `vp test` の集約実行には乗らず、`vite.config.ts` の `test.projects` から明示的に除外しています。単体では次のコマンドで実行できます。
+`packages/cloudflare` のテストは `@cloudflare/vitest-pool-workers` (workerd 上で実行する Vitest プール) を使っていますが、`vp test` が内蔵する vitest ランナーとは別インスタンスのため `vp test` の集約実行には乗らず、`vite.config.ts` の `test.projects` から明示的に除外しています。単体では次のコマンドで実行できます。
 
 ```sh
-pnpm --filter @hakoniwa/server-workers test
+pnpm --filter @hakoniwajs/cloudflare test
 ```
 
 ## OGP タイル画像の生成
 
-OGP 画像のタイル画像データ (`packages/game/src/ogp/`) は事前生成したものをコミットしています。元画像 (`packages/game/public/images`) を差し替えた場合は、次のコマンドで再生成してください。
+OGP 画像のタイル画像データ (`packages/core/src/ogp/`) は事前生成したものをコミットしています。元画像 (`packages/core/public/images`) を差し替えた場合は、次のコマンドで再生成してください。
 
 ```sh
-pnpm --filter @hakoniwa/game generate:ogp-tiles
+pnpm --filter @hakoniwajs/core generate:ogp-tiles
 ```
 
 ## ターン進行の仕組み
@@ -156,28 +158,28 @@ pnpm --filter @hakoniwa/game generate:ogp-tiles
 
 ## Workers Cache と `no-store` の方針
 
-島の URL (`/games/:gameId/islands/:id`) を X や Discord、Slack 等でシェアすると、`GET /games/:gameId/islands/:id/ogp.png` (800×420 PNG) の地図画像が OGP (`og:image`) として表示されます。地図は観光者向けの表示 (基地→森、海底基地→海、ハリボテ→防衛施設に見える偽装ルールを含む) をそのまま敷き詰めたもので、文字は描画しません (島名やターン・人口・面積・順位は `og:title`/`og:description` に載せます)。画像は外部サービスやネイティブライブラリを使わず、`packages/game/src/ogp/` の純粋な TypeScript (自前の PNG エンコーダ + 事前生成したタイル画像データ) で毎回組み立てます。
+島の URL (`/games/:gameId/islands/:id`) を X や Discord、Slack 等でシェアすると、`GET /games/:gameId/islands/:id/ogp.png` (800×420 PNG) の地図画像が OGP (`og:image`) として表示されます。地図は観光者向けの表示 (基地→森、海底基地→海、ハリボテ→防衛施設に見える偽装ルールを含む) をそのまま敷き詰めたもので、文字は描画しません (島名やターン・人口・面積・順位は `og:title`/`og:description` に載せます)。画像は外部サービスやネイティブライブラリを使わず、`packages/core/src/ogp/` の純粋な TypeScript (自前の PNG エンコーダ + 事前生成したタイル画像データ) で毎回組み立てます。
 
 `GET /islands/:id/ogp.png` の `Cache-Control` は tmp/21-kv-snapshot-cache.md「OGP 画像」節により画像の変わりやすさで出し分けます (`routes/islands.tsx` の `ogpCacheControl`)。過去のゲーム、または現在のゲームでも終了済みのゲームの画像は二度と変わらないため `public, max-age=31536000, immutable`。進行中のゲームは次のターンまでの秒数 (60〜3600 秒にクランプ)、ゲーム開始前は最短の `public, max-age=60` を返します。
 
 Cloudflare Workers 版は、自前で Cache API (`caches.default`) を呼ぶ実装は持たず、代わりに [Workers Cache](https://developers.cloudflare.com/workers/cache/) (`wrangler.jsonc` の `cache.enabled: true`) を使います。これは応答の `Cache-Control` に従って Cloudflare 側が自動でキャッシュする機能で、**`*.workers.dev` のデフォルトドメインでも有効**です (Cache API と違いカスタムドメインは不要)。
 
-Workers Cache は `Cache-Control` の無い応答も RFC 9111 のヒューリスティックでキャッシュしてしまい、しかも Cookie 付きリクエストをバイパスしません (バイパス対象は `Set-Cookie` を含む応答と `Authorization` 付きリクエストのみ)。そのため、セッション依存の HTML (`/api/auth/*` の better-auth の応答を含む) が他人に配信されてしまわないよう、`packages/game/src/web/app.tsx` の `defaultCacheControlMiddleware` が **すべての応答に既定で `Cache-Control: private, no-store` を付け**、ルートが明示的に `Cache-Control` を設定している場合だけそちらを優先します。`GET /games/:gameId/islands/:id/ogp.png` は自身で上記の `Cache-Control` (と、将来のパージ用に `Cache-Tag: island-<id>`) を設定するので、そちらがキャッシュされます。`GET /games/:gameId` (トップ) と `GET /games/:gameId/islands/:id` (観光) の HTML は引き続き `private, no-store` のままです (下記「KV スナップショットキャッシュ」節)。
+Workers Cache は `Cache-Control` の無い応答も RFC 9111 のヒューリスティックでキャッシュしてしまい、しかも Cookie 付きリクエストをバイパスしません (バイパス対象は `Set-Cookie` を含む応答と `Authorization` 付きリクエストのみ)。そのため、セッション依存の HTML (`/api/auth/*` の better-auth の応答を含む) が他人に配信されてしまわないよう、`packages/core/src/web/app.tsx` の `defaultCacheControlMiddleware` が **すべての応答に既定で `Cache-Control: private, no-store` を付け**、ルートが明示的に `Cache-Control` を設定している場合だけそちらを優先します。`GET /games/:gameId/islands/:id/ogp.png` は自身で上記の `Cache-Control` (と、将来のパージ用に `Cache-Tag: island-<id>`) を設定するので、そちらがキャッシュされます。`GET /games/:gameId` (トップ) と `GET /games/:gameId/islands/:id` (観光) の HTML は引き続き `private, no-store` のままです (下記「KV スナップショットキャッシュ」節)。
 
 この既定 no-store のミドルウェアは Node 版でも同じように動きますが、Node 版自体はキャッシュ層を持たないため実質無害です (必要ならリバースプロキシ側でキャッシュしてください)。
 
-### 画像 (`packages/game/public/images/`) の長期キャッシュ
+### 画像 (`packages/core/public/images/`) の長期キャッシュ
 
-`packages/game/public/images/` の地形タイル画像 (gif) やロゴ (svg) は内容が変わらない固定名のファイルです。Workers Static Assets の既定は `Cache-Control: public, max-age=0, must-revalidate` (毎回再検証) のため、`packages/game/public/_headers` で `/images/*` だけ `Cache-Control: public, max-age=31536000, immutable` にしています (`style.css` と `owner.js` はデプロイで内容が変わるため既定のままです)。**画像を差し替える場合はファイル名を変えてください** (現状 Perl 版から引き継いだ固定名で、差し替えの予定が無いことを前提にした設定です)。`_headers` は Node 版には影響しません (Workers Static Assets 専用の仕組み)。
+`packages/core/public/images/` の地形タイル画像 (gif) やロゴ (svg) は内容が変わらない固定名のファイルです。Workers Static Assets の既定は `Cache-Control: public, max-age=0, must-revalidate` (毎回再検証) のため、`packages/core/public/_headers` で `/images/*` だけ `Cache-Control: public, max-age=31536000, immutable` にしています (`style.css` と `owner.js` はデプロイで内容が変わるため既定のままです)。**画像を差し替える場合はファイル名を変えてください** (現状 Perl 版から引き継いだ固定名で、差し替えの予定が無いことを前提にした設定です)。`_headers` は Node 版には影響しません (Workers Static Assets 専用の仕組み)。
 
 ## KV スナップショットキャッシュ (Cloudflare Workers)
 
-tmp/21-kv-snapshot-cache.md。未ログイン (セッション Cookie 無し) の `GET /games/:gameId` (トップ) と `GET /games/:gameId/islands/:id` (観光) は、DO への往復 (実測で 200ms 以上) を省くため、ページの View Model (DB から組み立てた `TopPageVM`/`IslandPageVM` の JSON。HTML そのものではない) を Workers KV (`env.SNAPSHOT`) に TTL 付きで保存し、Worker (`packages/server-workers/src/worker.ts`) 側でレンダリングして応答します。HTML はキャッシュしないため、「次のターンまであと N 分」のような表示はリクエスト時刻で再計算され、キャッシュしても古くなりません。
+tmp/21-kv-snapshot-cache.md。未ログイン (セッション Cookie 無し) の `GET /games/:gameId` (トップ) と `GET /games/:gameId/islands/:id` (観光) は、DO への往復 (実測で 200ms 以上) を省くため、ページの View Model (DB から組み立てた `TopPageVM`/`IslandPageVM` の JSON。HTML そのものではない) を Workers KV (`env.SNAPSHOT`) に TTL 付きで保存し、Worker (`packages/cloudflare/src/worker.ts`) 側でレンダリングして応答します。HTML はキャッシュしないため、「次のターンまであと N 分」のような表示はリクエスト時刻で再計算され、キャッシュしても古くなりません。
 
 - **対象外はすべて DO へ転送**: ログイン中 (Cookie に `hako` を含む)、POST、`/`、`/games`、開発画面、管理画面、OGP 画像などは従来どおり `HakoniwaGame` (DO) への HTTP 転送のままです。ログイン中のユーザーは常に DO から最新を見られるため、自分のコメント・記帳・島の発見は即座に反映されます。未ログインの閲覧だけが最大 TTL 分だけ古くなる可能性があります。
 - **`env.SNAPSHOT` は省略可能**: 未バインドなら `worker.ts` は常に DO へ転送します (Node 版・KV 名前空間を作る前のデプロイ・テストに影響しません)。
-- **レンダリングは Worker 側**: `@hakoniwa/game` が公開する `renderTopPageHtml`/`renderIslandPageHtml` (`packages/game/src/web/render-snapshot.tsx`) が、DO 側の `routes/render.tsx` (`renderPage`) と同じ `Layout`/`TopPage`/`IslandPage` の JSX を `user`/`csrfToken` を `undefined` にして描画します。hono/jsx の要素から文字列を得る処理 (`resolveCallback`) は `c.html()` の内部実装と同じものを使っており、出力が一致することを `packages/server-workers/test/snapshot-cache.test.ts` の「Worker が返す HTML と DO が返す HTML が一致する」テストで確認しています。
-- **DO 側の RPC**: `HakoniwaGame.pageSnapshot({ kind, gameId, islandId? })` (`packages/server-workers/src/game-object.ts`) が `{ kind, vm, nextTurnAt, ttl }` を返します (対象のゲーム/島が無ければ `undefined`)。`vm` の `terrain` は RPC 越しにクラスインスタンスのメソッドを渡せないため、`Terrain.toJSON()` (`number[][]`) にした形 (`IslandPageSnapshotVM`) で受け渡し、Worker 側で `terrainFromJSON` により復元します (`packages/server-workers/src/snapshot.ts`)。
+- **レンダリングは Worker 側**: `@hakoniwajs/core` が公開する `renderTopPageHtml`/`renderIslandPageHtml` (`packages/core/src/web/render-snapshot.tsx`) が、DO 側の `routes/render.tsx` (`renderPage`) と同じ `Layout`/`TopPage`/`IslandPage` の JSX を `user`/`csrfToken` を `undefined` にして描画します。hono/jsx の要素から文字列を得る処理 (`resolveCallback`) は `c.html()` の内部実装と同じものを使っており、出力が一致することを `packages/cloudflare/test/snapshot-cache.test.ts` の「Worker が返す HTML と DO が返す HTML が一致する」テストで確認しています。
+- **DO 側の RPC**: `HakoniwaGame.pageSnapshot({ kind, gameId, islandId? })` (`packages/cloudflare/src/game-object.ts`) が `{ kind, vm, nextTurnAt, ttl }` を返します (対象のゲーム/島が無ければ `undefined`)。`vm` の `terrain` は RPC 越しにクラスインスタンスのメソッドを渡せないため、`Terrain.toJSON()` (`number[][]`) にした形 (`IslandPageSnapshotVM`) で受け渡し、Worker 側で `terrainFromJSON` により復元します (`packages/cloudflare/src/snapshot.ts`)。
 - **TTL は DO 側で決める**: キーにターン数は含めず (`v1:<gameId>:top` / `v1:<gameId>:island:<islandId>`)、invalidate 処理も作らずすべて TTL 任せです。過去のゲーム (`vm.game.isCurrent === false`) は記帳もできず完全に不変なので長期 TTL (既定 30 日、`HAKONIWA_SNAPSHOT_TTL_IMMUTABLE_SEC`)。現在のゲームでも終了済み (`season.state === 'finished'`) のトップは不変なので同じく長期。終了済みの島ページだけは掲示板の記帳が入りうるため短期 (既定 60 秒、`HAKONIWA_SNAPSHOT_TTL_SEC`。Workers KV の最小 TTL が 60 秒のためこれ未満は指定できない)。進行中/開始前のゲームは短期 TTL を基本に、次のターンまでの残り時間がそれより短ければそちらを優先します。
 - **応答ヘッダ**: `Cache-Control` は HTML なので従来どおり `private, no-store` です。動作確認用に `X-Hakoniwa-Snapshot: hit`(KV から応答) `| miss`(DO から取得して KV に書いた) `| bypass`(DO への通常転送) を付けます。
 - **運用上の注意**: 管理者がバックアップから過去のゲームのデータを復元すると、復元前にキャッシュされていたページが最大 TTL 分だけ古いまま見えることがあります (`docs/setup-guide.md` にも記載)。
@@ -186,6 +188,21 @@ tmp/21-kv-snapshot-cache.md。未ログイン (セッション Cookie 無し) �
 
 - **Node**: CLI の `backup list|create|restore|delete`、または管理画面の「バックアップ一覧」から、`HAKONIWA_BACKUP_DIR` (既定 `./data/backups`) 配下にファイルとしてバックアップを作成・復元・削除できます
 - **Cloudflare Workers**: ファイルベースのバックアップの代わりに、SQLite backend の DO が持つ Point-in-Time Recovery のブックマークを使います。管理画面からの操作は Node 版と同じですが、`restore` は DO を再起動する (`ctx.abort()`) ため、実行後は「復元を予約しました。数秒後に再読み込みしてください」という案内になります
+
+## npm への公開
+
+`@hakoniwajs/core`・`@hakoniwajs/node`・`@hakoniwajs/cloudflare` の 3 パッケージを npm で配布しています。開発中は各パッケージの `exports` が `./src/index.ts` (TypeScript ソース) を指しますが、公開時は `publishConfig.exports` によりビルド済みの `dist/` (`.js` + `.d.ts`) に差し替わります。`dist` は `pnpm -r run build` (各パッケージの `tsc -p tsconfig.build.json`。packages/node は vite バンドル + `.d.ts` 生成) で生成します。
+
+```sh
+pnpm -r run build
+pnpm -r publish --access public   # 各パッケージの publishConfig.access = public 済み
+```
+
+`workspace:*` 依存は publish 時に実バージョンへ自動で書き換えられます。
+
+リリースは tagpr で自動化しています (`.tagpr` + `.github/workflows/tagpr.yml`)。main への push ごとに tagpr がリリース PR を作成・更新し、その PR をマージするとタグと GitHub Release が作られます。3 パッケージの `version` は tagpr が一括で更新します。
+
+GitHub Release の公開をトリガーに `publish` ワークフロー (`.github/workflows/publish.yml`) が `pnpm -r publish` を実行します。認証は npm Trusted Publishing (OIDC) で、NPM_TOKEN は不要です。npmjs.com 側で各パッケージの Trusted Publisher にこのリポジトリの `publish.yml` を登録しておく必要があります (新規パッケージの初回公開は token または手動 publish が必要な場合があります)。
 
 ## 設計書
 
