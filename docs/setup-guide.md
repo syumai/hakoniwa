@@ -125,7 +125,7 @@ HAKONIWA_AUTH_SECRET=xxxx HAKONIWA_ADMIN_EMAILS=you@example.com npx hakoniwa ser
 
 ## 4. 環境変数一覧
 
-`packages/game/src/bootstrap/config-from-env.ts` (ゲーム本体・両ランタイム共通)、`packages/server-node/src/config.ts` (Node 固有)、`packages/server-workers/src/snapshot.ts` (Workers の KV スナップショットキャッシュ専用) の一覧です。Node では `.env` (または環境変数) に、Workers では `wrangler.jsonc` の `vars` か `wrangler secret put` (secret) に設定します。
+`packages/core/src/bootstrap/config-from-env.ts` (ゲーム本体・両ランタイム共通)、`packages/node/src/config.ts` (Node 固有)、`packages/cloudflare/src/snapshot.ts` (Workers の KV スナップショットキャッシュ専用) の一覧です。Node では `.env` (または環境変数) に、Workers では `wrangler.jsonc` の `vars` か `wrangler secret put` (secret) に設定します。
 
 | 環境変数                                                        | 既定値                                    | 用途                                                                                                                                                                                                                                                                  | Node | Workers                                    |
 | --------------------------------------------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--: | ------------------------------------------ |
