@@ -2,6 +2,7 @@
 // tmp/08-turn-trigger-admin-cli.md 「CLI」節の移植。
 // Perl 版 Maintenance.pm の各モードを CLI から叩けるようにする。
 // `node dist/cli.js <command>` または root で `vp run --filter ./packages/node cli -- <command>`。
+import { realpathSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
 import {
@@ -457,12 +458,17 @@ export async function runCli(
 
 // `node dist/cli.js ...` として直接実行された場合のみエントリポイントとして動く。
 // テストからの import では実行されない (import.meta.url とエントリスクリプトの比較)。
+// npm の .bin はシンボリックリンクなので、argv[1] を realpath してから比較する。
 const isMain = (() => {
   const entry = process.argv[1];
   if (entry === undefined) {
     return false;
   }
-  return import.meta.url === pathToFileURL(entry).href;
+  try {
+    return import.meta.url === pathToFileURL(realpathSync(entry)).href;
+  } catch {
+    return false;
+  }
 })();
 
 if (isMain) {
