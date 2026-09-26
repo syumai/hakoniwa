@@ -246,6 +246,7 @@ export { ConsoleMailer, ResendMailer } from "./bootstrap/mailer.ts";
 // web 層 (Phase 4a)。ランタイム非依存の Hono app。静的配信は Adapter の責務。
 // ----------------------------------------------------------------------
 
+export type { AppEnv } from "./web/env.ts";
 export type { WebDeps } from "./web/deps.ts";
 export { createApp } from "./web/app.tsx";
 
