@@ -13,6 +13,6 @@ jobs:
       - uses: jdx/mise-action@v3
       - run: pnpm install --frozen-lockfile
       # lint + check (fmt/lint/型) + test (Vitest) + build
-      - run: pnpm ci
+      - run: pnpm run ci
       # packages/cloudflare のテストは workerd 上で動く別インスタンスのため集約実行に乗らない (development.md 参照)
       - run: pnpm --filter @hakoniwajs/cloudflare test
