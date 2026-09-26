@@ -2,6 +2,7 @@ packages:
   - "packages/*"
 
 # packages/cloudflare (wrangler/@cloudflare/vite-plugin) が使うネイティブバイナリの取得に必要。
-onlyBuiltDependencies:
-  - esbuild
-  - workerd
+# pnpm 11+ では onlyBuiltDependencies → allowBuilds にリネームされている
+allowBuilds:
+  esbuild: true
+  workerd: true

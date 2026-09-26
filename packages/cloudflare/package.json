@@ -36,11 +36,11 @@
     "hono": "^4.13.9"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "1.60.2",
+    "@cloudflare/vite-plugin": "1.60.0",
     "@cloudflare/vitest-pool-workers": "0.22.0",
-    "@cloudflare/workers-types": "5.20260926.1",
+    "@cloudflare/workers-types": "5.20260925.1",
     "vitest": "4.1.11",
-    "wrangler": "4.141.0"
+    "wrangler": "4.139.0"
   },
   "peerDependencies": {
     "@cloudflare/workers-types": "*"

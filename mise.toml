@@ -1,6 +1,6 @@
 [tools]
 node = "24"
-pnpm = "10"
+pnpm = "12"
 vp = "0.3.3" # mise registry の `vp` (= npm:vite-plus)。npm の最新に合わせる
 pinact = "latest" # GitHub Actions の SHA pin (`pinact run` で .github/workflows を更新)
 
