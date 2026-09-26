@@ -9,11 +9,12 @@ import {
   formatDuration,
   GAME_NOT_STARTED_LABEL,
   parseDuration,
-} from "@hakoniwa/game";
-import type { GameStatus, SeasonState } from "@hakoniwa/game";
+} from "@hakoniwajs/core";
+import type { GameStatus, SeasonState } from "@hakoniwajs/core";
 import { composeNode } from "./compose.ts";
 import type { ComposedNode } from "./compose.ts";
 import { loadNodeConfig } from "./config.ts";
+import { startServer } from "./serve.ts";
 
 /** テストから差し込める最小限の出力口。既定は console。 */
 export interface CliIO {
@@ -69,10 +70,11 @@ const HELP_TEXT = `hakoniwa CLI
   backup create [label]  バックアップを作成する (label 省略可)
   backup restore <label> バックアップを現役データへ復元する
   backup delete <label>  バックアップを削除する
+  serve                  HTTP サーバーを起動する (Ctrl+C / SIGTERM で停止)
 
   -h, --help             このヘルプを表示する
 
-環境変数は @hakoniwa/game の loadConfigFromEnv と config.ts (HAKONIWA_DB_PATH 等) を参照する。
+環境変数は @hakoniwajs/core の loadConfigFromEnv と config.ts (HAKONIWA_DB_PATH 等) を参照する。
 `;
 
 const SEASON_STATE_LABELS: Record<SeasonState, string> = {
@@ -408,6 +410,13 @@ export async function runCli(
   }
 
   const rest = positionals.slice(1);
+
+  // serve は DB を開かずプロセスを持続させるため、通常コマンドの compose/close と分ける。
+  if (command === "serve") {
+    startServer(loadNodeConfig(env));
+    // サーバーが生きている間この Promise は解決しない (シグナルハンドラが process.exit する)。
+    return new Promise<number>(() => {});
+  }
 
   let node: ComposedNode | undefined;
   try {

@@ -10,7 +10,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
-import type { BackupInfo, BackupStore } from "@hakoniwa/game";
+import type { BackupInfo, BackupStore } from "@hakoniwajs/core";
 import type { NodeSqliteDriver } from "./driver.ts";
 
 const LABEL_PATTERN = /^[A-Za-z0-9_-]+$/;

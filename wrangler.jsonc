@@ -3,7 +3,7 @@
   "name": "hakoniwa",
   // 設計書との差異: Deploy to Cloudflare ボタンはサブディレクトリ単位のデプロイを
   // サポートしない (依存が閉じている必要があるが packages/server-workers は
-  // workspace 依存の @hakoniwa/game を参照するため使えない)。そのため wrangler.jsonc を
+  // workspace 依存の @hakoniwajs/core を参照するため使えない)。そのため wrangler.jsonc を
   // リポジトリ直下に置き、リポジトリ全体を 1 つのデプロイ単位にする
   // (tmp/12-workers-adapter.md 末尾「Deploy to Cloudflare ボタン」節)。
   "main": "packages/server-workers/src/worker.ts",

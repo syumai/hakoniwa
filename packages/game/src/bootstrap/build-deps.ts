@@ -1,4 +1,4 @@
-// tmp/13-monorepo.md 「@hakoniwa/game の公開 API」、tmp/08 の buildDeps、
+// tmp/13-monorepo.md 「@hakoniwajs/core の公開 API」、tmp/08 の buildDeps、
 // tmp/14-users-auth.md 「bootstrap」節に対応する組立関数。
 import { AdminService } from "../app/admin-service.ts";
 import { AuthMethodPolicy } from "../app/auth-methods.ts";

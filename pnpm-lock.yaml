@@ -45,7 +45,7 @@ importers:
 
   packages/server-node:
     dependencies:
-      '@hakoniwa/game':
+      '@hakoniwajs/core':
         specifier: workspace:*
         version: link:../game
       '@hono/node-server':
@@ -67,7 +67,7 @@ importers:
 
   packages/server-workers:
     dependencies:
-      '@hakoniwa/game':
+      '@hakoniwajs/core':
         specifier: workspace:*
         version: link:../game
       hono:

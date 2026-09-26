@@ -1,6 +1,6 @@
 // tmp/12-workers-adapter.md 「SqlDriver の DO 実装」節の実装。
 // Durable Object (SQLite backend) の同期 SQL API (`ctx.storage.sql`) を `SqlDriver` に載せる。
-import type { SqlDriver, SqlParam } from "@hakoniwa/game";
+import type { SqlDriver, SqlParam } from "@hakoniwajs/core";
 
 /**
  * `ctx.storage` (DurableObjectStorage) による `SqlDriver` 実装。

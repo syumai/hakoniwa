@@ -1,6 +1,6 @@
 // tmp/04-database.md 「SqlDriver」表の Node 実装。node:sqlite の DatabaseSync を使う。
 import { DatabaseSync } from "node:sqlite";
-import type { SqlDriver, SqlParam } from "@hakoniwa/game";
+import type { SqlDriver, SqlParam } from "@hakoniwajs/core";
 
 /** `node:sqlite` の `DatabaseSync` による `SqlDriver` 実装。 */
 export class NodeSqliteDriver implements SqlDriver {

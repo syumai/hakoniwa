@@ -1,9 +1,9 @@
 // tmp/13-monorepo.md packages/server-node の compose.ts。
-// driver/backup/clock を組み立てて @hakoniwa/game の buildDeps を呼び、Adapter が使う一式を返す。
+// driver/backup/clock を組み立てて @hakoniwajs/core の buildDeps を呼び、Adapter が使う一式を返す。
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { buildDeps, migrate } from "@hakoniwa/game";
-import type { BuiltDeps, Clock } from "@hakoniwa/game";
+import { buildDeps, migrate } from "@hakoniwajs/core";
+import type { BuiltDeps, Clock } from "@hakoniwajs/core";
 import { FileBackupStore } from "./backup.ts";
 import type { NodeConfig } from "./config.ts";
 import { NodeSqliteDriver } from "./driver.ts";
@@ -19,7 +19,7 @@ function createSystemClock(): Clock {
 
 /**
  * `NodeConfig` から DB ファイルを開き、マイグレーションを適用したうえで
- * `@hakoniwa/game` の `buildDeps` を呼ぶ。`server.ts`/`dev.ts`/`cli.ts` (Phase 4/5) の入口。
+ * `@hakoniwajs/core` の `buildDeps` を呼ぶ。`server.ts`/`dev.ts`/`cli.ts` (Phase 4/5) の入口。
  */
 export function composeNode(config: NodeConfig): ComposedNode {
   if (config.dbPath !== ":memory:") {

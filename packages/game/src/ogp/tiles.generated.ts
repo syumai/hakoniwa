@@ -1,5 +1,5 @@
 // 生成物。手で編集しない。
-// `pnpm --filter @hakoniwa/game generate:ogp-tiles` で再生成する。
+// `pnpm --filter @hakoniwajs/core generate:ogp-tiles` で再生成する。
 // 生成元: packages/game/scripts/generate-ogp-tiles.ts, packages/game/public/images/*.gif
 // tmp/17-ogp.md 「実装の置き場所」節。
 

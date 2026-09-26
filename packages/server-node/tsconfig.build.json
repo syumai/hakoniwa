@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // 本体の .js 出力は `vp build` (vite) が担当。ここでは .d.ts だけを出す。
+    // 依存先の @hakoniwajs/core はビルド済み dist の .d.ts を参照させる
+    // (ソースの .ts を引くと core のファイルまで emit 対象になる)。
+    "paths": {
+      "@hakoniwajs/core": ["../game/dist/index.d.ts"]
+    },
+    "noEmit": false,
+    "allowImportingTsExtensions": false,
+    "rewriteRelativeImportExtensions": true,
+    "emitDeclarationOnly": true,
+    "declaration": true,
+    "declarationMap": true,
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src"]
+}

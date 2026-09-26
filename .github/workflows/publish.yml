@@ -1,0 +1,25 @@
+name: publish
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # npm provenance (sigstore) 用
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v3
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r run build
+      # 各パッケージの publishConfig.access = public。workspace:* 依存は実バージョンに書き換えられる。
+      # 既に公開済みのバージョンがある場合は失敗するので、公開前に version を上げること。
+      - run: pnpm -r publish --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"

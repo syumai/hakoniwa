@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // 依存先の @hakoniwajs/core はビルド済み dist の .d.ts を参照させる
+    // (ソースの .ts を引くと core のファイルまで emit 対象になる)。
+    "paths": {
+      "@hakoniwajs/core": ["../game/dist/index.d.ts"]
+    },
+    "noEmit": false,
+    "allowImportingTsExtensions": false,
+    "rewriteRelativeImportExtensions": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src"]
+}

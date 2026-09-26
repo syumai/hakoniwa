@@ -22,12 +22,12 @@ export default defineConfig({
     ssr: true,
     outDir: "dist",
     rollupOptions: {
-      input: { server: "src/server.ts", cli: "src/cli.ts" },
+      input: { server: "src/server.ts", cli: "src/cli.ts", index: "src/index.ts" },
       output: { entryFileNames: "[name].js" },
     },
   },
-  // @hakoniwa/game は .ts を exports しているため、ソースからバンドルへ同梱する。
-  ssr: { noExternal: ["@hakoniwa/game"] },
+  // @hakoniwajs/core は .ts を exports しているため、ソースからバンドルへ同梱する。
+  ssr: { noExternal: ["@hakoniwajs/core"] },
   // 設計書 (tmp/09-tooling.md) は esbuild オプションを指定しているが、packages/game/vite.config.ts
   // と同じ理由 (vite-plus は rolldown-vite ベースで esbuild が deprecated) で oxc オプションを使う。
   oxc: { jsx: { runtime: "automatic", importSource: "hono/jsx" } },

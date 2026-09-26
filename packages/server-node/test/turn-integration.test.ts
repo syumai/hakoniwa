@@ -8,8 +8,8 @@ import {
   FakeClock,
   LandKind,
   migrate,
-} from "@hakoniwa/game";
-import type { AppConfig, AuthUser, Point, Terrain } from "@hakoniwa/game";
+} from "@hakoniwajs/core";
+import type { AppConfig, AuthUser, Point, Terrain } from "@hakoniwajs/core";
 import { beforeEach, describe, expect, it } from "vitest";
 import { NodeSqliteDriver } from "../src/driver.ts";
 

@@ -1,0 +1,18 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v3
+      - run: pnpm install --frozen-lockfile
+      # lint + check (fmt/lint/型) + test (Vitest) + build
+      - run: pnpm ci
+      # server-workers のテストは workerd 上で動く別インスタンスのため集約実行に乗らない (development.md 参照)
+      - run: pnpm --filter @hakoniwajs/cloudflare test

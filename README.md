@@ -1,6 +1,6 @@
 # 箱庭諸島２
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/syumai/hakoniwa)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/hakoniwajs/template-cloudflare)
 
 徳岡宏樹氏による Web ブラウザゲーム「箱庭諸島２」を、TypeScript (Node.js + Hono + `node:sqlite`) で書き直したものです。
 ゲームロジックと HTTP 層をランタイムから独立させてあり、Node.js と Cloudflare Workers (Durable Objects SQLite) の両方で動かせる構成にしています。
@@ -21,6 +21,18 @@
 - **OGP 画像**: 島ページをシェアすると、島の地図を描画した PNG が OGP 画像として表示されます。
 - **スマートフォン対応**: スマートフォンの画面幅でも入力欄や長い URL がはみ出さないようにしています。
 - **2 つの実行環境**: Node.js (`node:sqlite`) と Cloudflare Workers (Durable Objects SQLite) のどちらでも同じゲームロジックで動きます。
+
+## npm パッケージ
+
+`npm install` するだけで自分の環境に箱庭諸島２を設置できます。
+
+| パッケージ               | 内容                                                                 |
+| ------------------------ | -------------------------------------------------------------------- |
+| `@hakoniwajs/node`       | Node.js 版。`npx hakoniwa serve` で HTTP サーバーが起動します        |
+| `@hakoniwajs/cloudflare` | Cloudflare Workers (Durable Objects) 版。Worker エントリを提供します |
+| `@hakoniwajs/core`       | ランタイム非依存のゲーム本体 (上の 2 つが依存しています)             |
+
+設置手順は [設置ガイド](docs/setup-guide.md) を参照してください。Cloudflare Workers へは上の Deploy ボタン (テンプレート: [hakoniwajs/template-cloudflare](https://github.com/hakoniwajs/template-cloudflare)) からもデプロイできます。
 
 ## ドキュメント
 

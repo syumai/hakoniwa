@@ -1,7 +1,7 @@
 // tmp/08-turn-trigger-admin-cli.md 「設定の読み込み (Node)」節。
-// @hakoniwa/game の loadConfigFromEnv に Node 固有の設定 (DB パス、ポート等) を足す。
-import { loadConfigFromEnv } from "@hakoniwa/game";
-import type { AppConfig } from "@hakoniwa/game";
+// @hakoniwajs/core の loadConfigFromEnv に Node 固有の設定 (DB パス、ポート等) を足す。
+import { loadConfigFromEnv } from "@hakoniwajs/core";
+import type { AppConfig } from "@hakoniwajs/core";
 
 export interface NodeConfig extends AppConfig {
   port: number;

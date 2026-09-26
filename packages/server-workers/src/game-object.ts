@@ -1,9 +1,9 @@
 // tmp/12-workers-adapter.md 「Worker エントリ (worker.ts, game-object.ts) の骨子」節の実装。
 // 1 インスタンス = ゲーム世界 1 つ。DO の SQLite ストレージに Node 版と同じスキーマを構築し、
-// @hakoniwa/game の buildDeps で組み立てた Hono app にそのまま委譲する。
+// @hakoniwajs/core の buildDeps で組み立てた Hono app にそのまま委譲する。
 import { DurableObject } from "cloudflare:workers";
-import { AppError, buildDeps, buildSeasonVM, loadConfigFromEnv, migrate } from "@hakoniwa/game";
-import type { BuiltDeps } from "@hakoniwa/game";
+import { AppError, buildDeps, buildSeasonVM, loadConfigFromEnv, migrate } from "@hakoniwajs/core";
+import type { BuiltDeps } from "@hakoniwajs/core";
 import { BookmarkBackupStore } from "./backup.ts";
 import { DurableObjectSqlDriver } from "./driver.ts";
 import type { Env } from "./env.ts";
@@ -13,7 +13,7 @@ import type { PageSnapshotRequest, PageSnapshotResult } from "./snapshot.ts";
 /**
  * ゲーム世界を 1 つ保持する Durable Object。
  *
- * - `fetch`: 組み立てた Hono app (`@hakoniwa/game` の `createApp`) にそのまま委譲する。
+ * - `fetch`: 組み立てた Hono app (`@hakoniwajs/core` の `createApp`) にそのまま委譲する。
  * - `checkTurn`: Cron Trigger から呼ばれる RPC。`turnService.advanceTurnIfDue` を呼ぶだけで、
  *   ターン境界を跨いだかどうかの判定は turnService 側 (`unitTimeSec` と `game.last_time`) に任せる。
  */

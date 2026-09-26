@@ -11,7 +11,7 @@ import {
   migrate,
   SCHEMA_VERSION,
   SqliteGameRepository,
-} from "@hakoniwa/game";
+} from "@hakoniwajs/core";
 import { describe, expect, it } from "vitest";
 import { NodeSqliteDriver } from "../src/driver.ts";
 

@@ -1,6 +1,6 @@
 // tmp/17-ogp.md 「キャッシュ (Workers Cache)」節: Workers Cache (`wrangler.jsonc` の
 // `cache.enabled`) は応答の `Cache-Control` に従う。自前の Cache API 呼び出しは行わないため、
-// worker.ts は DO への単純な転送のみで、`Cache-Control` は `@hakoniwa/game` の
+// worker.ts は DO への単純な転送のみで、`Cache-Control` は `@hakoniwajs/core` の
 // defaultCacheControlMiddleware / OGP ルートが付ける。DO 経由でその応答ヘッダを確認する。
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";

@@ -1,15 +1,38 @@
 {
-  "name": "@hakoniwa/server-workers",
-  "private": true,
+  "name": "@hakoniwajs/cloudflare",
+  "version": "0.1.0",
+  "description": "箱庭諸島２ (TypeScript 版) の Cloudflare Workers アダプタ。Durable Objects (SQLite) 版の Worker エントリと DO クラスを提供する",
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hakoniwajs/hakoniwa.git",
+    "directory": "packages/server-workers"
+  },
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    },
+    "access": "public"
+  },
   "scripts": {
     "dev": "wrangler dev --config ../../wrangler.jsonc",
-    "build": "wrangler deploy --config ../../wrangler.jsonc --dry-run --outdir dist",
+    "build": "tsc -p tsconfig.build.json && wrangler deploy --config ../../wrangler.jsonc --dry-run --outdir dist-check",
     "deploy": "wrangler deploy --config ../../wrangler.jsonc",
     "test": "vitest run"
   },
   "dependencies": {
-    "@hakoniwa/game": "workspace:*",
+    "@hakoniwajs/core": "workspace:*",
     "hono": "^4.13.8"
   },
   "devDependencies": {
@@ -18,5 +41,13 @@
     "@cloudflare/workers-types": "5.20260918.1",
     "vitest": "4.1.11",
     "wrangler": "4.134.0"
+  },
+  "peerDependencies": {
+    "@cloudflare/workers-types": "*"
+  },
+  "peerDependenciesMeta": {
+    "@cloudflare/workers-types": {
+      "optional": true
+    }
   }
 }

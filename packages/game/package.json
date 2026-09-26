@@ -1,12 +1,37 @@
 {
-  "name": "@hakoniwa/game",
-  "private": true,
+  "name": "@hakoniwajs/core",
+  "version": "0.1.0",
+  "description": "箱庭諸島２ (TypeScript 版) のランタイム非依存コア。ゲームロジック・ストレージ・Hono app・OGP 描画を含む",
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hakoniwajs/hakoniwa.git",
+    "directory": "packages/game"
+  },
+  "files": [
+    "dist",
+    "public",
+    "LICENSE"
+  ],
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./public/*": "./public/*"
+    "./public/*": "./public/*",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./public/*": "./public/*",
+      "./package.json": "./package.json"
+    },
+    "access": "public"
   },
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "generate:ogp-tiles": "node --experimental-strip-types scripts/generate-ogp-tiles.ts"
   },
   "dependencies": {

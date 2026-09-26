@@ -5,7 +5,7 @@
 // 32x32 タイル) だけを実際に tileFor を全パターン列挙して洗い出し、GIF をデコードして
 // `src/ogp/tiles.generated.ts` (パレット + インデックス列) を書き出す。
 //
-// 実行: `pnpm --filter @hakoniwa/game generate:ogp-tiles`
+// 実行: `pnpm --filter @hakoniwajs/core generate:ogp-tiles`
 // (`tsx` または `node --experimental-strip-types` で実行できる純 TypeScript)
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -138,7 +138,7 @@ function main(): void {
 
   const lines: string[] = [];
   lines.push("// 生成物。手で編集しない。");
-  lines.push("// `pnpm --filter @hakoniwa/game generate:ogp-tiles` で再生成する。");
+  lines.push("// `pnpm --filter @hakoniwajs/core generate:ogp-tiles` で再生成する。");
   lines.push(
     "// 生成元: packages/game/scripts/generate-ogp-tiles.ts, packages/game/public/images/*.gif",
   );

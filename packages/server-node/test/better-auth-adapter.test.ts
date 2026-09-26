@@ -11,8 +11,8 @@ import {
   createAuth,
   loadConfigFromEnv,
   migrate,
-} from "@hakoniwa/game";
-import type { AppConfig } from "@hakoniwa/game";
+} from "@hakoniwajs/core";
+import type { AppConfig } from "@hakoniwajs/core";
 import { NodeSqliteDriver } from "../src/driver.ts";
 
 const AUTH_SECRET = "a".repeat(32);

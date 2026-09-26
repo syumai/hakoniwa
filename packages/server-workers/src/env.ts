@@ -14,7 +14,7 @@ export interface Env {
   SNAPSHOT?: KVNamespace;
 
   // 以下は vars (wrangler.jsonc) または `wrangler secret put` で設定する。
-  // すべて loadConfigFromEnv (@hakoniwa/game) がそのまま読む文字列環境変数。
+  // すべて loadConfigFromEnv (@hakoniwajs/core) がそのまま読む文字列環境変数。
   HAKONIWA_BASE_URL?: string;
   HAKONIWA_AUTH_SECRET?: string;
   HAKONIWA_X_CLIENT_ID?: string;

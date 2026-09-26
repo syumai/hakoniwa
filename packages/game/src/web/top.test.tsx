@@ -191,7 +191,7 @@ describe("フッタ", () => {
     expect(html).not.toContain("掲示板(");
     expect(html).not.toContain("トップページ(");
     expect(html).toContain("箱庭諸島のページ(");
-    expect(html).toContain('TypeScript版配布(<a href="https://github.com/syumai/hakoniwa">');
+    expect(html).toContain('TypeScript版配布(<a href="https://github.com/hakoniwajs/hakoniwa">');
     // コーディネーターの追加指示: 遊び方 (外部サイト) へのリンク。
     expect(html).toContain("遊び方(");
     expect(html).toContain('href="https://hako2d-mj.xii.jp/pin/st/manual/man01.html"');

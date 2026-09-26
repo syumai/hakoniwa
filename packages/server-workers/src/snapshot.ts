@@ -1,8 +1,8 @@
 // tmp/21-kv-snapshot-cache.md: 未ログイン GET のトップ/観光ページの View Model を
 // Workers KV にキャッシュするための型・キー・TTL 計算。HTML はキャッシュしない
-// (レンダリングは @hakoniwa/game の renderTopPageHtml/renderIslandPageHtml を worker.ts が呼ぶ)。
-import { terrainFromJSON } from "@hakoniwa/game";
-import type { IslandPageVM, SeasonState, TopPageVM } from "@hakoniwa/game";
+// (レンダリングは @hakoniwajs/core の renderTopPageHtml/renderIslandPageHtml を worker.ts が呼ぶ)。
+import { terrainFromJSON } from "@hakoniwajs/core";
+import type { IslandPageVM, SeasonState, TopPageVM } from "@hakoniwajs/core";
 
 /** KV キーの版数。保存形式を変えるときはこれを上げる (invalidate 処理は作らないため)。 */
 const SNAPSHOT_KEY_VERSION = "v1";

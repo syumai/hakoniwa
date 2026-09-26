@@ -1,4 +1,4 @@
-// @hakoniwa/game の公開 API。
+// @hakoniwajs/core の公開 API。
 // Phase 0 時点では core の主要な型・関数のみを re-export する。
 // Adapter 向け API (buildDeps, migrate 等) は Phase 3 以降で追加する。
 

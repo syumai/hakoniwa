@@ -16,7 +16,7 @@ export interface LayoutProps {
 }
 
 const SCRIPT_SOURCE_URL = "http://www.bekkoame.ne.jp/~tokuoka/hakoniwa.html";
-const REPOSITORY_URL = "https://github.com/syumai/hakoniwa";
+const REPOSITORY_URL = "https://github.com/hakoniwajs/hakoniwa";
 /** 箱庭諸島の遊び方 (オリジナル版の解説ページ)。コーディネーターの追加指示によりフッタと
  * トップの「新しい島を探す」節にリンクする。 */
 export const MANUAL_URL = "https://hako2d-mj.xii.jp/pin/st/manual/man01.html";

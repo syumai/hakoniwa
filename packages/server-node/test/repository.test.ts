@@ -8,8 +8,8 @@ import {
   migrate,
   SqliteGameRepository,
   defaultConfig,
-} from "@hakoniwa/game";
-import type { CreateGameInput, GameRepository, Island } from "@hakoniwa/game";
+} from "@hakoniwajs/core";
+import type { CreateGameInput, GameRepository, Island } from "@hakoniwajs/core";
 import { beforeEach, describe, expect, it } from "vitest";
 import { NodeSqliteDriver } from "../src/driver.ts";
 

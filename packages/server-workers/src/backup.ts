@@ -1,6 +1,6 @@
 // tmp/12-workers-adapter.md 「バックアップ: Point-in-Time Recovery」節の実装。
 // SQLite backend の DO が持つ PITR ブックマークを `backups` 表 (04-database.md、schema.ts) の台帳で管理する。
-import type { BackupInfo, BackupStore } from "@hakoniwa/game";
+import type { BackupInfo, BackupStore } from "@hakoniwajs/core";
 
 const LABEL_PATTERN = /^[A-Za-z0-9_-]+$/;
 

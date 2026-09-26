@@ -1,8 +1,8 @@
 // tmp/21-kv-snapshot-cache.md「キャッシュ期間の区別」節の TTL 計算と、island の terrain の
 // JSON 変換往復を単体でテストする。DO/Worker のエンドツーエンドな確認は
 // snapshot-cache.test.ts で行う。
-import { createTerrain } from "@hakoniwa/game";
-import type { IslandPageVM } from "@hakoniwa/game";
+import { createTerrain } from "@hakoniwajs/core";
+import type { IslandPageVM } from "@hakoniwajs/core";
 import { describe, expect, it } from "vitest";
 import {
   computeSnapshotTtl,

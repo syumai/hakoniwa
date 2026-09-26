@@ -10,8 +10,8 @@ import {
   FakeBackupStore,
   FakeClock,
   migrate,
-} from "@hakoniwa/game";
-import type { AppConfig } from "@hakoniwa/game";
+} from "@hakoniwajs/core";
+import type { AppConfig } from "@hakoniwajs/core";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

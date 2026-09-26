@@ -4,8 +4,8 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { defaultConfig } from "@hakoniwa/game";
-import type { GameConfig } from "@hakoniwa/game";
+import { defaultConfig } from "@hakoniwajs/core";
+import type { GameConfig } from "@hakoniwajs/core";
 import { afterEach, describe, expect, it } from "vitest";
 import { composeNode } from "../src/compose.ts";
 import type { ComposedNode } from "../src/compose.ts";

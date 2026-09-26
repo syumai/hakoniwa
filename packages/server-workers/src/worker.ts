@@ -16,21 +16,44 @@
 // 応答する (`tryServeFromSnapshot`)。HTML 自体はキャッシュしない (`Cache-Control` は従来どおり
 // `private, no-store`) ので、「次のターンまであと N 分」はリクエスト時刻で再計算され古くならない。
 // 対象外・KV 未バインド・キャッシュにも DO にも無ければ、従来どおり DO への HTTP 転送に委ねる。
-import { loadConfigFromEnv, renderIslandPageHtml, renderTopPageHtml } from "@hakoniwa/game";
+import { loadConfigFromEnv, renderIslandPageHtml, renderTopPageHtml } from "@hakoniwajs/core";
 import type { Env } from "./env.ts";
 import { HakoniwaGame, pickStringEnv } from "./game-object.ts";
 import { fromIslandPageSnapshotVM, islandSnapshotKey, topSnapshotKey } from "./snapshot.ts";
 import type { IslandPageSnapshotEnvelope, TopPageSnapshotEnvelope } from "./snapshot.ts";
 
+/** `createWorker` のオプション。 */
+export interface CreateWorkerOptions {
+  /**
+   * wrangler.jsonc の `durable_objects.bindings` の binding 名 (既定 `"GAME"`)。
+   * `class_name` は `HakoniwaGame` 固定で、このパッケージから再エクスポートされる。
+   */
+  doBinding?: string;
+  /**
+   * DO の初回作成時の location hint (既定 `"apac-ne"` (北東アジア)。プレイヤーは日本在住が
+   * 中心のため)。効くのは DO の **初回作成時のみ** でベストエフォート。既存の DO は移動しない。
+   * 変更する場合は次のいずれかから選ぶ: wnam, enam, sam, weur, eeur, apac, apac-ne, apac-se, oc, afr, me
+   * (参考: https://developers.cloudflare.com/durable-objects/reference/data-location/#provide-a-location-hint)
+   */
+  locationHint?: DurableObjectLocationHint;
+}
+
 // DO の取得に location hint `apac-ne` (北東アジア) を指定する。
 // 注意:
 // - location hint が効くのは DO の **初回作成時のみ** で、ベストエフォート。既存の DO は移動しない。
 // - プレイヤーは日本在住が中心のため `apac-ne` を選択している。
-// - 変更する場合は次のいずれかから選ぶ: wnam, enam, sam, weur, eeur, apac, apac-ne, apac-se, oc, afr, me
-//   (参考: https://developers.cloudflare.com/durable-objects/reference/data-location/#provide-a-location-hint)
-function getGame(env: Env) {
-  const id = env.GAME.idFromName("main");
-  return env.GAME.get(id, { locationHint: "apac-ne" });
+function getGame(env: Env, options: Required<CreateWorkerOptions>) {
+  // binding 名は options.doBinding で変えられるため Env のプロパティを動的に引く。
+  const namespace = (env as unknown as Record<string, unknown>)[options.doBinding] as
+    | DurableObjectNamespace<HakoniwaGame>
+    | undefined;
+  if (namespace === undefined) {
+    throw new Error(
+      `hakoniwa: wrangler.jsonc の durable_objects.bindings に name: "${options.doBinding}" (class_name: "HakoniwaGame") がありません`,
+    );
+  }
+  const id = namespace.idFromName("main");
+  return namespace.get(id, { locationHint: options.locationHint });
 }
 
 /** `/games/:gameId` (トップ)。 */
@@ -77,6 +100,7 @@ async function tryServeFromSnapshot(
   request: Request,
   env: Env,
   ctx: ExecutionContext,
+  options: Required<CreateWorkerOptions>,
 ): Promise<Response | undefined> {
   const snapshot = env.SNAPSHOT;
   if (request.method !== "GET" || snapshot === undefined || hasSessionCookie(request)) {
@@ -115,7 +139,7 @@ async function tryServeFromSnapshot(
       return snapshotResponse(html, "hit");
     }
 
-    const result = await getGame(env).pageSnapshot({ kind: "top", gameId });
+    const result = await getGame(env, options).pageSnapshot({ kind: "top", gameId });
     if (result === undefined) {
       return undefined;
     }
@@ -149,7 +173,7 @@ async function tryServeFromSnapshot(
     return snapshotResponse(html, "hit");
   }
 
-  const result = await getGame(env).pageSnapshot({ kind: "island", gameId, islandId });
+  const result = await getGame(env, options).pageSnapshot({ kind: "island", gameId, islandId });
   if (result === undefined) {
     return undefined;
   }
@@ -163,18 +187,49 @@ async function tryServeFromSnapshot(
   return snapshotResponse(html, "miss");
 }
 
-export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const snapshotRes = await tryServeFromSnapshot(request, env, ctx);
-    if (snapshotRes !== undefined) {
-      return snapshotRes;
-    }
-    return withBypassHeader(await getGame(env).fetch(request));
-  },
-  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    // 進めるべきかどうか (unitTimeSec と game.last_time から判定) は DO 側 (checkTurn) に任せる。
-    ctx.waitUntil(getGame(env).checkTurn());
-  },
-} satisfies ExportedHandler<Env>;
+/**
+ * `createWorker()` が返す Worker オブジェクト。fetch/scheduled を持つ。
+ * `ExportedHandler<Env>` 相当だが、`Request` は素の DOM 型のままにする
+ * (`Request<unknown, IncomingRequestCfProperties>` にすると、テスト等で作った素の `Request`
+ * を渡したとき `exactOptionalPropertyTypes` との組み合わせで型エラーになるため)。
+ */
+export interface HakoniwaWorker {
+  fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response>;
+  scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void>;
+}
+
+/**
+ * 箱庭諸島２の Worker エントリを組み立てるファクトリ。
+ * 利用側は次の 3 行で Worker を構成できる (DO クラスは wrangler.jsonc の class_name で
+ * 名前解決されるため、利用側のエントリから再エクスポートが必要):
+ *
+ * ```ts
+ * import { createWorker } from "@hakoniwajs/cloudflare";
+ * export { HakoniwaGame } from "@hakoniwajs/cloudflare";
+ * export default createWorker();
+ * ```
+ */
+export function createWorker(options: CreateWorkerOptions = {}): HakoniwaWorker {
+  const resolved: Required<CreateWorkerOptions> = {
+    doBinding: options.doBinding ?? "GAME",
+    locationHint: options.locationHint ?? "apac-ne",
+  };
+  return {
+    async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+      const snapshotRes = await tryServeFromSnapshot(request, env, ctx, resolved);
+      if (snapshotRes !== undefined) {
+        return snapshotRes;
+      }
+      return withBypassHeader(await getGame(env, resolved).fetch(request));
+    },
+    async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+      // 進めるべきかどうか (unitTimeSec と game.last_time から判定) は DO 側 (checkTurn) に任せる。
+      ctx.waitUntil(getGame(env, resolved).checkTurn());
+    },
+  };
+}
+
+// このリポジトリ自身のデプロイ用エントリ (root の wrangler.jsonc が main に指す)。
+export default createWorker();
 
 export { HakoniwaGame };
