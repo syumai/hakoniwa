@@ -33,14 +33,14 @@
   },
   "dependencies": {
     "@hakoniwajs/core": "workspace:*",
-    "hono": "^4.13.8"
+    "hono": "^4.13.9"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "1.55.0",
+    "@cloudflare/vite-plugin": "1.60.2",
     "@cloudflare/vitest-pool-workers": "0.22.0",
-    "@cloudflare/workers-types": "5.20260918.1",
+    "@cloudflare/workers-types": "5.20260926.1",
     "vitest": "4.1.11",
-    "wrangler": "4.134.0"
+    "wrangler": "4.141.0"
   },
   "peerDependencies": {
     "@cloudflare/workers-types": "*"

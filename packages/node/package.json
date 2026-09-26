@@ -37,11 +37,11 @@
   "dependencies": {
     "@hakoniwajs/core": "workspace:*",
     "@hono/node-server": "^2.1.1",
-    "hono": "^4.13.8"
+    "hono": "^4.13.9"
   },
   "devDependencies": {
     "@hono/vite-dev-server": "^0.26.1",
-    "@types/node": "^24.13.5",
+    "@types/node": "^26.6.3",
     "vitest": "4.1.11"
   },
   "engines": {

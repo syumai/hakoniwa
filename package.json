@@ -14,10 +14,10 @@
     "deploy": "wrangler deploy"
   },
   "devDependencies": {
-    "@types/node": "^24.13.5",
-    "typescript": "^5.9.3",
-    "vite-plus": "0.3.2",
-    "wrangler": "4.134.0"
+    "@types/node": "^26.6.3",
+    "typescript": "^7.0.2",
+    "vite-plus": "0.3.3",
+    "wrangler": "4.141.0"
   },
   "engines": {
     "node": ">=24"

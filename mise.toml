@@ -1,7 +1,8 @@
 [tools]
 node = "24"
 pnpm = "10"
-vp = "0.3.2" # mise registry の `vp` (= npm:vite-plus)。npm の最新に合わせる
+vp = "0.3.3" # mise registry の `vp` (= npm:vite-plus)。npm の最新に合わせる
+pinact = "latest" # GitHub Actions の SHA pin (`pinact run` で .github/workflows を更新)
 
 [env]
 # リポジトリ直下に .env があれば mise 経由で自動的に環境変数として読み込む。

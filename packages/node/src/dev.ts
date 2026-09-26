@@ -1,6 +1,9 @@
 // tmp/09-tooling.md 「packages/node」節: `@hono/vite-dev-server` 用のエントリ。
 // Vite の `publicDir` (packages/core/public) が images/style.css/owner.js を配信するため、
 // ここでは server.ts と同じ組み立てを行い、ランタイム非依存の Hono app をそのまま export する。
+import type { AppEnv } from "@hakoniwajs/core";
+import type { Hono } from "hono";
+
 import { composeNode } from "./compose.ts";
 import { loadNodeConfig } from "./config.ts";
 
@@ -14,4 +17,6 @@ if (config.auth.devLogin) {
   );
 }
 
-export default deps.app;
+const app: Hono<AppEnv> = deps.app;
+
+export default app;

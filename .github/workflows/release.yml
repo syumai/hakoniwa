@@ -29,7 +29,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -40,7 +40,7 @@ jobs:
       - name: Run tagpr
         id: tagpr
         if: github.event_name == 'push'
-        uses: Songmu/tagpr@v1
+        uses: Songmu/tagpr@2afc990a4a5a9a340665cc1a484c2102f7de332f # v1.21.0
         env:
           GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
 
@@ -67,7 +67,7 @@ jobs:
 
       - name: Set up toolchain
         if: steps.resolve.outputs.tag != ''
-        uses: jdx/mise-action@v3
+        uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3.6.3
 
       # pnpm publish は内部で npm CLI を呼ぶため、Trusted Publishing 対応の
       # npm (11.5.1+) を明示的に入れる
