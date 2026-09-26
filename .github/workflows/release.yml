@@ -103,30 +103,30 @@ jobs:
       # --- テンプレートリポジトリ (TEMPLATE_REPO) への追従 ---
       # syumai/workers-go → syumai/workers のミラー同期と同じ構成:
       # GITHUB_TOKEN は他リポジトリへ push できないため、テンプレート用の
-      # deploy key (TEMPLATE_DEPLOY_KEY secret、テンプレートリポジトリへの
+      # deploy key (TEMPLATE_CLOUDFLARE_DEPLOY_KEY secret、テンプレートリポジトリへの
       # 書き込みのみ許可した秘密鍵) で SSH clone → 更新 → push する。
-      # TEMPLATE_DEPLOY_KEY が未設定なら追従ステップはすべてスキップされる。
+      # TEMPLATE_CLOUDFLARE_DEPLOY_KEY が未設定なら追従ステップはすべてスキップされる。
       - name: Set up template deploy key
-        if: steps.resolve.outputs.tag != '' && secrets.TEMPLATE_DEPLOY_KEY != ''
+        if: steps.resolve.outputs.tag != '' && secrets.TEMPLATE_CLOUDFLARE_DEPLOY_KEY != ''
         uses: webfactory/ssh-agent@a6f90b1f127823b31d4d4a8d96047790581349bd # v0.9.1
         with:
-          ssh-private-key: ${{ secrets.TEMPLATE_DEPLOY_KEY }}
+          ssh-private-key: ${{ secrets.TEMPLATE_CLOUDFLARE_DEPLOY_KEY }}
 
       - name: Trust github.com's host key
-        if: steps.resolve.outputs.tag != '' && secrets.TEMPLATE_DEPLOY_KEY != ''
+        if: steps.resolve.outputs.tag != '' && secrets.TEMPLATE_CLOUDFLARE_DEPLOY_KEY != ''
         run: |
           mkdir -p ~/.ssh
           ssh-keyscan -t rsa,ed25519 github.com >> ~/.ssh/known_hosts
 
       - name: Clone template repository
-        if: steps.resolve.outputs.tag != '' && secrets.TEMPLATE_DEPLOY_KEY != ''
+        if: steps.resolve.outputs.tag != '' && secrets.TEMPLATE_CLOUDFLARE_DEPLOY_KEY != ''
         run: git clone "git@github.com:${TEMPLATE_REPO}.git" ../template
 
       # @hakoniwajs/* の依存をリリースしたバージョンに揃え、lockfile も更新する。
       # publish 直後は npm registry への反映に多少ラグがあり得るため、
       # 更新後に `npm install` が取れることをもって反映確認とする。
       - name: Bump @hakoniwajs deps in template
-        if: steps.resolve.outputs.tag != '' && secrets.TEMPLATE_DEPLOY_KEY != ''
+        if: steps.resolve.outputs.tag != '' && secrets.TEMPLATE_CLOUDFLARE_DEPLOY_KEY != ''
         working-directory: ../template
         env:
           TAG: ${{ steps.resolve.outputs.tag }}
@@ -159,7 +159,7 @@ jobs:
           exit 1
 
       - name: Commit and push to template
-        if: steps.resolve.outputs.tag != '' && secrets.TEMPLATE_DEPLOY_KEY != ''
+        if: steps.resolve.outputs.tag != '' && secrets.TEMPLATE_CLOUDFLARE_DEPLOY_KEY != ''
         working-directory: ../template
         env:
           TAG: ${{ steps.resolve.outputs.tag }}
